@@ -1,0 +1,267 @@
+{
+  "recentCustomers": {
+    "customers": {
+      "edges": [
+        {
+          "node": {
+            "id": "gid://shopify/Customer/9001",
+            "displayName": "Marcus Webb",
+            "amountSpent": {
+              "amount": "1008.0"
+            },
+            "numberOfOrders": 1,
+            "tags": []
+          }
+        },
+        {
+          "node": {
+            "id": "gid://shopify/Customer/9002",
+            "displayName": "Priya Nair",
+            "amountSpent": {
+              "amount": "170.0"
+            },
+            "numberOfOrders": 1,
+            "tags": []
+          }
+        },
+        {
+          "node": {
+            "id": "gid://shopify/Customer/9003",
+            "displayName": "Nate Harper",
+            "amountSpent": {
+              "amount": "60.38"
+            },
+            "numberOfOrders": 1,
+            "tags": []
+          }
+        },
+        {
+          "node": {
+            "id": "gid://shopify/Customer/9004",
+            "displayName": "Omar Blake",
+            "amountSpent": {
+              "amount": "60.38"
+            },
+            "numberOfOrders": 1,
+            "tags": []
+          }
+        }
+      ]
+    }
+  },
+  "customerDetail": {
+    "customer": {
+      "id": "gid://shopify/Customer/9001",
+      "displayName": "Marcus Webb",
+      "amountSpent": {
+        "amount": "1008.0"
+      },
+      "numberOfOrders": 1,
+      "tags": [],
+      "orders": {
+        "edges": [
+          {
+            "node": {
+              "name": "#1190",
+              "createdAt": "2025-02-13T19:21:52Z",
+              "lineItems": {
+                "edges": [
+                  {
+                    "node": {
+                      "title": "Basketball Jerseys",
+                      "quantity": 55,
+                      "variant": null
+                    }
+                  },
+                  {
+                    "node": {
+                      "title": "Basketball Shorts",
+                      "quantity": 55,
+                      "variant": null
+                    }
+                  },
+                  {
+                    "node": {
+                      "title": "Shipping",
+                      "quantity": 1,
+                      "variant": null
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "floorProducts": {
+    "products": {
+      "edges": [
+        {
+          "node": {
+            "id": "gid://shopify/Product/8825070485701",
+            "title": "Collegiate T Shirt",
+            "handle": "collegiate-t-shirt-1",
+            "productType": "",
+            "tags": [],
+            "totalInventory": 8,
+            "priceRangeV2": {
+              "minVariantPrice": {
+                "amount": "60.0"
+              }
+            },
+            "variants": {
+              "edges": [
+                {
+                  "node": {
+                    "title": "M",
+                    "inventoryQuantity": 2,
+                    "price": "60.00"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "gid://shopify/Product/8825067405509",
+            "title": "Non Linear Evolution T Shirt",
+            "handle": "non-linear-evolution-t-shirt",
+            "productType": "",
+            "tags": [],
+            "totalInventory": 6,
+            "priceRangeV2": {
+              "minVariantPrice": {
+                "amount": "60.0"
+              }
+            },
+            "variants": {
+              "edges": [
+                {
+                  "node": {
+                    "title": "M",
+                    "inventoryQuantity": 2,
+                    "price": "60.00"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "gid://shopify/Product/8825001836741",
+            "title": "Future Basics Flyer Pant",
+            "handle": "future-basics-flyer-pant",
+            "productType": "",
+            "tags": [],
+            "totalInventory": 6,
+            "priceRangeV2": {
+              "minVariantPrice": {
+                "amount": "140.0"
+              }
+            },
+            "variants": {
+              "edges": [
+                {
+                  "node": {
+                    "title": "M",
+                    "inventoryQuantity": 2,
+                    "price": "140.00"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "gid://shopify/Product/8820340293829",
+            "title": "Future Basics Flyer Jacket",
+            "handle": "future-basics-flyer-jacket",
+            "productType": "",
+            "tags": [],
+            "totalInventory": 3,
+            "priceRangeV2": {
+              "minVariantPrice": {
+                "amount": "140.0"
+              }
+            },
+            "variants": {
+              "edges": [
+                {
+                  "node": {
+                    "title": "M",
+                    "inventoryQuantity": 1,
+                    "price": "140.00"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "gid://shopify/Product/8140483854533",
+            "title": "Cytoshift XTrainer",
+            "handle": "cytoshift-trainer",
+            "productType": "",
+            "tags": [
+              "tag world-id-gated"
+            ],
+            "totalInventory": 19,
+            "priceRangeV2": {
+              "minVariantPrice": {
+                "amount": "160.0"
+              }
+            },
+            "variants": {
+              "edges": [
+                {
+                  "node": {
+                    "title": "9",
+                    "inventoryQuantity": 5,
+                    "price": "160.00"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "gid://shopify/Product/7598108475589",
+            "title": "De Milo Fingerboard",
+            "handle": "tech-deck-fingerboard",
+            "productType": "",
+            "tags": [],
+            "totalInventory": 20,
+            "priceRangeV2": {
+              "minVariantPrice": {
+                "amount": "16.0"
+              }
+            },
+            "variants": {
+              "edges": [
+                {
+                  "node": {
+                    "title": "Default Title",
+                    "inventoryQuantity": 20,
+                    "price": "16.00"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "abandoned": {
+    "abandonedCheckouts": {
+      "edges": []
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "gapvision",
+  "private": true,
+  "version": "0.1.0",
+  "description": "GapVision — e-commerce level intelligence for retail floor associates. Simulator-first prototype.",
+  "workspaces": [
+    "packages/server",
+    "packages/web",
+    "packages/glasses-plugin"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace=packages/server",
+    "dev:web": "npm run dev --workspace=packages/web",
+    "dev:plugin": "npm run dev --workspace=packages/glasses-plugin",
+    "dev:ai": "cd packages/ai-service && uvicorn app.main:app --reload --port 8000",
+    "build": "npm run build --workspace=packages/web"
+  }
+}

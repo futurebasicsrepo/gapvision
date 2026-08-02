@@ -1,0 +1,56 @@
+{
+  "recentCustomers": {
+    "customers": { "edges": [
+      { "node": { "id": "gid://shopify/Customer/801", "displayName": "Jordan Avery", "amountSpent": { "amount": "1840.00" }, "numberOfOrders": 12, "tags": [] } },
+      { "node": { "id": "gid://shopify/Customer/802", "displayName": "Sam Rivera", "amountSpent": { "amount": "620.00" }, "numberOfOrders": 5, "tags": [] } },
+      { "node": { "id": "gid://shopify/Customer/803", "displayName": "Alexis Kim", "amountSpent": { "amount": "140.00" }, "numberOfOrders": 2, "tags": [] } }
+    ] }
+  },
+  "customerDetail": {
+    "customer": {
+      "id": "gid://shopify/Customer/801",
+      "displayName": "Jordan Avery",
+      "amountSpent": { "amount": "1840.00" },
+      "numberOfOrders": 12,
+      "tags": [],
+      "orders": { "edges": [
+        { "node": { "name": "#1041", "createdAt": "2026-07-20T15:00:00Z",
+          "lineItems": { "edges": [
+            { "node": { "title": "Cup Noodle Tee", "quantity": 1,
+              "variant": { "title": "M", "price": "60.00",
+                "product": { "productType": "Tops", "tags": ["Tops", "graphic"] } } } },
+            { "node": { "title": "Crystal Basketball Jersey", "quantity": 1,
+              "variant": { "title": "M", "price": "100.00",
+                "product": { "productType": "Jerseys", "tags": ["Jerseys"] } } } }
+          ] } } },
+        { "node": { "name": "#0977", "createdAt": "2026-06-02T15:00:00Z",
+          "lineItems": { "edges": [
+            { "node": { "title": "Utility Cargo Pant", "quantity": 1,
+              "variant": { "title": "32", "price": "110.00",
+                "product": { "productType": "Bottoms", "tags": ["Bottoms", "workwear"] } } } },
+            { "node": { "title": "Eye Logo Trucker Hat", "quantity": 2,
+              "variant": { "title": "OS", "price": "60.00",
+                "product": { "productType": "Headwear", "tags": ["Headwear"] } } } },
+            { "node": { "title": "Beads Classic Flower Tee", "quantity": 1,
+              "variant": { "title": "M", "price": "60.00",
+                "product": { "productType": "Tops", "tags": ["Tops", "graphic"] } } } }
+          ] } } }
+      ] }
+    }
+  },
+  "floorProducts": {
+    "products": { "edges": [
+      { "node": { "id": "gid://shopify/Product/1", "title": "Paneled Logo Tee", "handle": "paneled-logo-tee", "productType": "Tops", "tags": ["Tops", "graphic"], "totalInventory": 14, "priceRangeV2": { "minVariantPrice": { "amount": "90.0" } }, "variants": { "edges": [ { "node": { "title": "M", "inventoryQuantity": 4, "price": "90.00" } } ] } } },
+      { "node": { "id": "gid://shopify/Product/2", "title": "Baby Baseball Jersey", "handle": "baby-baseball-jersey", "productType": "Jerseys", "tags": ["Jerseys"], "totalInventory": 9, "priceRangeV2": { "minVariantPrice": { "amount": "70.0" } }, "variants": { "edges": [ { "node": { "title": "M", "inventoryQuantity": 3, "price": "70.00" } } ] } } },
+      { "node": { "id": "gid://shopify/Product/3", "title": "Cup Noodle Tee", "handle": "cup-noodle-tee", "productType": "Tops", "tags": ["Tops", "graphic"], "totalInventory": 22, "priceRangeV2": { "minVariantPrice": { "amount": "60.0" } }, "variants": { "edges": [ { "node": { "title": "M", "inventoryQuantity": 6, "price": "60.00" } } ] } } },
+      { "node": { "id": "gid://shopify/Product/4", "title": "Workwear Chore Jacket", "handle": "workwear-chore-jacket", "productType": "Outerwear", "tags": ["Outerwear", "workwear"], "totalInventory": 6, "priceRangeV2": { "minVariantPrice": { "amount": "140.0" } }, "variants": { "edges": [ { "node": { "title": "M", "inventoryQuantity": 2, "price": "140.00" } } ] } } }
+    ] }
+  },
+  "abandoned": {
+    "abandonedCheckouts": { "edges": [
+      { "node": { "lineItems": { "edges": [
+        { "node": { "title": "Workwear Chore Jacket", "quantity": 1, "variant": { "price": "140.00" } } }
+      ] } } }
+    ] }
+  }
+}
