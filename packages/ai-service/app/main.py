@@ -1,18 +1,19 @@
 """GapVision AI Service — FastAPI.
 
 The Brain: guest context, persona matching, and clienteling script
-generation. CRM is pluggable (mock / Shopify / Gap) via GAPVISION_CRM;
-LLM is pluggable via GAPVISION_LLM. Identification is opt-in signal only.
+generation. Multi-tenant: the `tenant` parameter selects the CRM world
+("gap" demo dataset or "shopify" live store). LLM is pluggable via
+GAPVISION_LLM. Identification is opt-in signal only.
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .crm_provider import get_crm, provider_name
+from .crm_provider import TenantNotConfigured, get_crm_for, tenant_status
 from .llm import get_provider
 from .personas import match_products
 
-app = FastAPI(title="GapVision AI Service", version="0.2.0")
+app = FastAPI(title="GapVision AI Service", version="0.4.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,7 +25,15 @@ app.add_middleware(
 
 class GuestContextRequest(BaseModel):
     guest_id: str
-    zone: str | None = None  # beacon zone, e.g. "Denim Wall"
+    zone: str | None = None   # beacon zone, e.g. "Denim Wall"
+    tenant: str | None = "gap"
+
+
+def _crm(tenant: str | None):
+    try:
+        return get_crm_for(tenant)
+    except TenantNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.get("/health")
@@ -32,20 +41,20 @@ def health():
     return {
         "status": "ok",
         "llm_provider": get_provider().name,
-        "crm_provider": provider_name(),
+        "tenants": tenant_status(),
     }
 
 
 @app.get("/api/guests")
-def list_guests():
-    """Roster of opted-in guests (used by the simulator's beacon panel)."""
-    return get_crm().all_guests()
+def list_guests(tenant: str = "gap"):
+    """Roster of opted-in guests for the given tenant."""
+    return _crm(tenant).all_guests()
 
 
 @app.post("/api/guest-context")
 def guest_context(req: GuestContextRequest):
     """The core call: beacon signal in, full clienteling package out."""
-    crm = get_crm()
+    crm = _crm(req.tenant)
     guest = crm.get_guest(req.guest_id)
     if guest is None:
         raise HTTPException(status_code=404, detail="Unknown or non-opted-in guest")
@@ -59,6 +68,7 @@ def guest_context(req: GuestContextRequest):
     return {
         "guest": guest,
         "zone": req.zone,
+        "tenant": (req.tenant or "gap").lower(),
         "recommendations": recommendations,
         "script": script,
     }

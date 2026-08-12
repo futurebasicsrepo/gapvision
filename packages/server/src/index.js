@@ -74,12 +74,12 @@ io.on("connection", (socket) => {
    * Beacon simulation: an opted-in guest's phone enters an associate's zone.
    * Flow: signal -> AI service -> script -> glasses overlay + dashboard.
    */
-  socket.on("beacon:guest-enter", async ({ guestId, zone }) => {
+  socket.on("beacon:guest-enter", async ({ guestId, zone, tenant }) => {
     try {
       const res = await fetch(`${AI_SERVICE_URL}/api/guest-context`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guest_id: guestId, zone }),
+        body: JSON.stringify({ guest_id: guestId, zone, tenant: tenant || "gap" }),
       });
       if (!res.ok) throw new Error(`AI service ${res.status}`);
       const context = await res.json();

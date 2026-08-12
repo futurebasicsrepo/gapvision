@@ -13,7 +13,14 @@ import { getBridge, type GlassesBridge } from "./bridge";
 import { buildPage, IDLE_LINES, MAX_LINES, toDisplayText } from "./layout";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:4000";
-const ZONE = "Denim Wall"; // pilot: assigned per associate at login
+const AI_URL = import.meta.env.VITE_AI_URL || "http://localhost:8000";
+
+/** Tenant = which retail world this launch belongs to ("gap" demo | "shopify"
+ *  live). Carried by the launch URL, i.e. the QR code that opened us. */
+const TENANT =
+  new URLSearchParams(window.location.search).get("tenant")?.toLowerCase() || "gap";
+const TENANT_LABEL = TENANT === "shopify" ? "FUTURE BASICS · LIVE" : "GAP · DEMO";
+const ZONE = TENANT === "shopify" ? "Front Table" : "Denim Wall";
 
 type DisplayPayload = {
   lines: string[];
@@ -66,7 +73,10 @@ async function renderLines(lines: string[], status: string) {
 
 async function showIdle() {
   engaged = false;
-  await renderLines(IDLE_LINES, "BLE OK · zone: " + ZONE);
+  await renderLines(
+    [IDLE_LINES[0], TENANT_LABEL, "", "Awaiting guest signal..."],
+    "BLE OK · zone: " + ZONE
+  );
   ui.sessionInfo.textContent = "No active session";
 }
 
@@ -117,7 +127,7 @@ async function main() {
     ui.serverStatus.className = "pill ok";
     socket.emit("register", {
       role: "associate",
-      name: (user as any).name || "G2 Associate",
+      name: `${(user as any).name || "G2 Associate"} [${TENANT}]`,
       zone: ZONE,
     });
   });
@@ -139,13 +149,36 @@ async function main() {
 
   await showIdle();
 
-  // Dev-only: simulate an opt-in beacon from the phone page.
-  document.querySelectorAll<HTMLButtonElement>("[data-beacon]").forEach((btn) =>
-    btn.addEventListener("click", () => {
-      socket.emit("beacon:guest-enter", { guestId: btn.dataset.beacon, zone: ZONE });
-      log(`beacon → ${btn.dataset.beacon}`);
-    })
-  );
+  // Tenant badge on the phone page
+  const badge = document.getElementById("tenant-badge");
+  if (badge) {
+    badge.textContent = TENANT_LABEL;
+    badge.className = TENANT === "shopify" ? "pill live" : "pill dev";
+  }
+
+  // Beacon roster: fetched live for this tenant (demo guests for gap,
+  // real store customers for shopify).
+  const rosterEl = document.getElementById("beacon-roster");
+  if (rosterEl) {
+    try {
+      const res = await fetch(`${AI_URL}/api/guests?tenant=${TENANT}`);
+      if (!res.ok) throw new Error(`${res.status}`);
+      const guests: { guest_id: string; name: string; loyalty_tier: string }[] =
+        await res.json();
+      rosterEl.innerHTML = "";
+      guests.slice(0, 8).forEach((g) => {
+        const b = document.createElement("button");
+        b.textContent = `${g.name} · ${g.loyalty_tier}`;
+        b.addEventListener("click", () => {
+          socket.emit("beacon:guest-enter", { guestId: g.guest_id, zone: ZONE, tenant: TENANT });
+          log(`beacon → ${g.name}`);
+        });
+        rosterEl.appendChild(b);
+      });
+    } catch (e) {
+      rosterEl.innerHTML = `<span style="color:#f59e0b;font-size:12px">Roster unavailable (${String(e)}). Is the '${TENANT}' tenant configured on the server?</span>`;
+    }
+  }
 }
 
 void main();
