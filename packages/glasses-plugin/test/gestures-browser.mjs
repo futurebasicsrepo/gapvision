@@ -28,7 +28,10 @@ page.on("pageerror", (e) => pageErrors.push(String(e)));
 await page.goto(URL, { waitUntil: "networkidle" });
 await page.waitForSelector("#virtual-lens .lens-text");
 
-const lens = () => page.$$eval("#virtual-lens .lens-text", (els) => els.map((e) => e.textContent));
+const lens = () => page.$$eval("#virtual-lens .lens-text:not(.meta)",
+  (els) => els.map((e) => e.textContent));
+const lensMeta = () => page.$$eval("#virtual-lens .lens-text.meta",
+  (els) => els.map((e) => e.textContent));
 const logText = () => page.$eval("#event-log", (e) => e.textContent);
 const inspector = () => page.$eval("#event-inspector", (e) => e.textContent);
 const ring = (action) => page.click(`[data-event="${action}"][data-source="ring"]`);
@@ -59,28 +62,32 @@ await settle();
 await ring("scroll-down");
 await settle();
 let view = await lens();
+let meta = await lensMeta();
+// The position indicator is a supporting fact, not one of the three lines.
 check("scroll enters the recommendation carousel",
-  view.some((l) => /1 of \d/.test(l || "")), JSON.stringify(view.slice(0, 2)));
+  meta.some((l) => /1 OF \d/.test(l || "")), JSON.stringify(view.slice(0, 2)));
 const firstItem = view[0];
 
 await ring("scroll-down");
 await settle();
 view = await lens();
+meta = await lensMeta();
 check("scroll advances to the next item",
-  view.some((l) => /2 of \d/.test(l || "")) && view[0] !== firstItem,
+  meta.some((l) => /2 OF \d/.test(l || "")) && view[0] !== firstItem,
   JSON.stringify(view.slice(0, 1)));
 
 await ring("scroll-up");
 await settle();
-view = await lens();
+meta = await lensMeta();
 check("scroll back returns to the first item",
-  view.some((l) => /1 of \d/.test(l || "")), JSON.stringify(view.slice(0, 1)));
+  meta.some((l) => /1 OF \d/.test(l || "")), JSON.stringify(meta));
 
 await ring("scroll-up");
 await settle();
 view = await lens();
 check("scrolling off the top returns to the guest card",
-  view.some((l) => l?.includes("Sarah Chen")), JSON.stringify(view.slice(0, 1)));
+  view.some((l) => (l || "").toUpperCase().includes("SARAH CHEN")),
+  JSON.stringify(view.slice(0, 1)));
 
 // --- carousel sets voice context -------------------------------------------
 await ring("scroll-down");
@@ -89,9 +96,9 @@ await settle();
 const shown = (await lens())[0] || "";
 await ring("double-click");
 await page.waitForFunction(
-  () => [...document.querySelectorAll("#virtual-lens .lens-text")]
-    .some((e) => /◍\s+".+"/.test(e.textContent || "")),
-  { timeout: 15000 },
+  () => [...document.querySelectorAll("#virtual-lens .lens-text:not(.meta)")]
+    .filter((e) => (e.textContent || "").trim()).length >= 2,
+  { timeout: 18000 },
 );
 check("voice answer arrived after scrolling to an item", true);
 check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 
+from . import cue as cue_format
 from .llm import get_provider
 from .personas import match_products
 
@@ -353,9 +354,10 @@ def _answer_stock(transcript, item, size, how, guest) -> dict:
 
     lines.append(f"[ICON:ARROW] {name}")
     lines.append(f"        @ {loc}  {_money(item.get('price'))}")
-    if implied:
-        lines.append(f"[ICON:USER] assumed their size ({size})")
-    return _package(transcript, "stock", answer, item, lines, how=how, size=size)
+    # That we guessed the size is a supporting fact, not one of the three
+    # lines — it qualifies the answer rather than being part of it.
+    note = f"ASSUMED {size}" if implied else None
+    return _package(transcript, "stock", answer, item, lines, how=how, size=size, note=note)
 
 
 def _is_bottoms(item: dict) -> bool:
@@ -502,11 +504,24 @@ def _answer_open(transcript, guest, item, inventory) -> dict:
 
 
 def _package(transcript, intent, answer, item, lines, *, how="none", size=None,
-             matches=None, provider_name="rules") -> dict:
-    """One output shape for every intent, clipped to the lens."""
-    header = f'[ICON:MIC] "{_clip(transcript, LINE_CHARS - 4)}"'
-    glasses_lines = [header] + [_clip(l, LINE_CHARS + 8) for l in lines]
+             matches=None, provider_name="rules", note=None) -> dict:
+    """One output shape for every intent, written for the glass.
+
+    An answer is a cue like any other: three lines, uppercase, no punctuation
+    but the interpunct. The question itself is not echoed back — the associate
+    just asked it, and the glass shows nothing it doesn't have to.
+    """
+    body = [
+        re.sub(r"\[ICON:\w+\]\s*", "", str(l)).strip()
+        for l in lines
+        if str(l).strip()
+    ]
+    # A qualifying note outranks the stock count — if we assumed the size,
+    # that matters more to the associate than how many are on the floor.
+    meta = ([note] if note else []) + _meta_for(item)
+    cue = cue_format.build(body[:3], meta)
     return {
+        "cue": cue,
         "transcript": transcript,
         "intent": intent,
         "answer": answer,
@@ -515,5 +530,16 @@ def _package(transcript, intent, answer, item, lines, *, how="none", size=None,
         "product": item,
         "matches": matches or ([item] if item else []),
         "answer_provider": provider_name,
-        "glasses_lines": glasses_lines[:7],
+        "glasses_lines": cue_format.flatten(cue),
     }
+
+
+def _meta_for(item: dict | None) -> list[str]:
+    """Three facts that support the sentence and never compete with it."""
+    if not item:
+        return []
+    facts = [item.get("location"), cue_format.money(item.get("price"))]
+    stock = item.get("stock")
+    if isinstance(stock, int):
+        facts.append(f"{stock} ON HAND")
+    return [f for f in facts if f and f != "—"]

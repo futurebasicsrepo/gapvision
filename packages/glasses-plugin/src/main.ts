@@ -21,7 +21,7 @@
 import { io, type Socket } from "socket.io-client";
 import { getBridge, type GlassesBridge } from "./bridge";
 import { decodeGesture, describeGesture, type DecodedGesture } from "./gestures";
-import { buildPage, IDLE_LINES, MAX_LINES, toDisplayText } from "./layout";
+import { buildCue, CUE_LINES, IDLE_CUE, toDisplayText, type Cue } from "./layout";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
 
 /** Everything goes through the realtime server. The plugin is a static
@@ -47,6 +47,7 @@ type Recommendation = {
 
 type DisplayPayload = {
   lines: string[];
+  cue?: Cue;
   script?: { opener: string; upsell: string; closer: string };
   guest?: { name: string; tier: string; guest_id?: string };
   recommendations?: Recommendation[];
@@ -86,10 +87,13 @@ let lastDisplay: DisplayPayload | null = null;
 let recommendations: Recommendation[] = [];
 let recIndex = -1;
 
-async function renderLines(lines: string[], status: string) {
-  const page = buildPage(lines, status);
+/** Render a cue. `status` is gone: the glass shows nothing it doesn't have to,
+ *  and a hint row is chrome. */
+async function renderCue(cue: Cue, latencyMs?: number) {
+  const page = buildCue(cue, latencyMs);
+  const lines = cue.lines || [];
   const sameShape =
-    pageBuilt && lines.slice(0, MAX_LINES).length === currentLines.slice(0, MAX_LINES).length;
+    pageBuilt && lines.slice(0, CUE_LINES).length === currentLines.slice(0, CUE_LINES).length;
 
   if (!pageBuilt) {
     await bridge.createStartUpPageContainer(page);
@@ -114,16 +118,9 @@ async function showIdle() {
   engagedGuestId = null;
   focusSku = null;
   lastDisplay = null;
-  await renderLines(
-    [IDLE_LINES[0], TENANT_LABEL, "", "Awaiting guest signal..."],
-    "BLE OK · zone: " + ZONE
-  );
+  await renderCue({ ...IDLE_CUE, lines: ["CUESEA READY", TENANT_LABEL, "AWAITING GUEST SIGNAL"] });
   ui.sessionInfo.textContent = "No active session";
 }
-
-/** The status row is 264px wide — roughly 24 characters. Longer than that and
- *  the hint silently runs off the right edge of the lens. */
-const STATUS_HINT = "click·2x ask·scroll";
 
 async function onDisplay(payload: DisplayPayload) {
   engaged = true;
@@ -132,7 +129,7 @@ async function onDisplay(payload: DisplayPayload) {
   recommendations = payload.recommendations ?? [];
   recIndex = -1;
   focusSku = recommendations[0]?.sku ?? focusSku;
-  await renderLines(payload.lines, STATUS_HINT);
+  await renderCue(cueOf(payload));
   ui.sessionInfo.textContent = payload.guest
     ? `Engaged: ${payload.guest.name} (${payload.guest.tier})`
     : "Engaged";
@@ -143,11 +140,19 @@ async function onDisplay(payload: DisplayPayload) {
 async function restoreView() {
   if (!engaged || !lastDisplay) return showIdle();
   if (recIndex >= 0 && recommendations[recIndex]) return showRecommendation(recIndex);
-  await renderLines(lastDisplay.lines, STATUS_HINT);
+  await renderCue(cueOf(lastDisplay));
 }
 
+/** The service writes in glass grammar. `lines` is the flat form kept for the
+ *  manager view and older payloads; fall back to it only if `cue` is absent. */
+function cueOf(payload: DisplayPayload): Cue {
+  if (payload.cue?.lines?.length) return payload.cue;
+  return { lines: (payload.lines || []).slice(0, CUE_LINES).map(toDisplayText) };
+}
+
+/** Whole units on the glass — decimals are punctuation. */
 function money(v?: number) {
-  return typeof v === "number" ? `$${v.toFixed(2)}` : "";
+  return typeof v === "number" ? `$${Math.round(v).toLocaleString()}` : "";
 }
 
 /**
@@ -160,16 +165,14 @@ async function showRecommendation(index: number) {
   if (!item) return;
   recIndex = index;
   focusSku = item.sku;
-  await renderLines(
-    [
-      `[ICON:ARROW] ${item.name}`,
-      `        ${[item.location, money(item.price)].filter(Boolean).join("  ")}`,
-      typeof item.stock === "number" ? `        ${item.stock} on hand` : "",
-      "",
-      `[ICON:TAG] ${index + 1} of ${recommendations.length}`,
-    ],
-    STATUS_HINT,
-  );
+  await renderCue({
+    lines: [item.name, item.location || "", ""],
+    meta: [
+      money(item.price),
+      typeof item.stock === "number" ? `${item.stock} ON HAND` : "",
+      `${index + 1} OF ${recommendations.length}`,
+    ].filter(Boolean),
+  });
   log(`showing rec ${index + 1}/${recommendations.length}: ${item.name}`);
 }
 
@@ -187,7 +190,7 @@ async function cycleRecommendations(step: 1 | -1) {
     // Walked off either end — back to the guest card.
     recIndex = -1;
     focusSku = recommendations[0]?.sku ?? null;
-    if (lastDisplay) await renderLines(lastDisplay.lines, STATUS_HINT);
+    if (lastDisplay) await renderCue(cueOf(lastDisplay));
     return;
   }
   await showRecommendation(next);
@@ -216,7 +219,7 @@ function onGesture(g: DecodedGesture) {
       if (recIndex >= 0) {
         // Back out of the carousel before ending the engagement.
         recIndex = -1;
-        if (lastDisplay) void renderLines(lastDisplay.lines, STATUS_HINT);
+        if (lastDisplay) void renderCue(cueOf(lastDisplay));
         return;
       }
       if (engaged) {
@@ -280,7 +283,7 @@ async function main() {
   voice = new VoiceController({
     bridge,
     emit: (event, payload) => socket?.emit(event, payload),
-    render: (lines, status) => renderLines(lines, status),
+    render: (lines, meta) => renderCue({ lines, meta }),
     log,
     onState: (state: VoiceState) => {
       ui.voiceStatus.textContent =
@@ -323,10 +326,10 @@ async function main() {
   socket.on("radio:message", (m: { from: string; message: string }) => {
     log(`radio ← ${m.from}: ${m.message}`);
     if (!engaged) {
-      void renderLines(
-        ["◉ RADIO", "", toDisplayText(`${m.from}:`), m.message.slice(0, 40)],
-        "press: dismiss"
-      );
+      void renderCue({
+        lines: ["RADIO", toDisplayText(m.from), toDisplayText(m.message)],
+        meta: [],
+      });
       setTimeout(() => { if (!engaged) void showIdle(); }, 6000);
     }
   });

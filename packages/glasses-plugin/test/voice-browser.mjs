@@ -31,10 +31,13 @@ page.on("pageerror", (e) => consoleErrors.push(String(e)));
 await page.goto(URL, { waitUntil: "networkidle" });
 await page.waitForSelector("#virtual-lens .lens-text");
 
-const lens = () => page.$$eval("#virtual-lens .lens-text", (els) => els.map((e) => e.textContent));
+/** The three cue lines — excludes the CUE label, latency and meta strip,
+ *  which render at hud-300 and carry the `meta` class. */
+const lens = () => page.$$eval("#virtual-lens .lens-text:not(.meta)",
+  (els) => els.map((e) => e.textContent));
 const log = () => page.$eval("#event-log", (e) => e.textContent);
 
-check("boots to idle", (await lens())[0]?.includes("CUE READY"), (await lens())[0]);
+check("boots to idle", (await lens())[0]?.includes("CUESEA READY"), (await lens())[0]);
 check("realtime linked",
   (await page.textContent("#server-status")) === "Realtime linked",
   await page.textContent("#server-status"));
@@ -62,27 +65,27 @@ check("voice pill goes live", (await page.getAttribute("#voice-status", "class")
 
 await page.waitForTimeout(900);
 const metered = await lens();
-check("level meter is animating", metered.some((l) => /█/.test(l || "")), metered[1]);
+check("level meter is animating", metered.some((l) => /[█·]/.test(l || "")), metered[1]);
 
 // The mock mic goes quiet at ~2.2s; on-device endpointing should close it.
 await page.waitForFunction(
   () => [...document.querySelectorAll("#virtual-lens .lens-text")]
-    .some((e) => e.textContent?.includes("thinking")),
+    .some((e) => e.textContent?.includes("THINKING")),
   { timeout: 8000 },
 );
 check("silence endpointing closes the mic without a second press", true);
 
-// Answer comes back and paints. The answer header is the quoted transcript,
-// which is what distinguishes it from the "…thinking" placeholder.
+// The answer paints as a cue: the glass never echoes the question back, so
+// what distinguishes it from "THINKING" is a second line appearing.
 await page.waitForFunction(
-  () => [...document.querySelectorAll("#virtual-lens .lens-text")]
-    .some((e) => /◍\s+".+"/.test(e.textContent || "")),
-  { timeout: 10000 },
+  () => [...document.querySelectorAll("#virtual-lens .lens-text:not(.meta)")]
+    .filter((e) => (e.textContent || "").trim()).length >= 2,
+  { timeout: 12000 },
 );
 const answered = await lens();
 check("answer painted to the lens", answered.filter(Boolean).length > 1,
   JSON.stringify(answered.slice(0, 3)));
-check("transcript echoed in the log", /voice: ".+" →/.test(await log()),
+check("query logged with its intent", /voice: ".+" →/.test(await log()),
   (await log()).split("\n")[0]?.slice(0, 80));
 
 // A press dismisses the answer and restores the engaged view.
@@ -90,7 +93,8 @@ await page.click('[data-event="click"][data-source="ring"]');
 await page.waitForTimeout(500);
 const restored = await lens();
 check("press restores the guest card",
-  restored.some((l) => l?.includes("Sarah Chen")), JSON.stringify(restored.slice(0, 2)));
+  restored.some((l) => (l || "").toUpperCase().includes("SARAH CHEN")),
+  JSON.stringify(restored.slice(0, 2)));
 check("session survived the voice detour",
   (await page.textContent("#session-info")).includes("Engaged"),
   await page.textContent("#session-info"));

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, session } from "../api.js";
+import { Wordmark } from "./Mark.jsx";
 
 export default function Login({ onSignedIn }) {
   const [email, setEmail] = useState("");
@@ -24,9 +25,9 @@ export default function Login({ onSignedIn }) {
   return (
     <div className="signin-wrap">
       <form className="signin card" onSubmit={submit}>
-        <div className="brand-mark" style={{ alignSelf: "flex-start" }}>CUE</div>
+        <Wordmark size={22} />
         <h2>Sign in</h2>
-        <p className="signin-sub">Store and admin dashboards</p>
+        <p className="signin-sub">Cue Studio — floor performance and administration</p>
 
         <label>
           <span>Email</span>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { socket } from "./socket.js";
 import { api, session } from "./api.js";
+import { Wordmark } from "./components/Mark.jsx";
 import Login from "./components/Login.jsx";
 import ManagerDashboard from "./components/ManagerDashboard.jsx";
 import Dashboard from "./components/Dashboard.jsx";
@@ -13,7 +14,7 @@ const VIEWS = {
   client_admin: ["floor"],
   cue_admin: ["floor"],
 };
-const LABELS = { floor: "Store floor", simulator: "Simulator" };
+const LABELS = { floor: "Floor", simulator: "Simulator" };
 
 export default function App() {
   const [user, setUser] = useState(session.user);
@@ -57,7 +58,7 @@ export default function App() {
     return (
       <div className="app-shell">
         <div className="card signin-error" style={{ marginTop: 40 }}>
-          Associates don't have a dashboard — your view is in the glasses.
+          Associates don't have a dashboard — your surface is Cue Lens, in the glass.
           <button className="linkish" onClick={signOut}>Sign out</button>
         </div>
       </div>
@@ -71,9 +72,11 @@ export default function App() {
     <div className="app-shell">
       <div className="topbar">
         <div className="brand">
-          <span className="brand-mark">CUE</span>
+          <Wordmark size={20} />
           <span className="brand-sub">
-            {user.tenant_slug ? `${user.tenant_slug} · ${user.role.replace("_", " ")}` : "all tenants"}
+            Cue Studio · {user.tenant_slug
+              ? `${user.tenant_slug} · ${user.role.replace("_", " ")}`
+              : "all tenants"}
           </span>
         </div>
         <div className="view-switch">
@@ -95,7 +98,7 @@ export default function App() {
       {view === "simulator" && (
         <>
           <p className="card-note" style={{ marginBottom: 12 }}>
-            Demo harness — drives the same backend as the glasses. Anything you do
+            Demo harness — drives the same backend as Cue Lens. Anything you do
             here is recorded against the {user.tenant_slug || "demo"} tenant.
           </p>
           <AssociateView />

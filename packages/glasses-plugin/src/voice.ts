@@ -45,6 +45,8 @@ export interface VoiceResult {
   transcript?: string;
   intent?: string;
   answer?: string;
+  /** Written for the glass: three lines and up to three supporting facts. */
+  cue?: { lines: string[]; meta?: string[] };
   glasses_lines?: string[];
 }
 
@@ -52,8 +54,10 @@ export interface VoiceDeps {
   bridge: GlassesBridge;
   /** Send a socket event. Kept as a callback so voice.ts never imports the socket. */
   emit(event: string, payload?: unknown): void;
-  /** Render lines to the lens (main.ts owns the page/container lifecycle). */
-  render(lines: string[], status: string): Promise<void>;
+  /** Render a cue to the lens (main.ts owns the page/container lifecycle).
+   *  Three lines and up to three supporting facts — never a hint row. The
+   *  glass shows nothing it doesn't have to. */
+  render(lines: string[], meta: string[]): Promise<void>;
   log(message: string): void;
   onState?(state: VoiceState): void;
   /** Called when an answer's dwell expires, to restore idle/engaged view. */
@@ -163,8 +167,7 @@ export class VoiceController {
       // Host refused the mic (permission, or another app holds it).
       this.deps.emit("voice:cancel");
       await this.deps.render(
-        ["[ICON:WARN] Mic unavailable", "", "Check Even App mic permission"],
-        "press: dismiss",
+        ["MIC UNAVAILABLE", "CHECK EVEN APP PERMISSION"], [],
       );
       this.deps.log("voice: mic refused by host");
       this.setState("idle");
@@ -238,8 +241,7 @@ export class VoiceController {
       this.deps.emit("voice:cancel");
       this.deps.log(`voice: no speech (${reason})`);
       await this.deps.render(
-        ["[ICON:WARN] Didn't hear anything", "", "Double-press and speak"],
-        "press: dismiss",
+        ["DIDNT HEAR ANYTHING", "DOUBLE PRESS AND SPEAK"], [],
       );
       this.setState("idle");
       this.scheduleDwell(4000);
@@ -249,17 +251,19 @@ export class VoiceController {
     this.deps.emit("voice:end");
     this.setState("thinking");
     this.deps.log(`voice: closed (${reason}, ${Date.now() - this.startedAt}ms)`);
-    await this.deps.render(["[ICON:MIC] …thinking", "", ""], "hold on");
+    await this.deps.render(["THINKING"], []);
   }
 
   /** Server answer arrived. */
   async onResult(result: VoiceResult) {
     this.clearTimers();
-    const lines = result.glasses_lines?.length
-      ? result.glasses_lines
-      : ["[ICON:WARN] No answer", result.answer || ""];
+    const lines = result.cue?.lines?.length
+      ? result.cue.lines
+      : result.glasses_lines?.length
+        ? result.glasses_lines
+        : ["NO ANSWER", (result.answer || "").toUpperCase()];
     this.setState("answering");
-    await this.deps.render(lines, "press: dismiss");
+    await this.deps.render(lines, result.cue?.meta ?? []);
     this.deps.log(
       `voice: "${result.transcript ?? ""}" → ${result.intent ?? "?"} — ${result.answer ?? ""}`,
     );
@@ -283,13 +287,8 @@ export class VoiceController {
   private async paintListening() {
     const seconds = ((Date.now() - this.startedAt) / 1000).toFixed(1);
     await this.deps.render(
-      [
-        "[ICON:MIC] LISTENING",
-        levelMeter(this.level),
-        "",
-        this.heardSpeech ? "…keep going" : "Ask about stock, size, price",
-      ],
-      `${seconds}s · press: cancel`,
+      ["LISTENING", levelMeter(this.level), this.heardSpeech ? "" : "ASK ABOUT STOCK OR SIZE"],
+      [`${seconds}S`],
     );
   }
 

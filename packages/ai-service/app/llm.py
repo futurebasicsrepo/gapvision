@@ -9,6 +9,8 @@ changes the API contract.
 import os
 import textwrap
 
+from . import cue as cue_format
+
 
 class BaseProvider:
     name = "base"
@@ -55,31 +57,18 @@ class MockProvider(BaseProvider):
                 "loyalty_points"] >= 1000 else ".")
         )
 
+        # The cue is designed for the glass first; the phone and the dashboard
+        # get the same sentence with more room. `glasses_lines` stays as the
+        # flat form for logs and the manager view.
+        cue = cue_format.guest_cue(guest, top, cart)
         return {
             "provider": self.name,
             "opener": opener,
             "upsell": upsell,
             "closer": closer,
-            # Pre-formatted lines for the monochrome glasses display.
-            "glasses_lines": _to_glasses_lines(guest, top, cart),
+            "cue": cue,
+            "glasses_lines": cue_format.flatten(cue),
         }
-
-
-def _to_glasses_lines(guest: dict, top: dict | None, cart: list[dict]) -> list[str]:
-    """Format for a 576x288 monochrome display: short text lines + icon markers."""
-    first_name = guest["name"].split()[0]
-    lines = [
-        f"[ICON:USER] {guest['name']}",
-        f"[ICON:STAR] {guest['loyalty_tier']} * {guest['loyalty_points']} pts",
-        f"[ICON:TAG] Size {guest['sizes']['tops']} top / {guest['sizes']['bottoms']}",
-    ]
-    if cart:
-        lines.append(f"[ICON:CART] Online cart: {cart[0]['name']}")
-    if top:
-        lines.append(f"[ICON:ARROW] Show: {top['name']}")
-        lines.append(f"        @ {top['location']} ${top['price']:.2f}")
-    lines.append(f"[ICON:CHAT] \"Welcome back, {first_name}!\"")
-    return lines
 
 
 class AnthropicProvider(BaseProvider):

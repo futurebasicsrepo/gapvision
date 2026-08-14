@@ -9,7 +9,7 @@ const OUTCOME_TONE = {
   sale: "available",
   no_sale: "neutral",
   handoff: "neutral",
-  abandoned: "warnpill",
+  abandoned: "neutral",
 };
 
 const RANGES = [

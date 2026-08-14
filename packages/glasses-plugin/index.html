@@ -3,48 +3,70 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GapVision — Even Hub Plugin</title>
+  <title>Cue Lens — cuesea</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Doto is the dot-matrix face and exists for exactly one place: the glass.
+       Everything around it is Instrument Sans, identifiers in Plex Mono. -->
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Doto:wght@400;600&display=swap" rel="stylesheet" />
   <style>
-    :root{--navy:#001a38;--card:#0b1b2e;--edge:#16304d;--ink:#eef2f7;--muted:#7e8ea1;
-      --blue:#2563eb;--green:#33ff66;--green-dim:#1d9940;--warn:#f59e0b;
-      --mono:"IBM Plex Mono",ui-monospace,monospace}
+    /* cuesea tokens — see packages/web/src/brand.css for the full system. */
+    :root{--sea-900:#04122E;--sea-800:#06193A;--sea-700:#0A2E63;--sea-600:#0F3F80;
+      --sea-500:#1560B8;--sea-300:#3E9BE8;--sea-200:#8FC7F0;--sea-100:#BFE0F7;
+      --flame:#FF6B2C;--flame-300:#FFB08A;--paper:#FBF9F5;
+      --hud-500:#4BFF9A;--hud-400:#35E585;--hud-300:#22B869;
+      --sans:"Instrument Sans",system-ui,sans-serif;
+      --mono:"IBM Plex Mono",ui-monospace,monospace;
+      --matrix:"Doto","IBM Plex Mono",monospace}
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Inter,system-ui,sans-serif;background:var(--navy);color:var(--ink);
+    body{font-family:var(--sans);background:var(--sea-900);color:var(--paper);
       max-width:520px;margin:0 auto;padding:16px 16px 40px}
-    h1{font-size:16px;letter-spacing:.12em;margin:8px 0 2px}
-    .sub{color:var(--muted);font-size:12px;margin-bottom:14px}
-    .card{background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:14px;margin-bottom:12px}
-    .card h3{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:10px}
-    .pill{display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;
-      border:1px solid var(--edge);color:var(--muted);margin-right:6px}
-    .pill.ok{color:#22c55e;border-color:#22c55e}
-    .pill.warn{color:var(--warn);border-color:var(--warn)}
-    .pill.dev{color:#4f83f1;border-color:#4f83f1}
-    .pill.live{color:#33ff66;border-color:#1d9940}
-    #virtual-lens{position:relative;width:100%;aspect-ratio:2/1;background:#020a04;
-      border:2px solid #123522;border-radius:10px;overflow:hidden;font-family:var(--mono)}
-    .lens-text{position:absolute;color:var(--green);font-size:13px;line-height:1.3;
-      white-space:pre;overflow:hidden;text-shadow:0 0 5px rgba(51,255,102,.5)}
-    .lens-caption{color:var(--muted);font-size:10.5px;margin-top:6px;text-align:center}
-    button{border:1px solid var(--edge);background:#0a3766;color:var(--ink);font:inherit;
-      font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:8px;cursor:pointer;margin:3px 4px 3px 0}
-    button:active{background:#14467a}
-    #session-info{font-size:13px;color:var(--ink);margin-bottom:6px}
-    #event-log{font-family:var(--mono);font-size:10.5px;color:var(--muted);
+    h1{font-size:15px;font-weight:700;letter-spacing:-.01em;margin:8px 0 2px}
+    h1 .sea{color:var(--sea-300)}
+    .sub{color:var(--sea-200);font-family:var(--mono);font-size:11px;letter-spacing:.08em;
+      text-transform:uppercase;margin-bottom:14px}
+    .card{background:var(--sea-800);border:1px solid rgba(143,199,240,.14);border-radius:10px;
+      padding:14px;margin-bottom:12px}
+    .card h3{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.14em;
+      color:var(--sea-300);margin-bottom:10px;font-weight:500}
+    .pill{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:500;
+      padding:3px 10px;border-radius:999px;border:1px solid rgba(143,199,240,.22);
+      color:var(--sea-100);margin-right:6px;letter-spacing:.05em}
+    .pill.ok{color:var(--sea-100);border-color:rgba(143,199,240,.45)}
+    .pill.warn{color:var(--flame-300);border-color:rgba(255,176,138,.5)}
+    .pill.dev{color:var(--sea-200)}
+    .pill.live{color:var(--flame);border-color:rgba(255,107,44,.5)}
+    /* The glass. 576 x 288 on the G2 — the brand doc specs 640 x 200 for the
+       next display; the grammar is identical either way. Green lives only in
+       here: hud-500 for the three lines, hud-300 for the meta strip. */
+    #virtual-lens{position:relative;width:100%;aspect-ratio:2/1;background:#000;
+      border:1px solid rgba(34,184,105,.35);border-radius:10px;overflow:hidden;
+      font-family:var(--matrix)}
+    .lens-text{position:absolute;color:var(--hud-500);font-size:14px;font-weight:600;
+      line-height:1.25;letter-spacing:.02em;white-space:pre;overflow:hidden;
+      text-shadow:0 0 6px rgba(75,255,154,.45)}
+    .lens-text.meta{color:var(--hud-300);font-weight:400;font-size:11.5px;letter-spacing:.2em}
+    .lens-caption{color:var(--sea-200);font-size:10.5px;margin-top:6px;text-align:center}
+    button{border:1px solid rgba(143,199,240,.22);background:var(--sea-700);color:var(--paper);
+      font:inherit;font-size:12.5px;font-weight:500;padding:8px 12px;border-radius:8px;
+      cursor:pointer;margin:3px 4px 3px 0}
+    button:active{background:var(--sea-600)}
+    #session-info{font-size:13px;color:var(--paper);margin-bottom:6px}
+    #event-log{font-family:var(--mono);font-size:10.5px;color:var(--sea-200);
       max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
     #event-inspector{font-family:var(--mono);font-size:10px;max-height:220px;
       overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:8px}
     #event-inspector .insp{white-space:pre-wrap;word-break:break-all;padding:4px 6px;
       border-radius:5px;border-left:2px solid transparent}
-    #event-inspector .insp.ok{color:var(--muted);border-left-color:#22c55e;
-      background:rgba(34,197,94,.05)}
-    #event-inspector .insp.unknown{color:var(--warn);border-left-color:var(--warn);
-      background:rgba(245,158,11,.07)}
+    #event-inspector .insp.ok{color:var(--sea-200);border-left-color:var(--sea-500);
+      background:rgba(21,96,184,.10)}
+    #event-inspector .insp.unknown{color:var(--flame-300);border-left-color:var(--flame);
+      background:rgba(255,107,44,.09)}
   </style>
 </head>
 <body>
-  <h1>CUE</h1>
-  <div class="sub">Even Hub plugin — associate phone page</div>
+  <h1><span>cue</span><span class="sea">sea</span> &nbsp;·&nbsp; Cue Lens</h1>
+  <div class="sub">Even Hub plugin · associate phone page</div>
 
   <div class="card">
     <span id="bridge-status" class="pill">bridge…</span>

@@ -154,6 +154,9 @@ io.on("connection", (socket) => {
 
       // Push the monochrome overlay to the requesting associate's glasses...
       socket.emit("glasses:display", {
+        // The cue as written for the glass; `lines` is the flat form the
+        // manager view and the log use.
+        cue: context.script.cue,
         lines: context.script.glasses_lines,
         script: context.script,
         recommendations: context.recommendations,

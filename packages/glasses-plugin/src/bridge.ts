@@ -125,7 +125,10 @@ class MockBridge implements GlassesBridge {
       .sort((a, b) => (a.zOrderIndex ?? 0) - (b.zOrderIndex ?? 0))
       .forEach((c) => {
         const el = document.createElement("div");
-        el.className = "lens-text";
+        // hud-500 is peak brightness and belongs to the three lines alone;
+        // the label, latency and meta strip sit at hud-300.
+        const dim = /^(cue-label|cue-latency|cue-meta|status)$/.test(c.containerName);
+        el.className = dim ? "lens-text meta" : "lens-text";
         el.style.left = `${c.xPosition * sx}px`;
         el.style.top = `${c.yPosition * sy}px`;
         el.style.width = `${c.width * sx}px`;

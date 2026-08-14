@@ -1,22 +1,32 @@
 /**
  * Chart primitives.
  *
- * Palette: categorical slots 1–3, dark steps, validated against this app's
- * card surface (#0b1b2e) — lightness band, chroma floor, CVD separation
- * (worst adjacent ΔE 9.4 deutan), normal-vision floor (26.5) and 3:1 contrast
- * all pass. Colours are assigned to a fixed meaning and never cycled, so a
- * filter that drops a series can't repaint the others.
+ * Palette follows the brand's chart rule: the depth ramp carries the ordered
+ * series, and flame marks the one that matters. Never a rainbow.
  *
- * Text never wears the series colour — identity comes from the swatch beside
- * it. Values sit in text tokens so they stay legible on the card.
+ * Here the series that matters is assists — the whole reason this leaderboard
+ * is weighted the way it is — so it takes the flame, and sales and guests
+ * ride two steps of the sea ramp.
+ *
+ * Validated against the Cue Studio card surface (sea-800 #06193A), analysed
+ * the way it is actually constructed rather than as a flat categorical set:
+ *   · the two sea steps as an ordinal ramp — monotone lightness, ΔL ≥ 0.06,
+ *     light end 4.19:1, single hue (11° spread). All pass.
+ *   · flame against each sea step — CVD ΔE 22.8 / 24.2, normal-vision 29.2 /
+ *     34.9, contrast ≥ 3:1. All pass.
+ * sea-200 is low-chroma and reads grey under severe CVD, so identity leans on
+ * the legend and the written detail line beneath each bar, never on hue alone.
+ *
+ * hud green is deliberately absent: it belongs inside the glass, and the
+ * brand forbids it as a chart series.
  */
 export const SERIES = {
-  sales: { color: "#3987e5", label: "Sales" },
-  engagements: { color: "#d95926", label: "Guests helped" },
-  assists: { color: "#199e70", label: "Assists" },
+  sales: { color: "#2E7FD0", label: "Sales" },          /* sea-400 */
+  engagements: { color: "#8FC7F0", label: "Guests helped" }, /* sea-200 */
+  assists: { color: "#FF6B2C", label: "Assists" },      /* flame — the cue */
 };
 
-const SURFACE = "#0b1b2e";
+const SURFACE = "#06193A";
 
 export function StatTile({ label, value, sub, span = 3 }) {
   return (

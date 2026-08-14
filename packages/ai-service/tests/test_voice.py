@@ -137,7 +137,7 @@ def test_waist_size_never_binds_to_a_letter_sized_garment():
 
     r = answer_query("do we have these in a 32x30", crm.INVENTORY, focus_sku="GAP-TEE-1150")
     assert r["product"]["sku"] == "GAP-DNM-0498"
-    assert "3 in 32x30" in r["glasses_lines"][1]
+    assert r["cue"]["lines"][0] == "YES 3 IN 32X30"
 
     # Letter sizes must never appear as alternatives to a waist size.
     jeans_item = jeans()
@@ -185,8 +185,9 @@ def test_stock_answer_is_grounded_in_the_record():
     r = answer_query("do we have these in a 32x30", crm.INVENTORY, focus_sku="GAP-DNM-0498")
     assert r["intent"] == "stock"
     assert "3" in r["answer"]  # 32x30 -> 3 units in the fixture
-    assert str(jeans()["sizes"]["32x30"]) in r["glasses_lines"][1]
-    assert r["glasses_lines"][0].startswith("[ICON:MIC]")
+    # The cue leads with the answer, in glass grammar.
+    assert r["cue"]["lines"][0] == "YES 3 IN 32X30"
+    assert "HIGH RISE BARREL JEANS" in r["cue"]["lines"]
 
 
 def test_out_of_stock_offers_real_alternatives_only():
@@ -202,7 +203,9 @@ def test_missing_size_falls_back_to_the_guests_own_size():
     # Sarah Chen wears 28x30; the fixture has 3.
     assert r["size"] == "28x30"
     assert "28x30" in r["answer"]
-    assert any("assumed their size" in line for line in r["glasses_lines"])
+    # The guess is a supporting fact, not one of the three lines.
+    assert any("ASSUMED 28X30" in fact for fact in r["cue"]["meta"])
+    assert len(r["cue"]["lines"]) <= 3
 
 
 def test_unknown_product_does_not_guess():
@@ -243,13 +246,26 @@ def test_recommend_uses_persona_and_excludes_owned():
     assert all(m["sku"] not in owned for m in r["matches"])
 
 
-def test_lines_fit_the_lens():
+def test_every_answer_obeys_the_glass_grammar():
+    """Three lines, never four. Uppercase. No punctuation but the interpunct.
+
+    This is the constraint the whole product is designed around, so it is
+    asserted on every intent rather than spot-checked.
+    """
+    import re
+
     for q in ["do we have these in a 32x30", "what should I show her next",
-              "what did she buy last time", "where is the poplin shirt"]:
+              "what did she buy last time", "where is the poplin shirt",
+              "how much is the linen blazer", "any of these in a 34x32"]:
         r = answer_query(q, crm.INVENTORY, guest=guest(), focus_sku="GAP-DNM-0498")
-        assert len(r["glasses_lines"]) <= 7, q
-        for line in r["glasses_lines"]:
+        cue = r["cue"]
+        assert len(cue["lines"]) <= 3, (q, cue["lines"])
+        assert len(cue["meta"]) <= 3, (q, cue["meta"])
+        for line in cue["lines"] + cue["meta"]:
             assert len(line) <= 60, (q, line)
+            assert line == line.upper(), (q, line)
+            # The interpunct is the only mark that survives.
+            assert not re.search(r"[.,;:!?\"'()\[\]]", line), (q, line)
 
 
 # --- endpoint ----------------------------------------------------------------

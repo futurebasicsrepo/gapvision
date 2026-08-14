@@ -1,68 +1,111 @@
 /**
- * Maps Cue `glasses_lines` (the AI service's pre-formatted display
- * payload) onto Even Hub page containers.
+ * Cue Lens — the cue, as the glass renders it.
  *
- * Display: 576 x 288, monochrome green. SDK rules honored here:
- *  - containerTotalNum 1..12, max 8 text containers
- *  - exactly one container carries isEventCapture: 1
- *  - zOrderIndex: all-or-none per page, unique when present
+ * The identity system specifies this surface tighter than anything else in
+ * the product, and the constraint is the point:
+ *
+ *   CUE + latency   hud-300, small, tracked wide. Establishes this is live,
+ *                   not cached, and makes latency a visible product claim.
+ *   Three lines     hud-500 at full brightness. The only peak-brightness
+ *                   element on the display. Name, evidence, reason to speak.
+ *   Meta strip      hud-300. Three facts that support the sentence and never
+ *                   compete with it.
+ *   Absent          no buttons, no chrome, no logo, no icons. Confirmation is
+ *                   a temple tap; dismissal is a look away.
+ *
+ * The G2 renders 576 × 288 per eye; the brand doc specs 640 × 200 for the
+ * display it anticipates. The grammar is identical either way — only the
+ * geometry below changes — so this file is the single place that has to move
+ * when the hardware does.
  */
 import type { PageSpec, TextContainer } from "./bridge";
 
-export const MAX_LINES = 7; // + 1 status row = 8 text containers (SDK max)
-/** Characters that fit in the 264px status row. */
-export const STATUS_CHARS = 24;
+export const DISPLAY_W = 576;
+export const DISPLAY_H = 288;
 
-const LINE_X = 16;
-const LINE_W = 544;
-const LINE_H = 32;
-const LINE_Y0 = 12;
-const LINE_STEP = 34;
+/** Three lines is the contract. A fourth is a bug, not an overflow. */
+export const CUE_LINES = 3;
+/** Under 60 characters per line — the edge of the frame at this FOV. */
+export const LINE_CHARS = 60;
 
-/** Strip [ICON:*] markers to plain glyphs the monochrome renderer can show. */
-export function toDisplayText(line: string): string {
-  const ICONS: Record<string, string> = {
-    USER: "●", STAR: "★", TAG: "■", CART: "▸",
-    ARROW: "→", CHAT: "❝", WARN: "⚠", RADIO: "◉",
-    MIC: "◍", CHECK: "✓", NO: "✕", PIN: "⌖",
-  };
-  return line.replace(/\[ICON:(\w+)\]\s?/, (_, k) => `${ICONS[k] ?? "▪"} `);
+const X = 20;
+const W = DISPLAY_W - X * 2;
+
+export interface Cue {
+  lines: string[];
+  meta?: string[];
 }
 
-export function buildPage(lines: string[], statusText: string): PageSpec {
-  const shown = lines.slice(0, MAX_LINES).map(toDisplayText);
+/**
+ * Strip anything the glass shouldn't render.
+ *
+ * The service already writes in glass grammar, so this is a backstop for
+ * anything that reaches the lens from an older path — an icon marker, a
+ * stray comma, lowercase.
+ */
+export function toDisplayText(line: string): string {
+  return String(line ?? "")
+    .replace(/\[ICON:\w+\]\s*/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ·%$£€/+-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, LINE_CHARS);
+}
 
-  const textObject: TextContainer[] = shown.map((content, i) => ({
-    xPosition: LINE_X,
-    yPosition: LINE_Y0 + i * LINE_STEP,
-    width: LINE_W,
-    height: LINE_H,
-    containerID: i + 1,
-    containerName: `line-${i + 1}`,
-    zOrderIndex: i + 1,
-    content,
-    // First container is the page's single gesture receiver.
-    isEventCapture: i === 0 ? 1 : 0,
-  }));
+/**
+ * Build the page.
+ *
+ * `latency` is rendered because the brand makes it a claim rather than a
+ * diagnostic: the associate can see the cue is live.
+ */
+export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
+  const lines = (cue.lines || []).map(toDisplayText).filter(Boolean).slice(0, CUE_LINES);
+  const meta = (cue.meta || []).map(toDisplayText).filter(Boolean).slice(0, 3);
 
-  // Status row (bottom-right): session state / gesture hints.
-  // 264px fits roughly 24 characters; anything longer runs off the lens
-  // silently, so clip here rather than trusting every caller to count.
+  const textObject: TextContainer[] = [];
+
+  // Header — the word CUE, and how fresh this is.
   textObject.push({
-    xPosition: 296,
-    yPosition: 262,
-    width: 264,
-    height: 24,
-    containerID: 9,
-    containerName: "status",
-    zOrderIndex: 9,
-    content: statusText.length > STATUS_CHARS
-      ? statusText.slice(0, STATUS_CHARS - 1) + "…"
-      : statusText,
+    xPosition: X, yPosition: 16, width: 200, height: 20,
+    containerID: 1, containerName: "cue-label", zOrderIndex: 1,
+    content: "CUE",
+    // The single gesture receiver for the page. It is the header rather than
+    // a line of the cue so the sentence carries no affordance of its own.
+    isEventCapture: 1,
+  });
+  textObject.push({
+    xPosition: DISPLAY_W - X - 120, yPosition: 16, width: 120, height: 20,
+    containerID: 2, containerName: "cue-latency", zOrderIndex: 2,
+    content: latencyMs ? `${(latencyMs / 1000).toFixed(1)}S` : "",
+    isEventCapture: 0,
+  });
+
+  // The three lines. Peak brightness, nothing else on the display shares it.
+  const top = 70;
+  const step = 44;
+  lines.forEach((content, i) => {
+    textObject.push({
+      xPosition: X, yPosition: top + i * step, width: W, height: 38,
+      containerID: 3 + i, containerName: `cue-line-${i + 1}`, zOrderIndex: 3 + i,
+      content,
+      isEventCapture: 0,
+    });
+  });
+
+  // Meta strip, bottom left. Interpunct-separated, never four facts.
+  textObject.push({
+    xPosition: X, yPosition: DISPLAY_H - 42, width: W, height: 22,
+    containerID: 7, containerName: "cue-meta", zOrderIndex: 7,
+    content: meta.join(" · "),
     isEventCapture: 0,
   });
 
   return { containerTotalNum: textObject.length, textObject };
 }
 
-export const IDLE_LINES = ["CUE READY", "", "Awaiting guest signal..."];
+/** Nothing to say yet. Even the idle state obeys the grammar. */
+export const IDLE_CUE: Cue = {
+  lines: ["CUESEA READY", "", "AWAITING GUEST SIGNAL"],
+  meta: [],
+};
