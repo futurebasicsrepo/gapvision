@@ -86,12 +86,17 @@ async function ingest(path, body) {
 
 // ---- Socket wiring ----------------------------------------------------------
 io.on("connection", (socket) => {
-  socket.on("register", ({ role, name, zone, email }) => {
+  socket.on("register", ({ role, name, zone, email, deviceSerial, deviceModel }) => {
     socket.data.role = role;
-    // Attribution for the control plane. Until devices are bound to people in
-    // the admin UI, the plugin passes the associate's email through; without
-    // one, activity is still recorded against the tenant, just unattributed.
+    // Attribution for the control plane. The glasses identify themselves by
+    // serial — the Even SDK exposes no email — and the AI service resolves
+    // that to whoever the device is assigned to in Cue Console. Email is the
+    // fallback for the simulator and the dashboard's associate view, which do
+    // have one. With neither, activity is still recorded against the tenant,
+    // just unattributed.
     socket.data.email = email || null;
+    socket.data.deviceSerial = deviceSerial || null;
+    socket.data.deviceModel = deviceModel || null;
     if (role === "dashboard") {
       // A client switching views re-registers; drop any associate identity.
       socket.leave("associates");
@@ -149,6 +154,8 @@ io.on("connection", (socket) => {
         guest_ref: guestId,
         zone: zone || "Floor",
         associate_email: socket.data.email,
+        device_serial: socket.data.deviceSerial,
+        device_model: socket.data.deviceModel,
       });
       socket.data.engagementId = opened?.engagement_id || null;
 
@@ -193,10 +200,14 @@ io.on("connection", (socket) => {
   /** An associate helping someone else's guest. Recorded so the leaderboard
    *  can reward it — a sales-only ranking punishes exactly this behaviour. */
   socket.on("assist:record", ({ note } = {}) => {
-    if (!socket.data.email) return;
+    // An assist has to name someone — credit is the entire content of the
+    // record. Either identity will do; neither means there is nothing to file.
+    if (!socket.data.email && !socket.data.deviceSerial) return;
     void ingest("assist", {
       tenant: socket.data.tenant || "gap",
       helper_email: socket.data.email,
+      device_serial: socket.data.deviceSerial,
+      device_model: socket.data.deviceModel,
       engagement_id: socket.data.engagementId || null,
       note: note || null,
     });
@@ -346,6 +357,8 @@ async function finalizeVoice(socket, reason) {
     tenant: session.tenant,
     engagement_id: socket.data.engagementId || null,
     associate_email: socket.data.email,
+    device_serial: socket.data.deviceSerial,
+    device_model: socket.data.deviceModel,
     intent: result.intent || null,
     ok: result.ok !== false,
     resolved_by: result.resolved_by || null,

@@ -174,6 +174,19 @@ function TenantDetail({ tenant, onChanged }) {
     } catch (e) { setError(e.message); }
   }
 
+  async function assignDevice(deviceId, userId) {
+    // Optimistic: the select has already moved, and snapping it back on a
+    // slow round trip reads as the click not registering.
+    setDevices((ds) => ds.map((d) => (d.id === deviceId ? { ...d, user_id: userId || null } : d)));
+    try {
+      await api.updateDevice(deviceId, { user_id: userId || "" });
+      load();
+    } catch (e) {
+      setError(e.message);
+      load();
+    }
+  }
+
   const admins = (users || []).filter((u) => u.role === "client_admin");
 
   return (
@@ -255,25 +268,57 @@ function TenantDetail({ tenant, onChanged }) {
         {devices === null ? (
           <div className="empty">Loading…</div>
         ) : !devices.length ? (
-          <div className="empty">No devices registered.</div>
-        ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr><th>Serial</th><th>Model</th><th>Assigned</th><th>Last seen</th></tr>
-              </thead>
-              <tbody>
-                {devices.map((d) => (
-                  <tr key={d.id}>
-                    <td className="ident">{d.serial}</td>
-                    <td><span className="pill muted">{d.model}</span></td>
-                    <td>{d.assigned_to || <span className="meta">unassigned</span>}</td>
-                    <td className="meta mono">{when(d.last_seen_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="empty">
+            No devices yet. A pair of glasses registers itself the first time it
+            connects — put them on and reload.
           </div>
+        ) : (
+          <>
+            {devices.some((d) => !d.assigned_to) && (
+              <div className="notice" style={{ marginBottom: 12 }}>
+                Hardware with nobody assigned records activity against the store
+                but not against a person, so it never reaches the leaderboard.
+                Pick a name to fix it.
+              </div>
+            )}
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr><th>Serial</th><th>Model</th><th>Assigned to</th><th>Last seen</th></tr>
+                </thead>
+                <tbody>
+                  {devices.map((d) => (
+                    <tr key={d.id}>
+                      <td className="ident">{d.serial}</td>
+                      <td><span className="pill muted">{d.model}</span></td>
+                      <td>
+                        {/* Assigning is the whole job of this table, so it's a
+                            control rather than a value with an edit affordance
+                            hidden behind it. */}
+                        <select
+                          className="assign"
+                          value={d.user_id || ""}
+                          onChange={(e) => assignDevice(d.id, e.target.value)}
+                        >
+                          <option value="">— unassigned —</option>
+                          {/* Role is shown because it changes what the
+                              assignment does: the leaderboard ranks the sales
+                              floor, so hardware assigned to a manager records
+                              a name but never appears there. */}
+                          {(users || []).filter((u) => u.status === "active").map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name}{u.role !== "associate" ? ` · ${u.role.replace("_", " ")}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="meta mono">{when(d.last_seen_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </>

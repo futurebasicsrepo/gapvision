@@ -38,6 +38,13 @@ export interface GlassesBridge {
   audioControl(isOpen: boolean, source?: unknown): Promise<boolean>;
   onEvenHubEvent(cb: (event: any) => void): () => void;
   getUserInfo(): Promise<{ name?: string } | null>;
+  /** Model and serial of the connected glasses.
+   *
+   *  This is how the floor knows who did what. The SDK's UserInfo has no
+   *  email — uid, display name, avatar, country and nothing else — so a
+   *  serial the device knows about itself is the only identity available
+   *  here that a dashboard can resolve to a person. */
+  getDeviceInfo(): Promise<{ model?: string; sn?: string } | null>;
 }
 
 export async function getBridge(): Promise<GlassesBridge> {
@@ -64,6 +71,10 @@ function wrapReal(real: any): GlassesBridge {
     audioControl: (o, s) => real.audioControl(o, s),
     onEvenHubEvent: (cb) => real.onEvenHubEvent(cb),
     getUserInfo: () => real.getUserInfo().catch(() => null),
+    // Optional-chained: an older Even App build may not implement it, and
+    // losing attribution is not a reason to fail startup.
+    getDeviceInfo: () =>
+      real.getDeviceInfo?.().catch(() => null) ?? Promise.resolve(null),
   };
 }
 
@@ -193,4 +204,8 @@ class MockBridge implements GlassesBridge {
     return () => this.listeners.delete(cb);
   }
   async getUserInfo() { return { name: "Dev Associate" }; }
+  /** Stable, and obviously fake. The browser tests bind this serial to a
+   *  person so they exercise the real attribution path rather than a
+   *  shortcut around it. */
+  async getDeviceInfo() { return { model: "g2", sn: "MOCK-G2-0001" }; }
 }

@@ -481,3 +481,118 @@ def test_platform_flags_a_tenant_with_no_admin(client, fixtures):
     check = {c["key"]: c for c in body["checks"]}["tenant_admins"]
     assert check["status"] == "warn"
     assert "t_beta" in check["detail"]
+
+
+# --- device attribution ------------------------------------------------------
+#
+# The bug this replaced: attribution rode on an email the glasses cannot
+# supply, so every engagement recorded from real hardware landed unattributed
+# and nothing ever reached the leaderboard.
+
+def test_unknown_device_registers_itself_unassigned(client, fixtures):
+    """A serial we've never seen must be kept, not discarded — otherwise the
+    console can't offer to assign it and someone has to read a serial number
+    off a pair of glasses."""
+    from app import db
+
+    res = client.post("/api/ingest/engagement/start", headers=service_key(),
+                      json={"tenant": "t_alpha", "guest_ref": "g-1",
+                            "device_serial": "G2-NEW-0001", "device_model": "g2"})
+    assert res.status_code == 201
+
+    device = db.query_one(
+        "SELECT * FROM devices WHERE tenant_id = %s AND serial = %s",
+        (fixtures["alpha"]["id"], "G2-NEW-0001"),
+    )
+    assert device is not None
+    assert device["user_id"] is None          # seen, not yet owned
+    assert device["last_seen_at"] is not None
+    assert device["model"] == "g2"
+
+    # Unassigned means unattributed — but the engagement still recorded.
+    eng = db.query_one("SELECT * FROM engagements WHERE guest_ref = 'g-1'")
+    assert eng["associate_user_id"] is None
+
+
+def test_assigned_device_attributes_to_its_person(client, fixtures):
+    from app import db, identity
+
+    who = identity.create_user(email="wearer@alpha.example.com", name="Wearer",
+                               role="associate", tenant_id=fixtures["alpha"]["id"],
+                               password=PW)
+    db.execute(
+        """
+        INSERT INTO devices (tenant_id, user_id, model, serial)
+        VALUES (%s, %s, 'g2', 'G2-BOUND-1')
+        """,
+        (fixtures["alpha"]["id"], who["id"]),
+    )
+
+    opened = client.post("/api/ingest/engagement/start", headers=service_key(),
+                         json={"tenant": "t_alpha", "guest_ref": "g-2",
+                               "device_serial": "G2-BOUND-1"}).json()
+    client.post("/api/ingest/engagement/end", headers=service_key(),
+                json={"engagement_id": opened["engagement_id"],
+                      "outcome": "sale", "sale_cents": 9900})
+
+    # The point of all this: it reaches the leaderboard under a name.
+    rows = client.get("/api/analytics/leaderboard?days=1&tenant=t_alpha",
+                      headers=auth(client, "cue@cue.example.com")).json()["rows"]
+    mine = [r for r in rows if r["name"] == "Wearer"]
+    assert mine, [r["name"] for r in rows]
+    assert mine[0]["engagements"] == 1
+    assert mine[0]["sale_cents"] == 9900
+
+
+def test_device_serial_wins_over_email(client, fixtures):
+    """Both supplied: the hardware is the more specific claim about who was
+    actually wearing the glasses."""
+    from app import db, identity
+
+    owner = identity.create_user(email="owner@alpha.example.com", name="Device Owner",
+                                 role="associate", tenant_id=fixtures["alpha"]["id"],
+                                 password=PW)
+    db.execute(
+        "INSERT INTO devices (tenant_id, user_id, model, serial) "
+        "VALUES (%s, %s, 'g2', 'G2-PRIORITY')",
+        (fixtures["alpha"]["id"], owner["id"]),
+    )
+    opened = client.post("/api/ingest/engagement/start", headers=service_key(),
+                         json={"tenant": "t_alpha", "guest_ref": "g-3",
+                               "device_serial": "G2-PRIORITY",
+                               "associate_email": "mgr@alpha.example.com"}).json()
+    row = db.query_one("SELECT * FROM engagements WHERE id = %s",
+                       (opened["engagement_id"],))
+    assert str(row["associate_user_id"]) == str(owner["id"])
+
+
+def test_a_device_cannot_attribute_across_tenants(client, fixtures):
+    """The serial is only meaningful inside its own tenant — devices are unique
+    per tenant, not globally, and two retailers may hold identical stock."""
+    from app import db, identity
+
+    a_user = identity.create_user(email="alpha-wearer@alpha.example.com", name="Alpha Wearer",
+                                  role="associate", tenant_id=fixtures["alpha"]["id"],
+                                  password=PW)
+    db.execute("INSERT INTO devices (tenant_id, user_id, model, serial) "
+               "VALUES (%s, %s, 'g2', 'G2-SHARED-SERIAL')",
+               (fixtures["alpha"]["id"], a_user["id"]))
+
+    opened = client.post("/api/ingest/engagement/start", headers=service_key(),
+                         json={"tenant": "t_beta", "guest_ref": "g-4",
+                               "device_serial": "G2-SHARED-SERIAL"}).json()
+    row = db.query_one("SELECT * FROM engagements WHERE id = %s",
+                       (opened["engagement_id"],))
+    assert row["associate_user_id"] is None, "beta got alpha's associate"
+    assert str(row["tenant_id"]) == str(fixtures["beta"]["id"])
+
+
+def test_unassigned_hardware_shows_up_on_the_platform_panel(client):
+    client.post("/api/ingest/engagement/start", headers=service_key(),
+                json={"tenant": "t_alpha", "guest_ref": "g-5",
+                      "device_serial": "G2-LOOSE-9"})
+    body = client.get("/api/admin/platform",
+                      headers=auth(client, "cue@cue.example.com")).json()
+    check = {c["key"]: c for c in body["checks"]}["devices"]
+    assert check["status"] == "warn"
+    assert "G2-LOOSE-9" in check["detail"]

@@ -279,6 +279,9 @@ async function main() {
   ui.bridgeStatus.className = bridge.kind === "even-app" ? "pill ok" : "pill dev";
 
   const user = (await bridge.getUserInfo()) ?? {};
+  // Attribution rides on this. If the Even App won't tell us, everything
+  // still works — it just lands unattributed, and the console says so.
+  const device = (await bridge.getDeviceInfo()) ?? {};
 
   voice = new VoiceController({
     bridge,
@@ -314,6 +317,8 @@ async function main() {
       role: "associate",
       name: `${(user as any).name || "G2 Associate"} [${TENANT}]`,
       zone: ZONE,
+      deviceSerial: (device as any).sn || null,
+      deviceModel: (device as any).model || null,
     });
   });
   socket.on("disconnect", () => {

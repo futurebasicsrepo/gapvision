@@ -95,6 +95,8 @@ class EngagementStart(BaseModel):
     guest_ref: str | None = None
     zone: str | None = None
     associate_email: str | None = None
+    device_serial: str | None = None
+    device_model: str | None = None
 
 
 class EngagementEnd(BaseModel):
@@ -107,6 +109,8 @@ class VoiceRecord(BaseModel):
     tenant: str
     engagement_id: str | None = None
     associate_email: str | None = None
+    device_serial: str | None = None
+    device_model: str | None = None
     intent: str | None = None
     ok: bool = True
     resolved_by: str | None = None
@@ -118,9 +122,11 @@ class VoiceRecord(BaseModel):
 
 class AssistRecord(BaseModel):
     tenant: str
-    helper_email: str
+    helper_email: str | None = None
     engagement_id: str | None = None
     note: str | None = None
+    device_serial: str | None = None
+    device_model: str | None = None
 
 
 def _ingest_tenant(slug: str) -> dict:
@@ -140,6 +146,63 @@ def _user_in(tenant: dict, email: str | None) -> str | None:
     return row["id"] if row else None
 
 
+#: Devices announce their own model; anything unexpected is stored as a g2
+#: rather than rejected, because the plugin only runs on glasses and a CHECK
+#: violation here would fail a write nobody can see.
+_MODELS = ("g2", "g1", "ring1")
+
+
+def _associate(tenant: dict, *, device_serial: str | None,
+               email: str | None, device_model: str | None = None) -> str | None:
+    """Who did this — by the hardware first, by email second.
+
+    The glasses cannot tell us an email. The Even SDK's UserInfo carries a
+    uid, a display name, an avatar and a country, and that is all; attribution
+    used to depend on an email the plugin had no way to obtain, which is why
+    every engagement recorded so far is unattributed.
+
+    A serial is what the device actually knows about itself, and `devices`
+    already stores one per tenant with a `user_id` beside it. Email is kept as
+    a fallback for the simulator and for tests, which do have one.
+
+    Registering the device also has a side effect worth having: it is the only
+    place that can honestly stamp `last_seen_at`, which the Health panel reads.
+    """
+    if device_serial:
+        row = db.query_one(
+            """
+            UPDATE devices SET last_seen_at = now()
+             WHERE tenant_id = %s AND serial = %s
+             RETURNING user_id
+            """,
+            (tenant["id"], device_serial),
+        )
+        if row is None:
+            # Never seen this one. Record it, unassigned, rather than throwing
+            # the serial away: the console can then offer "this device has been
+            # on the floor, who is wearing it?" instead of asking someone to
+            # find a serial number on a pair of glasses and type it correctly.
+            #
+            # Only the realtime server can reach this route — it holds the
+            # service key — so this cannot be used to fill the table from
+            # outside.
+            model = (device_model or "").lower()
+            db.execute(
+                """
+                INSERT INTO devices (tenant_id, model, serial, last_seen_at)
+                VALUES (%s, %s, %s, now())
+                ON CONFLICT (tenant_id, serial) DO UPDATE SET last_seen_at = now()
+                """,
+                (tenant["id"], model if model in _MODELS else "g2", device_serial),
+            )
+        elif row["user_id"]:
+            return str(row["user_id"])
+        # Known but unassigned: falls through. Activity is still recorded
+        # against the tenant, just without a name on it — an associate
+        # mid-conversation must never have a write fail underneath them.
+    return _user_in(tenant, email)
+
+
 @ingest.post("/engagement/start", status_code=201)
 def ingest_engagement_start(req: EngagementStart, request: Request,
                             x_gapvision_key: str | None = KeyHeader):
@@ -147,7 +210,9 @@ def ingest_engagement_start(req: EngagementStart, request: Request,
     t = _ingest_tenant(req.tenant)
     row = analytics.start_engagement(
         t["id"], guest_ref=req.guest_ref, zone=req.zone,
-        associate_user_id=_user_in(t, req.associate_email),
+        associate_user_id=_associate(
+            t, device_serial=req.device_serial, email=req.associate_email,
+            device_model=req.device_model),
     )
     return {"engagement_id": str(row["id"]), "started_at": row["started_at"]}
 
@@ -172,7 +237,9 @@ def ingest_voice(req: VoiceRecord, request: Request,
     row = analytics.record_voice_query(
         t,
         engagement_id=req.engagement_id,
-        user_id=_user_in(t, req.associate_email),
+        user_id=_associate(
+            t, device_serial=req.device_serial, email=req.associate_email,
+            device_model=req.device_model),
         intent=req.intent, ok=req.ok, resolved_by=req.resolved_by,
         latency_ms=req.latency_ms, audio_seconds=req.audio_seconds,
         stt_provider=req.stt_provider, transcript=req.transcript,
@@ -185,7 +252,11 @@ def ingest_assist(req: AssistRecord, request: Request,
                   x_gapvision_key: str | None = KeyHeader):
     guard(request, req.tenant, x_gapvision_key)
     t = _ingest_tenant(req.tenant)
-    helper = _user_in(t, req.helper_email)
+    # An assist must name someone — the whole point of the record is that a
+    # specific person gets credit for helping. Unlike an engagement, there is
+    # nothing useful to store without it.
+    helper = _associate(t, device_serial=req.device_serial, email=req.helper_email,
+                        device_model=req.device_model)
     if helper is None:
         raise HTTPException(status_code=404, detail="Unknown associate")
     row = analytics.record_assist(

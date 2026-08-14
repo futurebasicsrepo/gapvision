@@ -397,6 +397,25 @@ def _platform_checks() -> list[dict]:
                 f"{int(p95)} ms",
             ))
 
+    # Hardware nobody owns. These record activity against the store but not
+    # against a person, so it never reaches a leaderboard — the failure is
+    # silent from the floor and only visible here.
+    unbound = db.query(
+        """
+        SELECT t.slug, d.serial FROM devices d
+          JOIN tenants t ON t.id = d.tenant_id
+         WHERE d.user_id IS NULL AND d.status = 'active'
+           AND d.last_seen_at > now() - interval '7 days'
+         ORDER BY d.last_seen_at DESC LIMIT 5
+        """
+    )
+    checks.append(_check(
+        "devices", "Active devices are assigned to someone",
+        "ok" if not unbound else "warn",
+        "all assigned" if not unbound
+        else "unassigned: " + ", ".join(f"{r['serial']} ({r['slug']})" for r in unbound),
+    ))
+
     # An engagement that never closed corrupts average-length reporting, and
     # usually means a socket dropped without the disconnect handler firing.
     stuck = db.query_one(

@@ -270,6 +270,15 @@ body {
 }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
 
+/* Inline assignment control. Sized to the table row rather than the form
+   scale — it lives among data, not among labelled fields. */
+.assign {
+  background: rgba(4, 18, 46, 0.7); border: 1px solid rgba(143, 199, 240, 0.2);
+  color: var(--paper); font: inherit; font-size: 12.5px;
+  padding: 5px 8px; border-radius: 6px; cursor: pointer; max-width: 190px;
+}
+.assign:focus { outline: 2px solid var(--sea-400); outline-offset: 1px; }
+
 .notice {
   font-size: 13px; border-radius: 8px; padding: 10px 12px; line-height: 1.5;
   border: 1px solid rgba(143, 199, 240, 0.25); background: rgba(4, 18, 46, 0.5);

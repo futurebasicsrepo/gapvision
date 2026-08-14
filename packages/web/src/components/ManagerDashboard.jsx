@@ -252,7 +252,14 @@ export default function ManagerDashboard({ user }) {
           {data.engagements.map((e) => (
             <div className="row" key={e.id}>
               <div>
-                {e.associate || <span className="meta">unattributed</span>}
+                {e.associate || (
+                  /* Say why, not just that. "Unattributed" reads as a bug;
+                     the actual cause is a pair of glasses nobody has been
+                     assigned to, and that is fixable in a few seconds. */
+                  <span className="meta" title="The glasses that recorded this aren't assigned to anyone">
+                    unassigned device
+                  </span>
+                )}
                 <span className="meta"> · {e.zone || "floor"}</span>
               </div>
               <div className="row-right">

@@ -29,6 +29,7 @@
     "brand:sync": "node packages/brand/build.mjs",
     "dev:internal": "npm run dev --workspace=packages/internal",
     "build:internal": "npm run build --workspace=packages/internal",
-    "test:console": "node packages/internal/test/console-browser.mjs"
+    "test:console": "node packages/internal/test/console-browser.mjs",
+    "test:attribution": "node packages/internal/test/attribution-e2e.mjs"
   }
 }

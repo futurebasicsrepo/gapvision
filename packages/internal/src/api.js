@@ -101,6 +101,7 @@ export const api = {
   createUser: (body) => request("/api/admin/users", { method: "POST", body }),
   updateUser: (id, body) => request(`/api/admin/users/${id}`, { method: "PATCH", body }),
   devices: (tenant) => request(`/api/admin/devices?tenant=${encodeURIComponent(tenant)}`),
+  updateDevice: (id, body) => request(`/api/admin/devices/${id}`, { method: "PATCH", body }),
 
   // --- analytics, for the usage column -------------------------------------
   summary: (tenant, days = 7) =>
