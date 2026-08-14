@@ -3,6 +3,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
+# Migrations run at startup, so they have to be in the image. Leaving them out
+# produced a service that reported a healthy, reachable, completely empty
+# database — which is worse than failing to start.
+COPY migrations ./migrations
 COPY tests ./tests
 ENV PORT=8000
 EXPOSE 8000

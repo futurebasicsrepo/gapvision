@@ -140,6 +140,14 @@ def migrate(verbose: bool = True) -> list[str]:
     nobody can reason about.
     """
     files = sorted(MIGRATIONS_DIR.glob("*.sql"))
+    if not files:
+        # This happened once for real: the Dockerfile copied `app` but not
+        # `migrations`, and the service came up reporting a healthy, reachable,
+        # entirely empty database. Silence is the wrong answer here.
+        raise FileNotFoundError(
+            f"No migrations found in {MIGRATIONS_DIR}. If this is a container, "
+            "check that the directory is copied into the image."
+        )
     ran: list[str] = []
     with connection() as conn:
         done = _applied(conn)
@@ -172,6 +180,16 @@ def health() -> dict:
             with conn.cursor() as cur:
                 cur.execute("SELECT count(*) AS n FROM schema_migrations")
                 n = cur.fetchone()["n"]
-        return {"configured": True, "reachable": True, "migrations": n}
+                cur.execute(
+                    "SELECT count(*) AS n FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_name = 'tenants'"
+                )
+                has_schema = cur.fetchone()["n"] > 0
+        state = {"configured": True, "reachable": True, "migrations": n}
+        if not has_schema:
+            # Reachable but empty is not healthy, and must not read as healthy.
+            state["status"] = "empty"
+            state["detail"] = "connected, but the schema has not been created"
+        return state
     except (psycopg.Error, DatabaseNotConfigured) as e:
         return {"configured": True, "reachable": False, "error": str(e)[:200]}
