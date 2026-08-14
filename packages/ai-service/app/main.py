@@ -16,16 +16,39 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from . import db
 from .auth import KeyHeader, guard, startup_check
 from .crm_provider import TenantNotConfigured, get_crm_for, tenant_status
 from .llm import get_provider
 from .personas import match_products
+from .routes_admin import router as admin_router
+from .routes_analytics import ingest as ingest_router, router as analytics_router
+from .routes_auth import router as auth_router
 from .stt import MAX_AUDIO_BYTES, SAMPLE_RATE, STTError, audio_duration_seconds, get_stt
 from .voice import answer_query
 
 app = FastAPI(title="Cue AI Service", version="0.5.0")
 
 _AUTH_STATE = startup_check()
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    """Apply migrations on boot.
+
+    The control plane is small and the migrations are additive, so running
+    them at startup keeps a Railway deploy to one step. If no database is
+    configured the service still runs — the guest-context and voice paths
+    predate it and must not start requiring one.
+    """
+    if not db.configured():
+        print("[cue] no database configured — control plane disabled", flush=True)
+        return
+    try:
+        applied = db.migrate()
+        print(f"[cue] database ready ({len(applied)} migration(s) applied)", flush=True)
+    except Exception as e:  # a bad migration must not take the lens offline
+        print(f"[cue] WARNING: migrations failed: {e}", flush=True)
 
 # Browsers should not reach this service directly any more — the realtime
 # server proxies on their behalf. Keep an allowlist for local development
@@ -90,7 +113,14 @@ def health():
         "stt_provider": get_stt().name,
         "tenants": tenant_status(),
         "auth": _AUTH_STATE,
+        "database": db.health(),
     }
+
+
+app.include_router(auth_router)
+app.include_router(admin_router)
+app.include_router(analytics_router)
+app.include_router(ingest_router)
 
 
 @app.get("/api/guests")

@@ -59,10 +59,39 @@ function broadcastDashboard() {
   io.to("dashboard").emit("dashboard:update", dashboardSnapshot());
 }
 
+/**
+ * Write an event to the control plane.
+ *
+ * Fire and forget, deliberately. An associate mid-conversation must not feel
+ * a reporting outage: if the analytics write fails, the guest card still
+ * renders and the lens still answers. We log it and move on.
+ */
+async function ingest(path, body) {
+  try {
+    const res = await fetch(`${AI_SERVICE_URL}/api/ingest/${path}`, {
+      method: "POST",
+      headers: aiHeaders(AI_API_KEY),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      console.warn(`[cue] ingest ${path} → ${res.status}`);
+      return null;
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn(`[cue] ingest ${path} failed: ${err.message}`);
+    return null;
+  }
+}
+
 // ---- Socket wiring ----------------------------------------------------------
 io.on("connection", (socket) => {
-  socket.on("register", ({ role, name, zone }) => {
+  socket.on("register", ({ role, name, zone, email }) => {
     socket.data.role = role;
+    // Attribution for the control plane. Until devices are bound to people in
+    // the admin UI, the plugin passes the associate's email through; without
+    // one, activity is still recorded against the tenant, just unattributed.
+    socket.data.email = email || null;
     if (role === "dashboard") {
       // A client switching views re-registers; drop any associate identity.
       socket.leave("associates");
@@ -115,6 +144,14 @@ io.on("connection", (socket) => {
       socket.data.guestId = guestId;
       socket.data.focusSku = context.recommendations?.[0]?.sku || null;
 
+      const opened = await ingest("engagement/start", {
+        tenant: socket.data.tenant,
+        guest_ref: guestId,
+        zone: zone || "Floor",
+        associate_email: socket.data.email,
+      });
+      socket.data.engagementId = opened?.engagement_id || null;
+
       // Push the monochrome overlay to the requesting associate's glasses...
       socket.emit("glasses:display", {
         lines: context.script.glasses_lines,
@@ -134,12 +171,32 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("session:end", () => {
+  socket.on("session:end", ({ outcome, saleCents } = {}) => {
     const associate = state.associates.get(socket.id);
     if (associate) associate.status = "available";
+    if (socket.data.engagementId) {
+      void ingest("engagement/end", {
+        engagement_id: socket.data.engagementId,
+        outcome: outcome || "no_sale",
+        sale_cents: Number(saleCents) || 0,
+      });
+    }
+    socket.data.engagementId = null;
     socket.data.guestId = null;
     socket.data.focusSku = null;
     broadcastDashboard();
+  });
+
+  /** An associate helping someone else's guest. Recorded so the leaderboard
+   *  can reward it — a sales-only ranking punishes exactly this behaviour. */
+  socket.on("assist:record", ({ note } = {}) => {
+    if (!socket.data.email) return;
+    void ingest("assist", {
+      tenant: socket.data.tenant || "gap",
+      helper_email: socket.data.email,
+      engagement_id: socket.data.engagementId || null,
+      note: note || null,
+    });
   });
 
   // ---- Voice queries -------------------------------------------------------
@@ -207,6 +264,15 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     endVoiceSession(socket);
+    // An associate whose phone died mid-engagement leaves an open row
+    // otherwise, and "average engagement length" quietly becomes fiction.
+    if (socket.data.engagementId) {
+      void ingest("engagement/end", {
+        engagement_id: socket.data.engagementId,
+        outcome: "abandoned",
+      });
+      socket.data.engagementId = null;
+    }
     state.associates.delete(socket.id);
     broadcastDashboard();
   });
@@ -272,6 +338,19 @@ async function finalizeVoice(socket, reason) {
     at: new Date().toISOString(),
   });
   if (state.voiceLog.length > 100) state.voiceLog.shift();
+
+  void ingest("voice", {
+    tenant: session.tenant,
+    engagement_id: socket.data.engagementId || null,
+    associate_email: socket.data.email,
+    intent: result.intent || null,
+    ok: result.ok !== false,
+    resolved_by: result.resolved_by || null,
+    latency_ms: Date.now() - session.startedAt,
+    audio_seconds: result.audio_seconds ?? null,
+    stt_provider: result.stt_provider || null,
+    transcript: result.transcript || null,
+  });
 
   socket.emit("voice:result", result);
   socket.emit("voice:state", { state: "idle" });

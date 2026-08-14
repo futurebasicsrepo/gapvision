@@ -84,6 +84,57 @@ the in-lens display renders the monochrome overlay, the full script appears in
 the phone panel, and the Command Center updates live. The radio panel
 broadcasts to every connected associate.
 
+## Control plane (tenants, people, analytics)
+
+Postgres behind the AI service. Everything the dashboards read lives here, so
+it survives a redeploy — leaderboards that reset when someone pushes a commit
+are not leaderboards.
+
+```
+tenants      slug, CRM provider, billing plan, privacy posture
+users        associate | manager | client_admin | cue_admin
+devices      G2s and rings, assigned to people
+engagements  one guest interaction; guest_ref points at the CRM, never a copy
+voice_queries  intent, outcome, latency, cost — transcript only if opted in
+assists      helping someone else's guest, ranked as a first-class act
+usage_daily  the rollup billing reads
+```
+
+Three roles' worth of surface, one spine:
+
+| Route | Who |
+|---|---|
+| `/auth/login`, `/auth/me` | anyone with an account |
+| `/api/analytics/*` | manager and up, pinned to their own tenant |
+| `/api/admin/users`, `/devices`, `/tenants/{slug}` | client_admin for their retailer |
+| `/api/admin/tenants` (all), billing, provisioning | cue_admin only |
+| `/api/ingest/*` | the realtime server, via the service key — never a browser |
+
+Tenant isolation runs through one function (`identity.scope_tenant`). A manager
+who asks for another retailer's tenant gets their own data back, not an error:
+there is no legitimate reason to ask, and a 403 confirms the tenant exists.
+
+**Transcripts are off by default.** `tenants.privacy.store_transcripts` gates
+them, and the analytics work without them — intent, outcome and latency carry
+the reporting. What an associate said standing next to a customer isn't
+something Cue should accumulate as a side effect of a stock question.
+
+**Leaderboards count assists.** Ranking retail staff on sales alone reliably
+produces cherry-picking and kills the habit of covering for each other, so
+assists are recorded as events and weighted (25 points each by default, tunable
+per tenant), and every component of a score is returned so a ranking can be
+explained rather than just asserted.
+
+```bash
+npm run db:migrate     # apply migrations (also runs on service boot)
+npm run db:seed        # tenants + first admin; --demo adds a store
+npm run test:spine     # floor socket → control plane → manager dashboard
+```
+
+Set `CUE_DATABASE_URL` (Railway's `DATABASE_URL` is read as a fallback). With
+no database the lens still works — guest cards and voice predate the control
+plane and must not start requiring one.
+
 ## Gestures — ring first
 
 An associate standing in front of a customer can turn a ring on their finger
