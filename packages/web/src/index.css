@@ -190,3 +190,10 @@ body {
   .span-3, .span-4 { grid-column: span 3; }
   .span-6, .span-8 { grid-column: span 6; }
 }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.tenant-pick {
+  background: var(--sea-700); border: 1px solid rgba(143, 199, 240, 0.22);
+  color: var(--paper); font: inherit; font-size: 13px; font-weight: 500;
+  padding: 10px 14px; border-radius: 8px; cursor: pointer;
+}
+.tenant-pick:hover { background: var(--sea-600); }

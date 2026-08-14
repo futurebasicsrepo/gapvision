@@ -72,13 +72,19 @@ export const api = {
   logout: () => request("/auth/logout", { method: "POST" }).catch(() => {}),
   me: () => request("/auth/me"),
 
-  summary: (days = 1) => request(`/api/analytics/summary?days=${days}`),
-  leaderboard: (days = 7) => request(`/api/analytics/leaderboard?days=${days}`),
-  engagements: (limit = 15) => request(`/api/analytics/engagements?limit=${limit}`),
-  voice: (limit = 15) => request(`/api/analytics/voice?limit=${limit}`),
-  users: () => request("/api/admin/users"),
-  devices: () => request("/api/admin/devices"),
+  // Cue staff aren't scoped to a retailer, so they name the tenant. Everyone
+  // else is pinned to their own and the parameter is ignored server-side.
+  summary: (days = 1, t) => request(`/api/analytics/summary?days=${days}${tq(t)}`),
+  leaderboard: (days = 7, t) => request(`/api/analytics/leaderboard?days=${days}${tq(t)}`),
+  engagements: (limit = 15, t) => request(`/api/analytics/engagements?limit=${limit}${tq(t)}`),
+  voice: (limit = 15, t) => request(`/api/analytics/voice?limit=${limit}${tq(t)}`),
+  tenants: () => request("/api/admin/tenants"),
+  users: (t) => request(`/api/admin/users${tq(t, true)}`),
+  devices: (t) => request(`/api/admin/devices${tq(t, true)}`),
 };
+
+const tq = (tenant, first = false) =>
+  tenant ? `${first ? "?" : "&"}tenant=${encodeURIComponent(tenant)}` : "";
 
 export const money = (cents) =>
   `$${((cents || 0) / 100).toLocaleString(undefined, {

@@ -34,10 +34,37 @@ export default function ManagerDashboard({ user }) {
   const [loading, setLoading] = useState(true);
   const registered = useRef(false);
 
+  /**
+   * Which retailer's floor we're looking at.
+   *
+   * A manager or client admin is pinned to their own tenant and this is just
+   * their slug. Cue staff belong to no tenant, so they have to pick one — the
+   * API refuses an unscoped request rather than guessing, which is correct,
+   * and the UI has to offer the choice rather than firing requests that
+   * cannot succeed.
+   */
+  const isCueStaff = user.role === "cue_admin";
+  const [tenant, setTenant] = useState(user.tenant_slug || null);
+  const [tenantOptions, setTenantOptions] = useState([]);
+
+  useEffect(() => {
+    if (!isCueStaff) return;
+    api.tenants()
+      .then(({ tenants }) => {
+        setTenantOptions(tenants);
+        // One tenant is not a choice; don't make them click it.
+        if (tenants.length === 1) setTenant(tenants[0].slug);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [isCueStaff]);
+
   const load = useCallback(async () => {
+    if (isCueStaff && !tenant) return;   // nothing to ask for yet
     try {
       const [summary, board, engagements, voice] = await Promise.all([
-        api.summary(days), api.leaderboard(days), api.engagements(15), api.voice(15),
+        api.summary(days, tenant), api.leaderboard(days, tenant),
+        api.engagements(15, tenant), api.voice(15, tenant),
       ]);
       setData({ summary, board, engagements: engagements.engagements, voice });
       setError(null);
@@ -46,7 +73,7 @@ export default function ManagerDashboard({ user }) {
     } finally {
       setLoading(false);
     }
-  }, [days]);
+  }, [days, tenant, isCueStaff]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -78,6 +105,62 @@ export default function ManagerDashboard({ user }) {
 
   if (loading) return <div className="empty">Loading the floor…</div>;
 
+  // Cue staff with no tenant chosen yet. Ask, rather than render nothing.
+  if (isCueStaff && !tenant) {
+    return (
+      <div className="grid grid-dashboard">
+        <div className="card span-12">
+          <h3>Choose a store</h3>
+          <p className="card-note">
+            You're signed in as Cue staff, so you aren't scoped to one retailer.
+            Pick whose floor to look at.
+          </p>
+          {error && <div className="signin-error" role="alert">{error}</div>}
+          <div className="btn-row">
+            {tenantOptions.length === 0 && !error && (
+              <Empty>No tenants exist yet.</Empty>
+            )}
+            {tenantOptions.map((t) => (
+              <button key={t.slug} className="tenant-pick" onClick={() => {
+                setLoading(true);
+                setTenant(t.slug);
+              }}>
+                {t.name}
+                <span className="meta"> · {t.slug}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // An API error must not blank the page. Before this guard, a failed summary
+  // left `s` null and the first stat tile threw — which is exactly what a
+  // signed-in cue_admin hit, because their unscoped request is refused.
+  if (!s) {
+    return (
+      <div className="grid grid-dashboard">
+        <div className="card span-12">
+          <h3>Floor unavailable</h3>
+          <div className="signin-error" role="alert">
+            {error || "The dashboard couldn't load. Try again in a moment."}
+          </div>
+          <div className="btn-row" style={{ marginTop: 12 }}>
+            <button className="tenant-pick" onClick={() => { setLoading(true); void load(); }}>
+              Retry
+            </button>
+            {isCueStaff && (
+              <button className="tenant-pick" onClick={() => setTenant(null)}>
+                Choose another store
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-dashboard">
       <div className="range-row span-12">
@@ -89,7 +172,13 @@ export default function ManagerDashboard({ user }) {
             </button>
           ))}
         </div>
-        <span className="meta">{user.tenant_slug || "—"} · signed in as {user.name}</span>
+        <span className="meta">
+          {tenant || "—"} · signed in as {user.name}
+          {isCueStaff && (
+            <button className="linkish" style={{ marginLeft: 10 }}
+                    onClick={() => setTenant(null)}>switch store</button>
+          )}
+        </span>
       </div>
 
       {error && (
