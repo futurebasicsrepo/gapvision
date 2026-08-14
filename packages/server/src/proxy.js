@@ -88,6 +88,46 @@ export function createAiProxy({ aiServiceUrl, apiKey, allowRoster = false }) {
     }
   });
 
+  /**
+   * Signed-in-human routes, passed straight through.
+   *
+   * These carry a *user's* bearer token, and the AI service authorizes them on
+   * its own — so this proxy deliberately does NOT attach the service key here.
+   * Adding it would turn the realtime server into an open door: any browser
+   * could reach tenant data without an account. The key is for machine calls
+   * (guest context, voice) where there is no human to authenticate.
+   *
+   * Everything the dashboard needs therefore lives on one origin, which keeps
+   * CORS out of the deployment story entirely.
+   */
+  const PASSTHROUGH = ["/auth", "/api/analytics", "/api/admin"];
+
+  router.use(async (req, res, next) => {
+    if (!PASSTHROUGH.some((p) => req.path === p || req.path.startsWith(p + "/"))) {
+      return next();
+    }
+    try {
+      const init = {
+        method: req.method,
+        headers: {
+          "content-type": "application/json",
+          // Forward the caller's identity, and nothing of ours.
+          ...(req.headers.authorization ? { authorization: req.headers.authorization } : {}),
+        },
+      };
+      if (!["GET", "HEAD"].includes(req.method)) {
+        init.body = JSON.stringify(req.body ?? {});
+      }
+      const url = new URL(req.originalUrl, aiServiceUrl);
+      const r = await fetch(url, init);
+      const body = await r.text();
+      res.status(r.status).type("application/json").send(body);
+    } catch (e) {
+      console.error(`[proxy] ${req.path} failed: ${e.message}`);
+      res.status(502).json({ error: "upstream_unavailable" });
+    }
+  });
+
   return router;
 }
 

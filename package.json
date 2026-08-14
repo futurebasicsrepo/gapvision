@@ -21,6 +21,9 @@
     "test:gestures-browser": "node packages/glasses-plugin/test/gestures-browser.mjs",
     "db:migrate": "cd packages/ai-service && python -c \"from app import db; db.migrate()\"",
     "db:seed": "cd packages/ai-service && python -m app.seed",
-    "test:spine": "node packages/server/test/spine-e2e.mjs"
+    "test:spine": "node packages/server/test/spine-e2e.mjs",
+    "test:dashboard": "node packages/web/test/dashboard-browser.mjs",
+    "build:web": "npm run build --workspace=packages/web",
+    "build:plugin": "npm run build --workspace=packages/glasses-plugin"
   }
 }

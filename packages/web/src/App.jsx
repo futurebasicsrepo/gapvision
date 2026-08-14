@@ -1,11 +1,35 @@
 import { useEffect, useState } from "react";
 import { socket } from "./socket.js";
+import { api, session } from "./api.js";
+import Login from "./components/Login.jsx";
+import ManagerDashboard from "./components/ManagerDashboard.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import AssociateView from "./components/AssociateView.jsx";
 
+/** Which views a role may open. An associate has no business in here at all —
+ *  their surface is the lens. */
+const VIEWS = {
+  manager: ["floor"],
+  client_admin: ["floor"],
+  cue_admin: ["floor"],
+};
+const LABELS = { floor: "Store floor", simulator: "Simulator" };
+
 export default function App() {
-  const [view, setView] = useState("associate");
+  const [user, setUser] = useState(session.user);
+  const [checking, setChecking] = useState(Boolean(session.token));
+  const [view, setView] = useState("floor");
   const [connected, setConnected] = useState(socket.connected);
+
+  // A stored token may have been revoked or expired since the tab was open;
+  // confirm it before rendering a dashboard that would 401 on every panel.
+  useEffect(() => {
+    if (!session.token) return;
+    api.me()
+      .then(({ user: fresh }) => { setUser(fresh); session.save(session.token, fresh); })
+      .catch(() => { session.clear(); setUser(null); })
+      .finally(() => setChecking(false));
+  }, []);
 
   useEffect(() => {
     const on = () => setConnected(true);
@@ -19,33 +43,65 @@ export default function App() {
     };
   }, []);
 
+  async function signOut() {
+    await api.logout();
+    session.clear();
+    setUser(null);
+  }
+
+  if (checking) return <div className="app-shell"><div className="empty">Checking your session…</div></div>;
+  if (!user) return <Login onSignedIn={setUser} />;
+
+  const allowed = VIEWS[user.role] || [];
+  if (allowed.length === 0) {
+    return (
+      <div className="app-shell">
+        <div className="card signin-error" style={{ marginTop: 40 }}>
+          Associates don't have a dashboard — your view is in the glasses.
+          <button className="linkish" onClick={signOut}>Sign out</button>
+        </div>
+      </div>
+    );
+  }
+
+  // The simulator stays available for demos, but behind the real thing.
+  const views = [...allowed, "simulator"];
+
   return (
     <div className="app-shell">
       <div className="topbar">
         <div className="brand">
-          <span className="brand-mark">GAPVISION</span>
-          <span className="brand-sub">Retail Floor Intelligence — Simulator</span>
+          <span className="brand-mark">CUE</span>
+          <span className="brand-sub">
+            {user.tenant_slug ? `${user.tenant_slug} · ${user.role.replace("_", " ")}` : "all tenants"}
+          </span>
         </div>
         <div className="view-switch">
-          <button
-            className={view === "associate" ? "active" : ""}
-            onClick={() => setView("associate")}
-          >
-            Associate View
-          </button>
-          <button
-            className={view === "dashboard" ? "active" : ""}
-            onClick={() => setView("dashboard")}
-          >
-            Command Center
-          </button>
+          {views.map((v) => (
+            <button key={v} className={view === v ? "active" : ""} onClick={() => setView(v)}>
+              {LABELS[v]}
+            </button>
+          ))}
         </div>
-        <span className={`conn-dot ${connected ? "" : "offline"}`}>
-          {connected ? "Realtime linked" : "Server offline"}
-        </span>
+        <div className="topbar-right">
+          <span className={`conn-dot ${connected ? "" : "offline"}`}>
+            {connected ? "Realtime linked" : "Server offline"}
+          </span>
+          <button className="linkish" onClick={signOut}>Sign out</button>
+        </div>
       </div>
 
-      {view === "associate" ? <AssociateView /> : <Dashboard />}
+      {view === "floor" && <ManagerDashboard user={user} />}
+      {view === "simulator" && (
+        <>
+          <p className="card-note" style={{ marginBottom: 12 }}>
+            Demo harness — drives the same backend as the glasses. Anything you do
+            here is recorded against the {user.tenant_slug || "demo"} tenant.
+          </p>
+          <AssociateView />
+          <Dashboard />
+        </>
+      )}
     </div>
   );
 }
