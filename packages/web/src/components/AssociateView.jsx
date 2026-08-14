@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { socket } from "../socket.js";
 import GlassesDisplay from "./GlassesDisplay.jsx";
 
-const AI_URL = import.meta.env.VITE_AI_URL || "http://localhost:8000";
+// Through the realtime server's proxy — the dashboard is a static bundle and
+// cannot hold the AI service key.
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:4000";
 
 export default function AssociateView() {
   const [display, setDisplay] = useState(null);
@@ -27,7 +29,7 @@ export default function AssociateView() {
   }, []);
 
   useEffect(() => {
-    fetch(`${AI_URL}/api/guests`)
+    fetch(`${SERVER_URL}/api/guests`)
       .then((r) => r.json())
       .then(setGuests)
       .catch(() => setGuests([]));

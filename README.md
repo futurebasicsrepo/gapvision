@@ -127,6 +127,10 @@ Pin one transcript for a scripted demo with
 
 | Var | Default | Purpose |
 |---|---|---|
+| `GAPVISION_API_KEY` | — | **Required in production.** Service key for the AI service; the realtime server holds it and attaches it. Generate with `openssl rand -hex 32` |
+| `GAPVISION_AUTH_MODE` | `strict` | `strict` = every data call needs the key; `demo` = mock-data tenants readable without one (real CRMs always need it) |
+| `GAPVISION_ALLOWED_ORIGINS` | localhost:5173,5180 | CORS allowlist for the AI service |
+| `GAPVISION_ALLOW_ROSTER` | `false` | Let the proxy pass roster listings for non-demo tenants. Leave off |
 | `CUE_STT` | `mock` | STT provider: `mock`, `openai`, `groq`, `deepgram` |
 | `CUE_STT_MODEL` | per-provider | Override the transcription model |
 | `CUE_STT_MOCK_TRANSCRIPT` | — | Pin the mock transcript for demos |
@@ -137,8 +141,11 @@ Pin one transcript for a scripted demo with
 | `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` | — | Dev Dashboard app credentials (2026+ flow; token auto-minted, auto-refreshed) |
 | `SHOPIFY_ADMIN_TOKEN` | — | Alternative: static token from a pre-2026 legacy custom app |
 | `AI_SERVICE_URL` | `http://localhost:8000` | Where the Node server finds the Brain |
-| `VITE_SERVER_URL` | `http://localhost:4000` | Where the web app finds the realtime server |
-| `VITE_AI_URL` | `http://localhost:8000` | Where the web app lists opted-in guests |
+| `VITE_SERVER_URL` | `http://localhost:4000` | Where the clients find the realtime server — and, through its proxy, everything else |
+
+Clients no longer take a `VITE_AI_URL`. They are static bundles, so anything
+compiled into them is published; they reach the AI service only through the
+realtime server, which holds the key server-side.
 
 ## Running on a real Shopify store
 

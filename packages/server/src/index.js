@@ -9,13 +9,23 @@ import express from "express";
 import http from "http";
 import cors from "cors";
 import { Server } from "socket.io";
+import { aiHeaders, createAiProxy } from "./proxy.js";
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
+const AI_API_KEY = process.env.GAPVISION_API_KEY;
 const PORT = process.env.PORT || 4000;
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Static clients (plugin, dashboard) cannot hold the AI service key, so they
+// call us and we attach it server-side. Mounted before the socket wiring.
+app.use(createAiProxy({
+  aiServiceUrl: AI_SERVICE_URL,
+  apiKey: AI_API_KEY,
+  allowRoster: process.env.GAPVISION_ALLOW_ROSTER === "true",
+}));
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
@@ -80,7 +90,7 @@ io.on("connection", (socket) => {
     try {
       const res = await fetch(`${AI_SERVICE_URL}/api/guest-context`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: aiHeaders(AI_API_KEY),
         body: JSON.stringify({ guest_id: guestId, zone, tenant: tenant || "gap" }),
       });
       if (!res.ok) throw new Error(`AI service ${res.status}`);
@@ -230,7 +240,7 @@ async function finalizeVoice(socket, reason) {
   try {
     const res = await fetch(`${AI_SERVICE_URL}/api/voice-query`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: aiHeaders(AI_API_KEY),
       body: JSON.stringify({
         tenant: session.tenant,
         audio_b64: audio.toString("base64"),

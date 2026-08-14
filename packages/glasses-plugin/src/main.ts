@@ -13,8 +13,11 @@ import { getBridge, type GlassesBridge } from "./bridge";
 import { buildPage, IDLE_LINES, MAX_LINES, toDisplayText } from "./layout";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
 
+/** Everything goes through the realtime server. The plugin is a static
+ *  bundle, so it cannot hold the AI service key — the server holds it and
+ *  proxies. There is deliberately no VITE_AI_URL any more: a build flag that
+ *  points the plugin straight at the AI service would quietly undo that. */
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:4000";
-const AI_URL = import.meta.env.VITE_AI_URL || "http://localhost:8000";
 
 /** Tenant = which retail world this launch belongs to ("gap" demo | "shopify"
  *  live). Carried by the launch URL, i.e. the QR code that opened us. */
@@ -203,7 +206,7 @@ async function main() {
   const rosterEl = document.getElementById("beacon-roster");
   if (rosterEl) {
     try {
-      const res = await fetch(`${AI_URL}/api/guests?tenant=${TENANT}`);
+      const res = await fetch(`${SERVER_URL}/api/guests?tenant=${TENANT}`);
       if (!res.ok) throw new Error(`${res.status}`);
       const guests: { guest_id: string; name: string; loyalty_tier: string }[] =
         await res.json();

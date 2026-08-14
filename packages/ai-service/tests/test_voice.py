@@ -4,6 +4,7 @@ The bar for the answer engine: it must never invent stock. Every assertion
 about a size or a count traces back to a record in the fixture inventory.
 """
 import base64
+import json
 import math
 import struct
 
@@ -258,8 +259,8 @@ def client():
     return TestClient(app)
 
 
-def test_voice_query_endpoint_with_audio():
-    res = client().post("/api/voice-query", json={
+def test_voice_query_endpoint_with_audio(auth_headers):
+    res = client().post("/api/voice-query", headers=auth_headers, json={
         "tenant": "gap",
         "audio_b64": base64.b64encode(tone(1.4)).decode(),
         "guest_id": "guest-001",
@@ -273,8 +274,8 @@ def test_voice_query_endpoint_with_audio():
     assert body["audio_seconds"] == pytest.approx(1.4, abs=0.05)
 
 
-def test_voice_query_endpoint_with_transcript_skips_stt():
-    res = client().post("/api/voice-query", json={
+def test_voice_query_endpoint_with_transcript_skips_stt(auth_headers):
+    res = client().post("/api/voice-query", headers=auth_headers, json={
         "tenant": "gap",
         "transcript": "how much is the linen blazer",
     })
@@ -283,8 +284,8 @@ def test_voice_query_endpoint_with_transcript_skips_stt():
     assert "$128.00" in body["answer"]
 
 
-def test_voice_query_silence_is_a_result_not_a_crash():
-    res = client().post("/api/voice-query", json={
+def test_voice_query_silence_is_a_result_not_a_crash(auth_headers):
+    res = client().post("/api/voice-query", headers=auth_headers, json={
         "tenant": "gap",
         "audio_b64": base64.b64encode(silence(1.0)).decode(),
     })
@@ -294,14 +295,34 @@ def test_voice_query_silence_is_a_result_not_a_crash():
     assert body["glasses_lines"][0].startswith("[ICON:WARN]")
 
 
-def test_voice_query_rejects_junk_and_oversize_audio():
+def test_voice_query_rejects_junk_and_oversize_audio(auth_headers):
     c = client()
-    assert c.post("/api/voice-query", json={"tenant": "gap"}).status_code == 400
-    assert c.post("/api/voice-query", json={
+    assert c.post("/api/voice-query", headers=auth_headers,
+                  json={"tenant": "gap"}).status_code == 400
+    assert c.post("/api/voice-query", headers=auth_headers, json={
         "tenant": "gap", "audio_b64": "not base64!!"}).status_code == 400
     big = base64.b64encode(b"\x01\x00" * (MAX_AUDIO_BYTES // 2 + 1)).decode()
-    assert c.post("/api/voice-query", json={
+    assert c.post("/api/voice-query", headers=auth_headers, json={
         "tenant": "gap", "audio_b64": big}).status_code == 413
+
+
+def test_voice_query_requires_the_service_key(auth_headers):
+    """The voice endpoint carries a guest_id and can return purchase history,
+    so it is the same door as /api/guest-context and gets the same lock."""
+    c = client()
+    body = {"tenant": "gap", "transcript": "how much is the linen blazer"}
+
+    assert c.post("/api/voice-query", json=body).status_code == 401
+    assert c.post("/api/voice-query", headers={"x-gapvision-key": "wrong"},
+                  json=body).status_code == 401
+    assert c.post("/api/voice-query", headers=auth_headers, json=body).status_code == 200
+
+
+def test_health_stays_open_and_leaks_nothing():
+    body = client().get("/health").json()
+    assert body["status"] == "ok"
+    assert body["auth"]["api_key_configured"] is True
+    assert "test-key" not in json.dumps(body)
 
 
 def test_health_reports_stt_provider():
