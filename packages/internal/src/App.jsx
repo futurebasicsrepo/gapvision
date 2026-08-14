@@ -1,23 +1,49 @@
 import { useEffect, useState } from "react";
 import { api, session, isCueStaff } from "./api.js";
-import { Wordmark } from "./components/Mark.jsx";
+import { CueBracket, Wordmark } from "./components/Mark.jsx";
 import Login from "./components/Login.jsx";
 import Health from "./components/Health.jsx";
 import Tenants from "./components/Tenants.jsx";
 import Architecture from "./components/Architecture.jsx";
 import Brand from "./components/Brand.jsx";
 
-const VIEWS = [
-  ["health", "Health"],
-  ["tenants", "Tenants"],
-  ["architecture", "Architecture"],
-  ["brand", "Brand"],
+/**
+ * Shell.
+ *
+ * Left rail rather than a top tab strip. Two reasons beyond convention: the
+ * panels here are destinations you sit in rather than tabs you flick between,
+ * and a vertical list has room to grow — billing, audit and support views are
+ * all coming, and a horizontal strip starts wrapping at about six.
+ */
+const SECTIONS = [
+  {
+    label: "Platform",
+    items: [
+      { key: "health", name: "Health", hint: "services and checks" },
+      { key: "tenants", name: "Tenants", hint: "retailers, people, billing" },
+    ],
+  },
+  {
+    label: "Reference",
+    items: [
+      { key: "architecture", name: "Architecture", hint: "how it all fits" },
+      { key: "brand", name: "Brand", hint: "tokens, mark, voice" },
+    ],
+  },
 ];
+
+const TITLES = {
+  health: ["Health", "What the platform can prove about itself right now."],
+  tenants: ["Tenants", "Every retailer, their people, their hardware, what they've used."],
+  architecture: ["Architecture", "The system, the decisions behind it, and what's still missing."],
+  brand: ["Brand & identity", "Generated from the same tokens that build the products."],
+};
 
 export default function App() {
   const [user, setUser] = useState(session.user);
   const [checking, setChecking] = useState(Boolean(session.token));
   const [view, setView] = useState("health");
+  const [navOpen, setNavOpen] = useState(false);
 
   // A stored token may have been revoked since the tab was opened. Confirm it
   // before rendering panels that would 401 one at a time and look broken.
@@ -63,31 +89,71 @@ export default function App() {
     );
   }
 
+  const [title, subtitle] = TITLES[view];
+
+  function go(key) {
+    setView(key);
+    setNavOpen(false);   // on a phone the rail is an overlay; close it behind you
+  }
+
   return (
-    <div className="console">
-      <header className="topbar">
-        <div className="brand">
-          <Wordmark size={21} />
-          <span className="brand-sub">Cue Console · staff</span>
+    <div className={`shell ${navOpen ? "nav-open" : ""}`}>
+      <aside className="rail">
+        <div className="rail-brand">
+          <Wordmark size={19} />
         </div>
-        <div className="topbar-right">
-          <span className="whoami">{user.email}</span>
+        <div className="rail-role">
+          <CueBracket size={13} arc="var(--flame-300)" />
+          <span>Cue Console · staff</span>
+        </div>
+
+        <nav className="rail-nav">
+          {SECTIONS.map((section) => (
+            <div className="rail-section" key={section.label}>
+              <div className="rail-section-label">{section.label}</div>
+              {section.items.map((item) => (
+                <button
+                  key={item.key}
+                  className={`rail-item ${view === item.key ? "active" : ""}`}
+                  onClick={() => go(item.key)}
+                  aria-current={view === item.key ? "page" : undefined}
+                >
+                  <span className="rail-item-name">{item.name}</span>
+                  <span className="rail-item-hint">{item.hint}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        <div className="rail-foot">
+          <div className="rail-user" title={user.email}>{user.email}</div>
           <button className="linkish" onClick={signOut}>Sign out</button>
         </div>
-      </header>
+      </aside>
 
-      <nav className="view-switch" style={{ marginBottom: 18, width: "fit-content" }}>
-        {VIEWS.map(([key, label]) => (
-          <button key={key} className={view === key ? "active" : ""} onClick={() => setView(key)}>
-            {label}
+      {/* Tapping the dimmed content closes the rail on a phone. */}
+      <div className="rail-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />
+
+      <div className="main">
+        <header className="main-head">
+          <button className="nav-toggle" onClick={() => setNavOpen((v) => !v)}
+                  aria-label="Menu" aria-expanded={navOpen}>
+            <span /><span /><span />
           </button>
-        ))}
-      </nav>
+          <div>
+            <h1 className="main-title">{title}</h1>
+            <p className="main-sub">{subtitle}</p>
+          </div>
+        </header>
 
-      {view === "health" && <Health />}
-      {view === "tenants" && <Tenants />}
-      {view === "architecture" && <Architecture />}
-      {view === "brand" && <Brand />}
+        <div className="main-body">
+          {view === "health" && <Health />}
+          {view === "tenants" && <Tenants />}
+          {view === "architecture" && <Architecture />}
+          {view === "brand" && <Brand />}
+        </div>
+      </div>
     </div>
   );
 }

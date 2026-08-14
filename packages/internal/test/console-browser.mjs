@@ -75,10 +75,15 @@ async function signIn(page, who) {
   await page.waitForSelector(".notice.error, .console", { timeout: 8000 });
 
   const body = await page.textContent("body");
+  // Guard against a false pass: a failed sign-in also renders .notice.error
+  // and no rail, so without this the three checks below would "pass" simply
+  // because the credentials were wrong.
+  check("client_admin actually signed in",
+    !/don't match|incorrect/i.test(body), body.slice(0, 120));
   check("client_admin sees the staff-only notice",
     /console is for cuesea staff/i.test(body), body.slice(0, 140));
   check("client_admin gets no navigation",
-    (await page.$$(".view-switch button")).length === 0);
+    (await page.$$(".rail-item")).length === 0);
   check("client_admin sees no tenant table", (await page.$$(".table")).length === 0);
 
   // Even if the shell had rendered, the API is the real boundary — nothing
@@ -95,8 +100,12 @@ const page = await browser.newPage();
 const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(String(e)));
 
+/** Navigate by the rail item's visible label, so the test breaks when a
+ *  destination is renamed rather than when the list is reordered. */
+const go = (name) => page.click(`.rail-item:has(.rail-item-name:text-is("${name}"))`);
+
 await signIn(page, STAFF);
-await page.waitForSelector(".view-switch", { timeout: 10_000 });
+await page.waitForSelector(".rail-item", { timeout: 10_000 });
 check("cue_admin reaches the console", true);
 
 // --- Health ---
@@ -126,7 +135,7 @@ check("fleet counts render", statValues.length === 4 && statValues.every((v) => 
   statValues.join(", "));
 
 // --- Tenants ---
-await page.click(".view-switch button:nth-child(2)");
+await go("Tenants");
 await page.waitForSelector(".table tbody tr", { timeout: 8000 });
 const rows = await page.$$(".table tbody tr");
 check("tenant table lists tenants", rows.length >= 1, `${rows.length} rows`);
@@ -138,7 +147,7 @@ check("clicking a tenant opens its people and hardware",
   /people/i.test(detail) && /hardware/i.test(detail));
 
 // --- Architecture ---
-await page.click(".view-switch button:nth-child(3)");
+await go("Architecture");
 await page.waitForSelector(".flow-node", { timeout: 8000 });
 const nodes = await page.$$eval(".flow-node .n-name", (els) => els.map((e) => e.textContent));
 check("architecture renders the pipeline", nodes.length === 6, nodes.join(" → "));
@@ -146,7 +155,7 @@ check("known gaps are stated, not hidden",
   /retention isn't enforced/i.test(await page.textContent("body")));
 
 // --- Brand ---
-await page.click(".view-switch button:nth-child(4)");
+await go("Brand");
 await page.waitForSelector(".swatch", { timeout: 8000 });
 const swatches = await page.$$eval(".swatch-hex", (els) => els.map((e) => e.textContent.trim()));
 const tokens = JSON.parse(

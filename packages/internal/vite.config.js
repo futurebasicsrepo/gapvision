@@ -56,14 +56,19 @@ function singleFile() {
       Preview build · sample data · nothing here reads or writes a real tenant
     </div>
     <style>
+      /* Static, not sticky: the left rail is a full-height sticky element,
+         and a banner pinned above it would push it permanently off-screen. */
       #preview-banner {
-        position: sticky; top: 0; z-index: 20;
+        position: relative; z-index: 40;
         background: #8C2D06; color: #FBF9F5;
         font: 500 11.5px/1 "IBM Plex Mono", ui-monospace, monospace;
         letter-spacing: 0.1em; text-transform: uppercase;
         padding: 9px 24px; text-align: center;
       }
-      body::before { display: none; }
+      /* Below the rail's breakpoint it becomes a fixed overlay anchored to
+         the viewport, which would slide under this banner. Production has no
+         banner, so this offset is preview-only. */
+      @media (max-width: 860px) { .rail { top: 34px; } }
     </style>`);
 
       html.source = source;
