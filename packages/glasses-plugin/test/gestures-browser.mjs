@@ -111,6 +111,37 @@ check("inspector shows raw payloads", /"sysEvent"/.test(insp));
 check("nothing landed as UNDECODED", !/UNDECODED/.test(insp),
   /UNDECODED/.test(insp) ? insp.slice(0, 200) : "");
 
+// --- root-page exit ---------------------------------------------------------
+//
+// Even Hub rejects apps whose root-page double-tap doesn't raise the system
+// exit dialog. This is the check that keeps that from regressing.
+
+// Get back to the root page. It takes three: the first click dismisses the
+// voice answer, the second backs out of the carousel, the third ends the
+// engagement. That layering is deliberate — a press should never end a guest
+// session while something else is still on the glass.
+await ring("click");
+await settle();
+await ring("click");
+await settle();
+await ring("click");
+await settle();
+check("back on the idle root page",
+  (await lens()).some((l) => (l || "").includes("CUESEA READY")),
+  JSON.stringify((await lens()).slice(0, 2)));
+check("idle names its controls",
+  (await lensMeta()).some((l) => /PRESS TO ASK/.test(l || "")),
+  JSON.stringify(await lensMeta()));
+
+await ring("double-click");
+await settle();
+const exitMode = await page.evaluate(() => window.__cueExitMode);
+check("root double-press raises the system exit dialog", exitMode === 1,
+  `shutDownPageContainer(${exitMode})`);
+check("the glass shows the system dialog, not a blank screen",
+  (await lens()).some((l) => /SYSTEM EXIT/.test(l || "")),
+  JSON.stringify(await lens()));
+
 // --- temple mirrors the ring ------------------------------------------------
 await page.click('[data-event="click"][data-source="glasses-right"]');
 await settle();

@@ -34,6 +34,10 @@ export interface GlassesBridge {
   createStartUpPageContainer(page: PageSpec): Promise<unknown>;
   rebuildPageContainer(page: PageSpec): Promise<unknown>;
   textContainerUpgrade(update: { containerID: number; containerName: string; content: string }): Promise<unknown>;
+  /** 1 = system exit-confirmation dialog, required on the root page.
+   *  0 = immediate exit, permitted only on internal pages. Defaulting to 1
+   *  because the failure mode of getting it wrong is a rejected submission,
+   *  and an extra confirmation is a far cheaper mistake than a silent exit. */
   shutDownPageContainer(exitMode?: number): Promise<unknown>;
   audioControl(isOpen: boolean, source?: unknown): Promise<boolean>;
   onEvenHubEvent(cb: (event: any) => void): () => void;
@@ -67,7 +71,7 @@ function wrapReal(real: any): GlassesBridge {
     createStartUpPageContainer: (p) => real.createStartUpPageContainer(p),
     rebuildPageContainer: (p) => real.rebuildPageContainer(p),
     textContainerUpgrade: (u) => real.textContainerUpgrade(u),
-    shutDownPageContainer: (m = 0) => real.shutDownPageContainer(m),
+    shutDownPageContainer: (m = 1) => real.shutDownPageContainer(m),
     audioControl: (o, s) => real.audioControl(o, s),
     onEvenHubEvent: (cb) => real.onEvenHubEvent(cb),
     getUserInfo: () => real.getUserInfo().catch(() => null),
@@ -163,8 +167,19 @@ class MockBridge implements GlassesBridge {
     if (c) { c.content = u.content; this.paint(); }
     return true;
   }
-  async shutDownPageContainer() {
-    this.containers.clear(); this.paint(); return true;
+  async shutDownPageContainer(exitMode = 1) {
+    // Record it rather than just clearing: the exit mode is the thing Even's
+    // reviewers check, so the browser test needs to be able to read it back.
+    (window as any).__cueExitMode = exitMode;
+    this.containers.clear();
+    this.paint();
+    const lens = document.getElementById("virtual-lens");
+    if (lens) {
+      lens.innerHTML =
+        `<div class="lens-text">SYSTEM EXIT DIALOG</div>` +
+        `<div class="lens-text meta">shutDownPageContainer(${exitMode})</div>`;
+    }
+    return true;
   }
 
   /**

@@ -196,6 +196,13 @@ async function cycleRecommendations(step: 1 | -1) {
   await showRecommendation(next);
 }
 
+/** The idle screen is our root page: nothing engaged, no carousel, and
+ *  nothing voice put on the lens. Everything else is an internal page, where
+ *  double-press is ours to use and mode-0 exits would be permitted. */
+function onRootPage(): boolean {
+  return !engaged && recIndex < 0 && voice.current === "idle";
+}
+
 /**
  * Ring and temple gestures → session actions.
  *
@@ -225,10 +232,27 @@ function onGesture(g: DecodedGesture) {
       if (engaged) {
         socket.emit("session:end");
         void showIdle();
+        return;
       }
+      // Nothing engaged: press is how you ask a question from the idle screen,
+      // because double-press is spoken for there. See onRootPage() below.
+      void voice.toggle({ tenant: TENANT, guestId: null, focusSku: null });
       return;
 
     case "double-click":
+      // Even Hub requires the root page's double-tap to raise the *system*
+      // exit dialog — shutDownPageContainer(1). Reviewers check it explicitly
+      // and reject apps that exit silently, exit with mode 0, or substitute
+      // their own confirmation UI. There is only ever one page container, so
+      // "root page" is ours to define: it is the idle screen, and anything
+      // with a guest on it counts as an internal page.
+      //
+      // That costs us double-press-to-talk at idle, which is why a plain press
+      // means "ask" there instead.
+      if (onRootPage()) {
+        void bridge.shutDownPageContainer(1);
+        return;
+      }
       void voice.toggle({ tenant: TENANT, guestId: engagedGuestId, focusSku });
       return;
 

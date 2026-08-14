@@ -1,0 +1,24 @@
+{
+  "package_id": "ai.cuesea.lens",
+  "edition": "202601",
+  "name": "Cue Lens",
+  "version": "0.1.0",
+  "min_app_version": "2.0.0",
+  "min_sdk_version": "0.0.13",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "Fetches the guest card and answers a floor associate's spoken questions about stock, size and price. All requests go to cuesea's own service.",
+      "whitelist": [
+        "https://realtime-production-80f4.up.railway.app"
+      ]
+    },
+    {
+      "name": "g2-microphone",
+      "desc": "A double press opens the microphone so an associate can ask a question hands-free while helping a customer. The mic closes itself when they stop speaking.",
+      "whitelist": []
+    }
+  ],
+  "supported_languages": ["en"]
+}

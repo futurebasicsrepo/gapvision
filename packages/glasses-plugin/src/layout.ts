@@ -107,5 +107,8 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
 /** Nothing to say yet. Even the idle state obeys the grammar. */
 export const IDLE_CUE: Cue = {
   lines: ["CUESEA READY", "", "AWAITING GUEST SIGNAL"],
-  meta: [],
+  // The only screen that spends space on controls. Everywhere else the
+  // gestures follow from what's on the glass; here they don't, and one of
+  // them exits the app.
+  meta: ["PRESS TO ASK", "DOUBLE PRESS EXITS"],
 };
