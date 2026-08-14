@@ -8,6 +8,7 @@ being re-derived per handler. The failure mode of getting it wrong is showing
 one retailer another retailer's floor, so it is worth having exactly one place
 to read.
 """
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
@@ -304,3 +305,158 @@ def update_device(device_id: str, req: DeviceUpdate,
         f"UPDATE devices SET {', '.join(sets)} WHERE id = %s RETURNING *", tuple(params)
     )
     return {"device": row}
+
+
+# --- platform (Cue staff only) -----------------------------------------------
+#
+# The lesson from the first production deploy was that "reachable" is not
+# "working": the service reported a healthy database while the schema did not
+# exist. Every check below therefore asserts on something a feature actually
+# needs, and anything it cannot prove is reported as unknown rather than ok.
+
+def _check(key: str, label: str, status: str, detail: str = "") -> dict:
+    return {"key": key, "label": label, "status": status, "detail": detail}
+
+
+def _platform_checks() -> list[dict]:
+    checks: list[dict] = []
+    dbstate = db.health()
+
+    if not dbstate.get("configured"):
+        checks.append(_check("schema", "Database schema", "fail",
+                             "DATABASE_URL is not set on this service"))
+        return checks
+    if not dbstate.get("reachable"):
+        checks.append(_check("schema", "Database schema", "fail",
+                             dbstate.get("error", "unreachable")))
+        return checks
+    if dbstate.get("status") == "empty":
+        checks.append(_check("schema", "Database schema", "fail",
+                             "connected, but no tables — migrations did not ship"))
+        return checks
+
+    checks.append(_check("schema", "Database schema", "ok",
+                         f"{dbstate.get('migrations', 0)} migration(s) applied"))
+
+    # An account nobody can sign in with is the same as no account.
+    staff = db.query_one(
+        "SELECT count(*) AS n FROM users "
+        " WHERE role = 'cue_admin' AND status = 'active' AND password_hash IS NOT NULL"
+    )
+    n_staff = (staff or {}).get("n", 0)
+    checks.append(_check(
+        "staff", "Cue staff accounts", "ok" if n_staff else "fail",
+        f"{n_staff} able to sign in" if n_staff
+        else "no active cue_admin with a password — bootstrap did not run",
+    ))
+
+    # A retailer with no admin of its own means every change routes through us.
+    orphans = db.query(
+        """
+        SELECT t.slug FROM tenants t
+         WHERE t.status = 'active'
+           AND NOT EXISTS (
+             SELECT 1 FROM users u
+              WHERE u.tenant_id = t.id AND u.role = 'client_admin' AND u.status = 'active')
+         ORDER BY t.slug
+        """
+    )
+    checks.append(_check(
+        "tenant_admins", "Every active tenant has an admin",
+        "ok" if not orphans else "warn",
+        "all covered" if not orphans
+        else "no client_admin: " + ", ".join(r["slug"] for r in orphans),
+    ))
+
+    # Voice is the feature most likely to fail quietly — a bad STT key returns
+    # answers that are merely wrong rather than errors.
+    vq = db.query_one(
+        """
+        SELECT count(*) AS n,
+               count(*) FILTER (WHERE NOT ok) AS failed,
+               percentile_disc(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95
+          FROM voice_queries WHERE created_at > now() - interval '24 hours'
+        """
+    ) or {}
+    n_vq = vq.get("n") or 0
+    if n_vq == 0:
+        checks.append(_check("voice", "Voice queries (24h)", "unknown",
+                             "no queries — nothing to judge"))
+    else:
+        rate = (vq.get("failed") or 0) / n_vq
+        checks.append(_check(
+            "voice", "Voice success rate (24h)",
+            "ok" if rate < 0.05 else "warn" if rate < 0.2 else "fail",
+            f"{n_vq - (vq.get('failed') or 0)}/{n_vq} answered",
+        ))
+        p95 = vq.get("p95")
+        if p95 is not None:
+            checks.append(_check(
+                "latency", "Voice p95 latency (24h)",
+                "ok" if p95 < 2500 else "warn" if p95 < 5000 else "fail",
+                f"{int(p95)} ms",
+            ))
+
+    # An engagement that never closed corrupts average-length reporting, and
+    # usually means a socket dropped without the disconnect handler firing.
+    stuck = db.query_one(
+        "SELECT count(*) AS n FROM engagements "
+        " WHERE ended_at IS NULL AND started_at < now() - interval '6 hours'"
+    ) or {}
+    n_stuck = stuck.get("n") or 0
+    checks.append(_check(
+        "engagements", "No stranded engagements", "ok" if n_stuck == 0 else "warn",
+        "all closed" if n_stuck == 0 else f"{n_stuck} open for over 6 hours",
+    ))
+
+    # Retention is stored but not yet enforced. Say so here rather than let the
+    # console imply a promise the code does not keep.
+    checks.append(_check("retention", "Retention enforcement", "warn",
+                         "privacy.retention_days is stored but nothing deletes yet"))
+    return checks
+
+
+@router.get("/platform")
+def platform(authorization: str | None = BearerHeader):
+    """Cross-tenant operational state. Cue staff only — this is the one view
+    that deliberately ignores tenant scoping, so it gets the strictest role."""
+    me = current_user(authorization)
+    require(me, "cue_admin")
+
+    from .llm import get_provider
+    from .stt import get_stt
+
+    counts: dict = {}
+    if db.health().get("reachable") and db.health().get("status") != "empty":
+        row = db.query_one(
+            """
+            SELECT (SELECT count(*) FROM tenants WHERE status = 'active') AS tenants_active,
+                   (SELECT count(*) FROM tenants) AS tenants_total,
+                   (SELECT count(*) FROM users WHERE status = 'active') AS users_active,
+                   (SELECT count(*) FROM users WHERE role = 'associate' AND status = 'active')
+                     AS associates,
+                   (SELECT count(*) FROM devices WHERE status = 'active') AS devices,
+                   (SELECT count(*) FROM devices
+                     WHERE last_seen_at > now() - interval '24 hours') AS devices_seen_24h,
+                   (SELECT count(*) FROM engagements
+                     WHERE started_at > now() - interval '24 hours') AS engagements_24h,
+                   (SELECT count(*) FROM voice_queries
+                     WHERE created_at > now() - interval '24 hours') AS voice_24h
+            """
+        )
+        counts = dict(row or {})
+
+    return {
+        "service": {
+            "llm_provider": get_provider().name,
+            "stt_provider": get_stt().name,
+            "commit": (os.environ.get("RAILWAY_GIT_COMMIT_SHA")
+                       or os.environ.get("GIT_COMMIT") or "")[:7] or None,
+            "deployed_at": os.environ.get("RAILWAY_DEPLOYMENT_CREATED_AT"),
+            "environment": os.environ.get("RAILWAY_ENVIRONMENT_NAME", "local"),
+        },
+        "database": db.health(),
+        "counts": counts,
+        "checks": _platform_checks(),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }

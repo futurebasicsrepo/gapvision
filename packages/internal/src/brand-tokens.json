@@ -1,0 +1,343 @@
+{
+  "$comment": "cuesea Brand & Identity System v3.0 (August 2026). CANONICAL. Every app's brand.css is generated from this file by `npm run brand:sync` — do not hand-edit the generated copies.",
+  "version": "3.0",
+  "updated": "2026-08-14",
+  "ramps": [
+    {
+      "key": "sea",
+      "name": "Sea",
+      "role": "The depth ramp. Grounds, structure, sequence, and every ordinal scale in a chart.",
+      "rule": "sea-300 and lighter never carry text on paper.",
+      "steps": [
+        {
+          "token": "--sea-900",
+          "hex": "#04122E",
+          "note": "abyss — the product ground"
+        },
+        {
+          "token": "--sea-800",
+          "hex": "#06193A",
+          "note": "card surface"
+        },
+        {
+          "token": "--sea-700",
+          "hex": "#0A2E63"
+        },
+        {
+          "token": "--sea-600",
+          "hex": "#0F3F80"
+        },
+        {
+          "token": "--sea-500",
+          "hex": "#1560B8",
+          "note": "type on paper, 5.9:1"
+        },
+        {
+          "token": "--sea-400",
+          "hex": "#2E7FD0",
+          "note": "primary chart series"
+        },
+        {
+          "token": "--sea-300",
+          "hex": "#3E9BE8",
+          "note": "accent on dark"
+        },
+        {
+          "token": "--sea-200",
+          "hex": "#8FC7F0",
+          "note": "secondary chart series"
+        },
+        {
+          "token": "--sea-100",
+          "hex": "#BFE0F7"
+        }
+      ]
+    },
+    {
+      "key": "flame",
+      "name": "Flame",
+      "role": "The cue itself. The one thing that asks to be looked at.",
+      "rule": "flame is never body text on paper (2.7:1) — use flame-600 or flame-700. One flame per screen region.",
+      "steps": [
+        {
+          "token": "--flame-700",
+          "hex": "#8C2D06",
+          "note": "type on light, 8.0:1"
+        },
+        {
+          "token": "--flame-600",
+          "hex": "#C2400A",
+          "note": "type on light, 5.0:1"
+        },
+        {
+          "token": "--flame",
+          "hex": "#FF6B2C",
+          "note": "graphic only — the mark, the cue dot"
+        },
+        {
+          "token": "--flame-400",
+          "hex": "#FF8C57"
+        },
+        {
+          "token": "--flame-300",
+          "hex": "#FFB08A"
+        },
+        {
+          "token": "--flame-100",
+          "hex": "#FFE2D2"
+        }
+      ]
+    },
+    {
+      "key": "hud",
+      "name": "HUD",
+      "role": "The cue inside the glass. Device-fixed, monochrome-safe on the G2's 576×288 display.",
+      "rule": "hud green never touches a light ground. Not a border, not an underline, not a chart series. It exists in the lens and nowhere else.",
+      "steps": [
+        {
+          "token": "--hud-500",
+          "hex": "#4BFF9A",
+          "note": "peak — the three cue lines"
+        },
+        {
+          "token": "--hud-400",
+          "hex": "#35E585",
+          "note": "body"
+        },
+        {
+          "token": "--hud-300",
+          "hex": "#22B869",
+          "note": "meta strip"
+        }
+      ]
+    },
+    {
+      "key": "ink",
+      "name": "Ink & paper",
+      "role": "Editorial and marketing surfaces. The site is paper; the product is sea.",
+      "rule": "70 / 25 / 5 — paper, sea, flame.",
+      "steps": [
+        {
+          "token": "--ink-900",
+          "hex": "#0E1116",
+          "note": "body type on paper"
+        },
+        {
+          "token": "--ink-800",
+          "hex": "#171B21"
+        },
+        {
+          "token": "--ink-700",
+          "hex": "#2A2F36"
+        },
+        {
+          "token": "--ink-500",
+          "hex": "#4E545C"
+        },
+        {
+          "token": "--ink-400",
+          "hex": "#6E747C"
+        },
+        {
+          "token": "--ink-300",
+          "hex": "#8E949B"
+        },
+        {
+          "token": "--ink-100",
+          "hex": "#E5E2DB"
+        },
+        {
+          "token": "--chalk",
+          "hex": "#F2EEE7",
+          "note": "secondary paper"
+        },
+        {
+          "token": "--paper",
+          "hex": "#FBF9F5",
+          "note": "primary light ground"
+        }
+      ]
+    }
+  ],
+  "type": {
+    "faces": [
+      {
+        "token": "--sans",
+        "name": "Instrument Sans",
+        "stack": "\"Instrument Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif",
+        "role": "Every functional job — UI, body, labels, headings in product."
+      },
+      {
+        "token": "--serif",
+        "name": "Instrument Serif",
+        "stack": "\"Instrument Serif\", Georgia, serif",
+        "role": "Editorial only. ≥24px. Deliberately not loaded into the product UI."
+      },
+      {
+        "token": "--mono",
+        "name": "IBM Plex Mono",
+        "stack": "\"IBM Plex Mono\", ui-monospace, monospace",
+        "role": "Identifiers — SKUs, slugs, serials, commit hashes, anything you might read aloud or type back."
+      },
+      {
+        "token": "--matrix",
+        "name": "Doto",
+        "stack": "\"Doto\", \"IBM Plex Mono\", monospace",
+        "role": "Cue Lens only. The dot-matrix face that matches the G2's monochrome grid."
+      }
+    ],
+    "scale": [
+      {
+        "step": "Display",
+        "size": "48 / 52",
+        "face": "Instrument Serif",
+        "use": "Marketing headline. Never in product."
+      },
+      {
+        "step": "Title",
+        "size": "28 / 34",
+        "face": "Instrument Sans 600",
+        "use": "Page title"
+      },
+      {
+        "step": "Heading",
+        "size": "18 / 24",
+        "face": "Instrument Sans 600",
+        "use": "Panel heading"
+      },
+      {
+        "step": "Body",
+        "size": "15 / 22",
+        "face": "Instrument Sans 400",
+        "use": "Default"
+      },
+      {
+        "step": "Label",
+        "size": "12 / 16",
+        "face": "Instrument Sans 600",
+        "use": "Uppercase, 0.08em tracking"
+      },
+      {
+        "step": "Identifier",
+        "size": "13 / 18",
+        "face": "IBM Plex Mono 400",
+        "use": "Slugs, serials, hashes"
+      }
+    ]
+  },
+  "mark": {
+    "name": "The Cue Bracket",
+    "idea": "An open C holding a single cue at its centre.",
+    "construction": [
+      "grid 32 × 32 · arc centre (16,16) · radius 11 · round caps",
+      "gap 70° total, centred on the 3 o'clock axis",
+      "cue: solid circle at exact optical centre",
+      "clear space: one cue diameter (5.8 units) on all four sides"
+    ],
+    "compensation": [
+      {
+        "from": 42,
+        "label": "42px and up",
+        "stroke": 4,
+        "cue": 2.9
+      },
+      {
+        "from": 24,
+        "label": "24–41px",
+        "stroke": 4.4,
+        "cue": 3.1
+      },
+      {
+        "from": 16,
+        "label": "16–23px",
+        "stroke": 4.9,
+        "cue": 3.5
+      }
+    ],
+    "minimum": "16px on screen, 6mm in print. Below that the opening closes and it reads as a filled ring.",
+    "rules": [
+      "The cue is always flame. It never changes colour, on any ground.",
+      "The arc takes the ground: ink on light, paper on dark.",
+      "Never a low-chroma dot inside the C — it reads as a copyright glyph.",
+      "Never rotate. The opening is always on the right."
+    ]
+  },
+  "wordmark": {
+    "rules": [
+      "Always lowercase, always one word: cuesea.",
+      "Two-tone: cue in paper or ink, sea in sea-300 on dark or sea-500 on light. The split is what stops it slurring into \"queasy\" when read fast.",
+      "Never set in the serif.",
+      "Never with \".ai\" attached."
+    ]
+  },
+  "naming": [
+    {
+      "name": "cuesea",
+      "what": "The company and the platform.",
+      "note": "Lowercase everywhere, including sentence-initial."
+    },
+    {
+      "name": "Cue Studio",
+      "what": "The retailer-facing back office — floor performance, roster, analytics, administration.",
+      "note": "app.cuesea.ai"
+    },
+    {
+      "name": "Cue Lens",
+      "what": "The in-glass surface on the Even Realities G2.",
+      "note": "The only thing an associate ever sees."
+    },
+    {
+      "name": "Cue Console",
+      "what": "This internal console — cuesea staff only.",
+      "note": "internal.cuesea.ai"
+    },
+    {
+      "name": "Currents",
+      "what": "The CRM adapters. Shopify today, enterprise connectors later.",
+      "note": "Not yet renamed in code — still crm_provider.*"
+    },
+    {
+      "name": "Depth",
+      "what": "The AI service: grounded answers, recommendations, the cue grammar.",
+      "note": "Not yet renamed in code — still ai-service"
+    }
+  ],
+  "voice": {
+    "principles": [
+      "Say the thing. The lens has three lines and 60 characters — that discipline is the brand, not a constraint we apologise for.",
+      "Evidence before claim. \"Bought the 32×30 in April\" beats \"likely interested in denim\".",
+      "Never perform certainty we don't have. If stock is unknown, the glass says unknown.",
+      "Plain nouns over category jargon. An associate reads this while folding a sweater."
+    ],
+    "avoid": [
+      "leverage",
+      "seamless",
+      "empower",
+      "revolutionise",
+      "AI-powered",
+      "unlock"
+    ]
+  },
+  "surfaces": {
+    "studio": {
+      "label": "Cue Studio / Cue Console",
+      "note": "Sea-toned dense UI. Plex Mono for all identifiers, the depth ramp for every chart.",
+      "selectors": [
+        ".studio",
+        ".console",
+        ".app-shell"
+      ],
+      "vars": {
+        "--ground": "var(--sea-900)",
+        "--card": "var(--sea-800)",
+        "--edge": "rgba(143, 199, 240, 0.14)",
+        "--edge-strong": "rgba(143, 199, 240, 0.26)",
+        "--text": "var(--paper)",
+        "--text-secondary": "var(--sea-100)",
+        "--text-muted": "#7FA3C4",
+        "--accent": "var(--sea-300)",
+        "--cue": "var(--flame)"
+      }
+    }
+  }
+}

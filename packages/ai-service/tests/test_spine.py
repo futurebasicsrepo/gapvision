@@ -432,3 +432,52 @@ def test_health_reports_database_state(client):
     assert body["database"]["configured"] is True
     assert body["database"]["reachable"] is True
     assert body["database"]["migrations"] >= 1
+
+
+# --- platform console (Cue staff only) ---------------------------------------
+#
+# This is the one endpoint that deliberately ignores tenant scoping, so the
+# negative cases matter more here than anywhere else in the suite.
+
+def test_platform_is_cue_staff_only(client):
+    for email in ("assoc@alpha.example.com", "mgr@alpha.example.com",
+                  "admin@alpha.example.com"):
+        res = client.get("/api/admin/platform", headers=auth(client, email))
+        assert res.status_code == 403, f"{email} reached the platform console"
+    assert client.get("/api/admin/platform").status_code == 401
+
+
+def test_platform_reports_real_state(client):
+    body = client.get("/api/admin/platform",
+                      headers=auth(client, "cue@cue.example.com")).json()
+
+    assert body["database"]["migrations"] >= 1
+    assert body["counts"]["tenants_active"] >= 2
+    assert body["counts"]["users_active"] >= 5
+
+    checks = {c["key"]: c for c in body["checks"]}
+    # Schema and staff are the two that make everything else meaningful.
+    assert checks["schema"]["status"] == "ok"
+    assert checks["staff"]["status"] == "ok"
+    # Every check reports a status the UI knows how to render.
+    assert all(c["status"] in ("ok", "warn", "fail", "unknown") for c in body["checks"])
+
+
+def test_platform_never_claims_healthy_on_an_empty_schema(client, monkeypatch):
+    """The bug that shipped once already: reachable but empty read as fine."""
+    from app import db, routes_admin
+
+    monkeypatch.setattr(db, "health", lambda: {
+        "configured": True, "reachable": True, "migrations": 0, "status": "empty",
+    })
+    checks = {c["key"]: c for c in routes_admin._platform_checks()}
+    assert checks["schema"]["status"] == "fail"
+
+
+def test_platform_flags_a_tenant_with_no_admin(client, fixtures):
+    """t_beta has a manager but no client_admin — that should surface, not pass."""
+    body = client.get("/api/admin/platform",
+                      headers=auth(client, "cue@cue.example.com")).json()
+    check = {c["key"]: c for c in body["checks"]}["tenant_admins"]
+    assert check["status"] == "warn"
+    assert "t_beta" in check["detail"]

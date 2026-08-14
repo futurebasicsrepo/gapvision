@@ -369,6 +369,32 @@ app.get("/health", (_req, res) =>
   })
 );
 
+/**
+ * The AI service's own health, relayed.
+ *
+ * Cue Console needs to show whether Depth is up, but the AI service keeps a
+ * CORS allowlist and a browser on a different origin can't read it directly —
+ * a healthy service would report as "failed to fetch", which is the exact
+ * false alarm a health panel must never produce. This origin is already
+ * allowed and already proxies everything else, so relay it here.
+ *
+ * Unauthenticated, like both /health routes it sits between: it reports
+ * configuration state and never tenant data.
+ */
+app.get("/health/ai", async (_req, res) => {
+  try {
+    const upstream = await fetch(`${AI_SERVICE_URL}/health`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    const body = await upstream.json();
+    res.status(upstream.ok ? 200 : 502).json(body);
+  } catch (e) {
+    // Reaching the AI service is the question being asked, so a failure here
+    // is an answer worth returning cleanly rather than a 500.
+    res.status(502).json({ status: "unreachable", error: String(e.message || e) });
+  }
+});
+
 server.listen(PORT, () =>
   console.log(`[cue] realtime server on :${PORT} (AI: ${AI_SERVICE_URL})`)
 );

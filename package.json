@@ -6,7 +6,8 @@
   "workspaces": [
     "packages/server",
     "packages/web",
-    "packages/glasses-plugin"
+    "packages/glasses-plugin",
+    "packages/internal"
   ],
   "scripts": {
     "dev:server": "npm run dev --workspace=packages/server",
@@ -24,6 +25,10 @@
     "test:spine": "node packages/server/test/spine-e2e.mjs",
     "test:dashboard": "node packages/web/test/dashboard-browser.mjs",
     "build:web": "npm run build --workspace=packages/web",
-    "build:plugin": "npm run build --workspace=packages/glasses-plugin"
+    "build:plugin": "npm run build --workspace=packages/glasses-plugin",
+    "brand:sync": "node packages/brand/build.mjs",
+    "dev:internal": "npm run dev --workspace=packages/internal",
+    "build:internal": "npm run build --workspace=packages/internal",
+    "test:console": "node packages/internal/test/console-browser.mjs"
   }
 }
