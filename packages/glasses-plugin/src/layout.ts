@@ -1,5 +1,5 @@
 /**
- * Maps GapVision `glasses_lines` (the AI service's pre-formatted display
+ * Maps Cue `glasses_lines` (the AI service's pre-formatted display
  * payload) onto Even Hub page containers.
  *
  * Display: 576 x 288, monochrome green. SDK rules honored here:
@@ -22,6 +22,7 @@ export function toDisplayText(line: string): string {
   const ICONS: Record<string, string> = {
     USER: "●", STAR: "★", TAG: "■", CART: "▸",
     ARROW: "→", CHAT: "❝", WARN: "⚠", RADIO: "◉",
+    MIC: "◍", CHECK: "✓", NO: "✕", PIN: "⌖",
   };
   return line.replace(/\[ICON:(\w+)\]\s?/, (_, k) => `${ICONS[k] ?? "▪"} `);
 }
@@ -58,4 +59,4 @@ export function buildPage(lines: string[], statusText: string): PageSpec {
   return { containerTotalNum: textObject.length, textObject };
 }
 
-export const IDLE_LINES = ["GAPVISION READY", "", "Awaiting guest signal..."];
+export const IDLE_LINES = ["CUE READY", "", "Awaiting guest signal..."];

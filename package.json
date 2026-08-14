@@ -1,8 +1,8 @@
 {
-  "name": "gapvision",
+  "name": "cue",
   "private": true,
-  "version": "0.1.0",
-  "description": "GapVision — e-commerce level intelligence for retail floor associates. Simulator-first prototype.",
+  "version": "0.5.0",
+  "description": "Cue — e-commerce level intelligence for retail floor associates, in-lens.",
   "workspaces": [
     "packages/server",
     "packages/web",
@@ -13,6 +13,9 @@
     "dev:web": "npm run dev --workspace=packages/web",
     "dev:plugin": "npm run dev --workspace=packages/glasses-plugin",
     "dev:ai": "cd packages/ai-service && uvicorn app.main:app --reload --port 8000",
-    "build": "npm run build --workspace=packages/web"
+    "build": "npm run build --workspace=packages/web",
+    "test:ai": "cd packages/ai-service && python -m pytest tests -q",
+    "test:voice": "node packages/server/test/voice-e2e.mjs",
+    "test:voice-browser": "node packages/glasses-plugin/test/voice-browser.mjs"
   }
 }

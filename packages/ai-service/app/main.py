@@ -1,13 +1,15 @@
-"""GapVision AI Service — FastAPI.
+"""Cue AI Service — FastAPI.
 
-The Brain: guest context, persona matching, and clienteling script
-generation. Multi-tenant: the `tenant` parameter selects the CRM world
-("gap" demo dataset or "shopify" live store). LLM is pluggable via
-GAPVISION_LLM. Identification is opt-in signal only.
+The Brain: guest context, persona matching, clienteling script generation,
+and voice queries. Multi-tenant: the `tenant` parameter selects the CRM world
+("gap" demo dataset or "shopify" live store). LLM and STT are pluggable via
+GAPVISION_LLM / CUE_STT. Identification is opt-in signal only.
 
 Data endpoints require a service key — see app/auth.py. Browser clients do
 not hold the key; they call the realtime server, which proxies.
 """
+import base64
+import binascii
 import os
 
 from fastapi import FastAPI, HTTPException, Request
@@ -18,8 +20,10 @@ from .auth import KeyHeader, guard, startup_check
 from .crm_provider import TenantNotConfigured, get_crm_for, tenant_status
 from .llm import get_provider
 from .personas import match_products
+from .stt import MAX_AUDIO_BYTES, SAMPLE_RATE, STTError, audio_duration_seconds, get_stt
+from .voice import answer_query
 
-app = FastAPI(title="GapVision AI Service", version="0.5.0")
+app = FastAPI(title="Cue AI Service", version="0.5.0")
 
 _AUTH_STATE = startup_check()
 
@@ -50,6 +54,22 @@ class GuestContextRequest(BaseModel):
     tenant: str | None = "gap"
 
 
+class VoiceQueryRequest(BaseModel):
+    """One utterance from an associate's glasses.
+
+    Either `audio_b64` (raw 16 kHz mono 16-bit LE PCM, base64) or a
+    pre-transcribed `transcript` — the second path lets a phone-side or
+    on-device recognizer skip the server STT hop entirely.
+    """
+    tenant: str | None = "gap"
+    audio_b64: str | None = None
+    transcript: str | None = None
+    sample_rate: int = SAMPLE_RATE
+    guest_id: str | None = None   # who the associate is engaged with, if anyone
+    focus_sku: str | None = None  # what's on the lens — resolves "these"
+    zone: str | None = None
+
+
 def _crm(tenant: str | None):
     try:
         return get_crm_for(tenant)
@@ -67,6 +87,7 @@ def health():
     return {
         "status": "ok",
         "llm_provider": get_provider().name,
+        "stt_provider": get_stt().name,
         "tenants": tenant_status(),
         "auth": _AUTH_STATE,
     }
@@ -106,4 +127,74 @@ def guest_context(req: GuestContextRequest, request: Request, x_gapvision_key: s
         "tenant": (req.tenant or "gap").lower(),
         "recommendations": recommendations,
         "script": script,
+    }
+
+
+@app.post("/api/voice-query")
+def voice_query(req: VoiceQueryRequest, request: Request, x_gapvision_key: str | None = KeyHeader):
+    """Voice path: audio in, grounded answer + display lines out.
+
+    Guarded like the other data endpoints. A voice query carries a guest_id,
+    and history questions return purchase records — this is the same door, so
+    it gets the same lock. The realtime server holds the key; the plugin
+    reaches this only through it.
+
+    Failure is a first-class result here, not a 500: the associate is wearing
+    the thing, so "didn't catch that" has to render on the lens like any other
+    answer. Only genuinely unexpected states raise.
+    """
+    guard(request, req.tenant, x_gapvision_key)
+
+    crm = _crm(req.tenant)
+    stt = get_stt()
+
+    transcript = (req.transcript or "").strip()
+    duration = None
+    if not transcript:
+        if not req.audio_b64:
+            raise HTTPException(status_code=400, detail="Provide audio_b64 or transcript")
+        try:
+            pcm = base64.b64decode(req.audio_b64, validate=True)
+        except (binascii.Error, ValueError):
+            raise HTTPException(status_code=400, detail="audio_b64 is not valid base64")
+        if len(pcm) > MAX_AUDIO_BYTES:
+            raise HTTPException(status_code=413, detail="Audio exceeds the per-utterance limit")
+        duration = round(audio_duration_seconds(pcm, req.sample_rate), 2)
+        try:
+            transcript = stt.transcribe(pcm, req.sample_rate)
+        except STTError as e:
+            return _voice_failure(str(e), stt.name, duration)
+        except Exception as e:  # vendor client blew up in an unexpected way
+            return _voice_failure(f"Transcription failed: {e}", stt.name, duration)
+
+    if not transcript:
+        return _voice_failure("Didn't catch that — try again", stt.name, duration)
+
+    guest = crm.get_guest(req.guest_id) if req.guest_id else None
+    result = answer_query(
+        transcript,
+        crm.floor_inventory(),
+        guest=guest,
+        focus_sku=req.focus_sku,
+    )
+    result.update({
+        "ok": True,
+        "tenant": (req.tenant or "gap").lower(),
+        "zone": req.zone,
+        "stt_provider": stt.name,
+        "audio_seconds": duration,
+    })
+    return result
+
+
+def _voice_failure(message: str, stt_name: str, duration: float | None) -> dict:
+    return {
+        "ok": False,
+        "transcript": "",
+        "intent": "error",
+        "answer": message,
+        "glasses_lines": [f"[ICON:WARN] {message}"],
+        "matches": [],
+        "stt_provider": stt_name,
+        "audio_seconds": duration,
     }

@@ -72,6 +72,7 @@ class MockBridge implements GlassesBridge {
   readonly kind = "mock" as const;
   private listeners = new Set<(event: any) => void>();
   private containers = new Map<number, TextContainer>();
+  private audioTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     // Gesture simulator buttons dispatch synthetic sys events.
@@ -120,8 +121,38 @@ class MockBridge implements GlassesBridge {
   async shutDownPageContainer() {
     this.containers.clear(); this.paint(); return true;
   }
-  async audioControl(isOpen: boolean) {
-    console.log(`[mock] audioControl(${isOpen})`); return true;
+
+  /**
+   * Opening the mock mic streams synthetic 16 kHz PCM: ~2.2 s of
+   * speech-shaped noise, then silence. That exercises the real thing —
+   * chunking, the level meter, silence endpointing — in a plain browser, so
+   * the voice path is testable and demo-able with no glasses in the room.
+   */
+  async audioControl(isOpen: boolean, _source?: unknown) {
+    console.log(`[mock] audioControl(${isOpen})`);
+    if (this.audioTimer) { clearInterval(this.audioTimer); this.audioTimer = null; }
+    if (!isOpen) return true;
+
+    const FRAME_MS = 100;
+    const SAMPLES = (16000 * FRAME_MS) / 1000;
+    let elapsed = 0;
+    this.audioTimer = setInterval(() => {
+      const speaking = elapsed < 2200;
+      const bytes = new Uint8Array(SAMPLES * 2);
+      const view = new DataView(bytes.buffer);
+      for (let i = 0; i < SAMPLES; i++) {
+        // Rough vowel-ish tone + noise while "speaking"; near-zero after.
+        const t = (elapsed / 1000) + i / 16000;
+        const amp = speaking ? 6000 + 3000 * Math.sin(t * 3) : 20;
+        const sample = speaking
+          ? amp * Math.sin(2 * Math.PI * 180 * t) + (Math.random() - 0.5) * amp * 0.6
+          : (Math.random() - 0.5) * amp;
+        view.setInt16(i * 2, Math.max(-32768, Math.min(32767, sample)), true);
+      }
+      this.listeners.forEach((cb) => cb({ audioEvent: { audioPcm: bytes, source: "glasses" } }));
+      elapsed += FRAME_MS;
+    }, FRAME_MS);
+    return true;
   }
   onEvenHubEvent(cb: (event: any) => void) {
     this.listeners.add(cb);

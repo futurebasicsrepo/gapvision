@@ -84,10 +84,53 @@ the in-lens display renders the monochrome overlay, the full script appears in
 the phone panel, and the Command Center updates live. The radio panel
 broadcasts to every connected associate.
 
+## Voice queries (double-press → ask → answer in-lens)
+
+The associate double-presses the temple, asks a question out loud, and the
+answer paints on the lens. No wake word, no second press to stop.
+
+```
+double-press ─▶ audioControl(true)
+             ─▶ audioEvent PCM (16 kHz mono 16-bit LE)
+             ─▶ plugin: level meter, RMS endpointing, 250 ms batches
+             ─▶ socket voice:start / voice:chunk / voice:end
+             ─▶ server buffers one utterance (15 s / 480 KB cap)
+             ─▶ POST /api/voice-query ─▶ STT ─▶ answer engine
+             ─▶ voice:result ─▶ glasses_lines on the lens
+```
+
+Answers are **grounded lookups, not model paraphrase**. Stock, size, price,
+location, and guest-history questions resolve deterministically against the
+CRM's floor inventory; only open-ended judgement calls ("what should I show
+her next") reach the LLM. Sizing schemes are checked before anything is
+quoted — a question about a 32x30 will never be answered with the tee that
+happened to be on the lens, and a letter size is never offered as an
+alternative to a waist size. If nothing matches, Cue says so.
+
+Context makes the deixis work: the server remembers the engaged guest and the
+product currently displayed, so "do we have **these** in a 32" and "what did
+**she** buy last time" both resolve without the associate naming anything.
+
+Test it with no hardware and no vendor account — the MockBridge streams
+synthetic PCM and the mock STT returns deterministic transcripts:
+
+```bash
+npm run test:ai             # answer engine + STT + endpoint (pytest)
+npm run test:voice          # socket round trip against live services
+npm run test:voice-browser  # full loop in headless Chromium via the MockBridge
+```
+
+Pin one transcript for a scripted demo with
+`CUE_STT_MOCK_TRANSCRIPT="do we have these in a 32x30"`.
+
 ## Environment
 
 | Var | Default | Purpose |
 |---|---|---|
+| `CUE_STT` | `mock` | STT provider: `mock`, `openai`, `groq`, `deepgram` |
+| `CUE_STT_MODEL` | per-provider | Override the transcription model |
+| `CUE_STT_MOCK_TRANSCRIPT` | — | Pin the mock transcript for demos |
+| `OPENAI_API_KEY` / `GROQ_API_KEY` / `DEEPGRAM_API_KEY` | — | Key for the selected STT provider |
 | `GAPVISION_LLM` | `mock` | LLM provider: `mock`, `anthropic`, `openai`, `google` |
 | `GAPVISION_CRM` | `mock` | CRM provider: `mock`, `shopify` (Gap adapter later) |
 | `SHOPIFY_STORE_DOMAIN` | — | e.g. `your-store.myshopify.com` (shopify CRM only) |
