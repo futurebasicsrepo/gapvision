@@ -32,6 +32,14 @@
     #session-info{font-size:13px;color:var(--ink);margin-bottom:6px}
     #event-log{font-family:var(--mono);font-size:10.5px;color:var(--muted);
       max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
+    #event-inspector{font-family:var(--mono);font-size:10px;max-height:220px;
+      overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:8px}
+    #event-inspector .insp{white-space:pre-wrap;word-break:break-all;padding:4px 6px;
+      border-radius:5px;border-left:2px solid transparent}
+    #event-inspector .insp.ok{color:var(--muted);border-left-color:#22c55e;
+      background:rgba(34,197,94,.05)}
+    #event-inspector .insp.unknown{color:var(--warn);border-left-color:var(--warn);
+      background:rgba(245,158,11,.07)}
   </style>
 </head>
 <body>
@@ -43,6 +51,7 @@
     <span id="server-status" class="pill">server…</span>
     <span id="tenant-badge" class="pill">tenant…</span>
     <span id="voice-status" class="pill">voice…</span>
+    <span id="ring-status" class="pill">ring: waiting</span>
   </div>
 
   <div class="card">
@@ -62,11 +71,23 @@
   </div>
 
   <div class="card">
-    <h3>Dev: simulate temple gestures</h3>
-    <button data-gesture="press">Press</button>
-    <button data-gesture="double-press">Double press (ask)</button>
-    <button data-gesture="swipe-up">Swipe up</button>
-    <button data-gesture="swipe-down">Swipe down</button>
+    <h3>Dev: simulate gestures</h3>
+    <div class="sub" style="margin:0 0 6px">Ring (primary)</div>
+    <button data-event="click" data-source="ring">Ring click</button>
+    <button data-event="double-click" data-source="ring">Ring double (ask)</button>
+    <button data-event="scroll-up" data-source="ring">Ring scroll ↑</button>
+    <button data-event="scroll-down" data-source="ring">Ring scroll ↓</button>
+    <div class="sub" style="margin:10px 0 6px">Temple (mirror)</div>
+    <button data-event="click" data-source="glasses-right">Temple click</button>
+    <button data-event="double-click" data-source="glasses-right">Temple double</button>
+    <button data-event="click" data-source="container">Container tap</button>
+  </div>
+
+  <div class="card">
+    <h3>Event inspector — raw host payloads</h3>
+    <div class="sub">Every event, decoded and raw. Anything marked UNDECODED is a
+      shape the mapping didn't anticipate — that's what to report back.</div>
+    <div id="event-inspector"></div>
   </div>
 
   <div class="card">

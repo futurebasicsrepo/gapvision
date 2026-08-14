@@ -75,13 +75,44 @@ class MockBridge implements GlassesBridge {
   private audioTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
-    // Gesture simulator buttons dispatch synthetic sys events.
-    document.querySelectorAll<HTMLButtonElement>("[data-gesture]").forEach((btn) => {
+    // The simulator buttons emit the *same protobuf shapes the host sends* —
+    // PB ordinals for sys events, protoName keys for container events — so
+    // dev exercises the real decoder rather than a shortcut around it.
+    document.querySelectorAll<HTMLButtonElement>("[data-event]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const gesture = btn.dataset.gesture!;
-        this.listeners.forEach((cb) => cb({ sysEvent: { eventType: `MOCK_${gesture.toUpperCase()}` }, mockGesture: gesture }));
+        const payload = MockBridge.eventFor(btn.dataset.event!, btn.dataset.source);
+        this.listeners.forEach((cb) => cb(payload));
       });
     });
+  }
+
+  /** Build a host-shaped EvenHubEvent for a simulator button. */
+  static eventFor(action: string, source?: string): any {
+    const SOURCE: Record<string, number> = {
+      ring: 2, "glasses-right": 1, "glasses-left": 3,
+    };
+    const TYPE: Record<string, number> = {
+      click: 0, "scroll-up": 1, "scroll-down": 2, "double-click": 3,
+    };
+
+    // A container tap arrives as a textEvent with protoName keys and a string
+    // event type, and carries no EventSource — the awkward shape, on purpose.
+    if (source === "container") {
+      return {
+        textEvent: {
+          Container_ID: 1,
+          Container_Name: "line-1",
+          Event_Type: action === "double-click" ? "DOUBLE_CLICK_EVENT" : "CLICK_EVENT",
+        },
+      };
+    }
+
+    return {
+      sysEvent: {
+        eventType: TYPE[action] ?? 0,
+        eventSource: SOURCE[source ?? "ring"] ?? 2,
+      },
+    };
   }
 
   private paint() {

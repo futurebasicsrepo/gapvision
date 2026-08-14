@@ -3,13 +3,24 @@
  *
  * Runs in the Even App WebView on the associate's phone. Connects to the
  * Cue realtime server, renders guest context to the glasses via the
- * Even Hub bridge, and maps temple gestures to session actions.
+ * Even Hub bridge, and maps ring and temple gestures to session actions.
+ *
+ * Control scheme is ring-first. An associate standing in front of a customer
+ * can turn a ring on their finger invisibly; reaching up to tap their temple
+ * is a visible tell that they're consulting something. The temple mirrors
+ * every ring action as a fallback.
+ *
+ *   click        dismiss what's on the lens / end the engagement
+ *   double-click open the mic and ask
+ *   scroll       cycle the recommendations — and whatever is showing becomes
+ *                the thing "these" refers to in the next voice question
  *
  * In a plain browser this same file runs against the MockBridge and renders
  * to the on-page virtual lens — the full flow is testable with zero hardware.
  */
 import { io, type Socket } from "socket.io-client";
 import { getBridge, type GlassesBridge } from "./bridge";
+import { decodeGesture, describeGesture, type DecodedGesture } from "./gestures";
 import { buildPage, IDLE_LINES, MAX_LINES, toDisplayText } from "./layout";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
 
@@ -26,19 +37,29 @@ const TENANT =
 const TENANT_LABEL = TENANT === "shopify" ? "FUTURE BASICS · LIVE" : "GAP · DEMO";
 const ZONE = TENANT === "shopify" ? "Front Table" : "Denim Wall";
 
+type Recommendation = {
+  sku: string;
+  name: string;
+  price?: number;
+  location?: string;
+  stock?: number;
+};
+
 type DisplayPayload = {
   lines: string[];
   script?: { opener: string; upsell: string; closer: string };
   guest?: { name: string; tier: string; guest_id?: string };
-  recommendations?: { sku: string; name: string }[];
+  recommendations?: Recommendation[];
 };
 
 const ui = {
   bridgeStatus: document.getElementById("bridge-status")!,
   serverStatus: document.getElementById("server-status")!,
   voiceStatus: document.getElementById("voice-status")!,
+  ringStatus: document.getElementById("ring-status"),
   sessionInfo: document.getElementById("session-info")!,
   log: document.getElementById("event-log")!,
+  inspector: document.getElementById("event-inspector"),
 };
 
 function log(msg: string) {
@@ -60,6 +81,10 @@ let engaged = false;
 let engagedGuestId: string | null = null;
 let focusSku: string | null = null;
 let lastDisplay: DisplayPayload | null = null;
+
+/** Recommendation carousel. -1 = showing the guest card, not a product. */
+let recommendations: Recommendation[] = [];
+let recIndex = -1;
 
 async function renderLines(lines: string[], status: string) {
   const page = buildPage(lines, status);
@@ -96,12 +121,18 @@ async function showIdle() {
   ui.sessionInfo.textContent = "No active session";
 }
 
+/** The status row is 264px wide — roughly 24 characters. Longer than that and
+ *  the hint silently runs off the right edge of the lens. */
+const STATUS_HINT = "click·2x ask·scroll";
+
 async function onDisplay(payload: DisplayPayload) {
   engaged = true;
   lastDisplay = payload;
   engagedGuestId = payload.guest?.guest_id ?? engagedGuestId;
-  focusSku = payload.recommendations?.[0]?.sku ?? focusSku;
-  await renderLines(payload.lines, "press: done · 2x: ask");
+  recommendations = payload.recommendations ?? [];
+  recIndex = -1;
+  focusSku = recommendations[0]?.sku ?? focusSku;
+  await renderLines(payload.lines, STATUS_HINT);
   ui.sessionInfo.textContent = payload.guest
     ? `Engaged: ${payload.guest.name} (${payload.guest.tier})`
     : "Engaged";
@@ -110,28 +141,132 @@ async function onDisplay(payload: DisplayPayload) {
 
 /** Restore whatever was on the lens before a voice interaction took it over. */
 async function restoreView() {
-  if (engaged && lastDisplay) {
-    await renderLines(lastDisplay.lines, "press: done · 2x: ask");
-  } else {
-    await showIdle();
+  if (!engaged || !lastDisplay) return showIdle();
+  if (recIndex >= 0 && recommendations[recIndex]) return showRecommendation(recIndex);
+  await renderLines(lastDisplay.lines, STATUS_HINT);
+}
+
+function money(v?: number) {
+  return typeof v === "number" ? `$${v.toFixed(2)}` : "";
+}
+
+/**
+ * Scrolling the ring walks the recommendation list. Whatever is showing also
+ * becomes `focusSku`, so the associate can scroll to an item and immediately
+ * ask "do we have these in a 32" without naming it.
+ */
+async function showRecommendation(index: number) {
+  const item = recommendations[index];
+  if (!item) return;
+  recIndex = index;
+  focusSku = item.sku;
+  await renderLines(
+    [
+      `[ICON:ARROW] ${item.name}`,
+      `        ${[item.location, money(item.price)].filter(Boolean).join("  ")}`,
+      typeof item.stock === "number" ? `        ${item.stock} on hand` : "",
+      "",
+      `[ICON:TAG] ${index + 1} of ${recommendations.length}`,
+    ],
+    STATUS_HINT,
+  );
+  log(`showing rec ${index + 1}/${recommendations.length}: ${item.name}`);
+}
+
+async function cycleRecommendations(step: 1 | -1) {
+  if (!engaged || recommendations.length === 0) return;
+  // From the guest card, scrolling either way enters the list at the ends.
+  const next =
+    recIndex < 0
+      ? step === 1
+        ? 0
+        : recommendations.length - 1
+      : recIndex + step;
+
+  if (next < 0 || next >= recommendations.length) {
+    // Walked off either end — back to the guest card.
+    recIndex = -1;
+    focusSku = recommendations[0]?.sku ?? null;
+    if (lastDisplay) await renderLines(lastDisplay.lines, STATUS_HINT);
+    return;
+  }
+  await showRecommendation(next);
+}
+
+/**
+ * Ring and temple gestures → session actions.
+ *
+ * Both devices drive the same actions; the source is recorded for the event
+ * inspector and the log, not branched on. An associate who prefers the temple
+ * shouldn't have a different mental model than one wearing the ring.
+ */
+function onGesture(g: DecodedGesture) {
+  log(`gesture: ${describeGesture(g)}`);
+  pushInspector(g);
+  if (g.source === "ring" && ui.ringStatus) {
+    ui.ringStatus.textContent = "ring active";
+    ui.ringStatus.className = "pill live";
+  }
+
+  switch (g.action) {
+    case "click":
+      // A click first dismisses whatever voice put on the lens; only then does
+      // it mean "I'm done with this guest".
+      if (voice.dismiss()) return;
+      if (recIndex >= 0) {
+        // Back out of the carousel before ending the engagement.
+        recIndex = -1;
+        if (lastDisplay) void renderLines(lastDisplay.lines, STATUS_HINT);
+        return;
+      }
+      if (engaged) {
+        socket.emit("session:end");
+        void showIdle();
+      }
+      return;
+
+    case "double-click":
+      void voice.toggle({ tenant: TENANT, guestId: engagedGuestId, focusSku });
+      return;
+
+    case "scroll-up":
+      void cycleRecommendations(-1);
+      return;
+
+    case "scroll-down":
+      void cycleRecommendations(1);
+      return;
+
+    case "exit":
+    case "foreground-exit":
+      // The OS is taking the page away; drop the session cleanly rather than
+      // leaving an associate "engaged" on the manager dashboard forever.
+      if (engaged) socket.emit("session:end");
+      return;
+
+    default:
+      return;
   }
 }
 
-/** Temple gestures → session actions. Mapping is intentionally minimal for pilot. */
-function onGesture(gesture: string) {
-  log(`gesture: ${gesture}`);
-  if (gesture === "press") {
-    // A press first dismisses whatever voice put on the lens; only then does
-    // it mean "I'm done with this guest".
-    if (voice.dismiss()) return;
-    if (engaged) {
-      socket.emit("session:end");
-      void showIdle();
-    }
-  } else if (gesture === "double-press") {
-    void voice.toggle({ tenant: TENANT, guestId: engagedGuestId, focusSku });
-  }
-  // swipe-up / swipe-down reserved for radio channel cycling.
+/**
+ * Raw event inspector.
+ *
+ * The decoder is written from the SDK's protobuf enums rather than from
+ * observed hardware, so the one thing that matters on a real device is
+ * seeing anything it *didn't* understand. Every event lands here with its
+ * decode result and its raw payload.
+ */
+function pushInspector(g: DecodedGesture | undefined, raw?: unknown) {
+  if (!ui.inspector) return;
+  const row = document.createElement("div");
+  row.className = g ? "insp ok" : "insp unknown";
+  const head = g ? `${g.action} · ${g.source} · ${g.kind}` : "UNDECODED";
+  row.textContent = `${new Date().toLocaleTimeString()}  ${head}\n${JSON.stringify(
+    g?.raw ?? raw,
+  )}`;
+  ui.inspector.prepend(row);
+  while (ui.inspector.childElementCount > 25) ui.inspector.lastElementChild?.remove();
 }
 
 async function main() {
@@ -157,11 +292,15 @@ async function main() {
   });
 
   bridge.onEvenHubEvent((event: any) => {
-    if (event.mockGesture) return onGesture(event.mockGesture);
-    if (event.audioEvent) return voice.onAudioChunk(event.audioEvent.audioPcm);
-    // Real-device events: first text container is the capture target.
-    if (event.textEvent) return onGesture("press");
-    if (event.listEvent) return onGesture("press");
+    if (event?.audioEvent) return voice.onAudioChunk(event.audioEvent.audioPcm);
+
+    const gesture = decodeGesture(event);
+    if (gesture) return onGesture(gesture);
+
+    // Not a gesture we recognise. IMU reports are expected noise; anything
+    // else is exactly what the inspector exists to surface.
+    if (event?.sysEvent?.imuData) return;
+    pushInspector(undefined, event);
   });
 
   socket = io(SERVER_URL);

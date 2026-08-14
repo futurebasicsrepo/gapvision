@@ -50,13 +50,13 @@ check("beacon engages a guest", (await page.textContent("#session-info")).includ
   await page.textContent("#session-info"));
 
 // Double-press -> mic opens -> mock PCM streams -> level meter paints.
-await page.click('[data-gesture="double-press"]');
+await page.click('[data-event="double-click"][data-source="ring"]');
 await page.waitForFunction(
   () => [...document.querySelectorAll("#virtual-lens .lens-text")]
     .some((e) => e.textContent?.includes("LISTENING")),
   { timeout: 5000 },
 );
-check("mic opens and lens shows LISTENING", true);
+check("ring double-click opens the mic", true);
 check("voice pill goes live", (await page.getAttribute("#voice-status", "class")).includes("live"),
   await page.textContent("#voice-status"));
 
@@ -86,7 +86,7 @@ check("transcript echoed in the log", /voice: ".+" →/.test(await log()),
   (await log()).split("\n")[0]?.slice(0, 80));
 
 // A press dismisses the answer and restores the engaged view.
-await page.click('[data-gesture="press"]');
+await page.click('[data-event="click"][data-source="ring"]');
 await page.waitForTimeout(500);
 const restored = await lens();
 check("press restores the guest card",

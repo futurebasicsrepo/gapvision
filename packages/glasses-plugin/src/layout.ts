@@ -10,6 +10,8 @@
 import type { PageSpec, TextContainer } from "./bridge";
 
 export const MAX_LINES = 7; // + 1 status row = 8 text containers (SDK max)
+/** Characters that fit in the 264px status row. */
+export const STATUS_CHARS = 24;
 
 const LINE_X = 16;
 const LINE_W = 544;
@@ -43,7 +45,9 @@ export function buildPage(lines: string[], statusText: string): PageSpec {
     isEventCapture: i === 0 ? 1 : 0,
   }));
 
-  // Status row (bottom-right): session state / radio hints.
+  // Status row (bottom-right): session state / gesture hints.
+  // 264px fits roughly 24 characters; anything longer runs off the lens
+  // silently, so clip here rather than trusting every caller to count.
   textObject.push({
     xPosition: 296,
     yPosition: 262,
@@ -52,7 +56,9 @@ export function buildPage(lines: string[], statusText: string): PageSpec {
     containerID: 9,
     containerName: "status",
     zOrderIndex: 9,
-    content: statusText,
+    content: statusText.length > STATUS_CHARS
+      ? statusText.slice(0, STATUS_CHARS - 1) + "…"
+      : statusText,
     isEventCapture: 0,
   });
 

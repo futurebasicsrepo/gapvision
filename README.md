@@ -84,7 +84,37 @@ the in-lens display renders the monochrome overlay, the full script appears in
 the phone panel, and the Command Center updates live. The radio panel
 broadcasts to every connected associate.
 
-## Voice queries (double-press → ask → answer in-lens)
+## Gestures — ring first
+
+An associate standing in front of a customer can turn a ring on their finger
+without anyone noticing. Reaching up to tap their temple is a visible tell that
+they're consulting something. So the ring is the primary control and the temple
+mirrors it.
+
+| Gesture | Action |
+|---|---|
+| click | dismiss what's on the lens / end the engagement |
+| double-click | open the mic and ask |
+| scroll ↑ / ↓ | cycle the recommendations |
+
+Scrolling also sets the voice context: whatever item is on the lens becomes what
+"these" refers to, so an associate can scroll to a product and immediately ask
+"do we have these in a 32" without naming it.
+
+`src/gestures.ts` decodes the SDK's protobuf enums (`OsEventTypeList`,
+`EventSourceType`) rather than pattern-matching observed hardware, so ring,
+left temple and right temple are distinguishable and every event type is
+handled. The host is Flutter and sends the same field as an ordinal, an enum
+name, a shorthand, or a protoName key depending on the path — the decoder
+accepts all of them, and the plugin page's **event inspector** shows anything it
+couldn't decode, which is the one thing worth watching on real hardware.
+
+```bash
+npm run test:gestures          # decoder, every payload shape (no browser)
+npm run test:gestures-browser  # carousel + voice context, headless
+```
+
+## Voice queries (double-click → ask → answer in-lens)
 
 The associate double-presses the temple, asks a question out loud, and the
 answer paints on the lens. No wake word, no second press to stop.
