@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy — cuesea</title>
+    <meta name="description" content="What cuesea collects, what it deliberately does not, and why." />
+    <meta name="theme-color" content="#FBF9F5" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2304122E'/%3E%3Cpath d='M 25.0 9.7 A 11 11 0 1 0 25.0 22.3' fill='none' stroke='%23FBF9F5' stroke-width='4.9' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%23FF6B2C'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Editorial surface: paper, not the product's sea. Serif is allowed
+         here — it is the one place in the system that is prose rather than
+         UI, and it never drops below 24px. */
+      :root {
+        --sea-900: #04122E; --sea-700: #0A2E63; --sea-500: #1560B8;
+        --flame: #FF6B2C; --flame-600: #C2400A; --flame-700: #8C2D06;
+        --ink-900: #0E1116; --ink-500: #4E545C; --ink-300: #8E949B;
+        --ink-100: #E5E2DB; --chalk: #F2EEE7; --paper: #FBF9F5;
+        --sans: "Instrument Sans", system-ui, -apple-system, sans-serif;
+        --serif: "Instrument Serif", Georgia, serif;
+        --mono: "IBM Plex Mono", ui-monospace, monospace;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: var(--sans); background: var(--paper); color: var(--ink-900);
+        -webkit-font-smoothing: antialiased; line-height: 1.6;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 40px 24px 96px; }
+
+      header { padding-bottom: 30px; border-bottom: 1px solid var(--ink-100); margin-bottom: 34px; }
+      .mark { display: inline-flex; align-items: center; gap: 9px; }
+      .wordmark { font-weight: 600; font-size: 20px; letter-spacing: -0.02em; }
+      .wordmark .sea { color: var(--sea-500); }
+      h1 { font-family: var(--serif); font-size: 44px; line-height: 1.1; font-weight: 400; margin: 26px 0 12px; }
+      .stand { font-size: 17px; color: var(--ink-500); max-width: 56ch; }
+      .dates { font-family: var(--mono); font-size: 12px; color: var(--ink-300); margin-top: 18px; }
+
+      h2 {
+        font-size: 13px; font-family: var(--mono); font-weight: 500;
+        text-transform: uppercase; letter-spacing: 0.14em; color: var(--flame-700);
+        margin: 44px 0 14px;
+      }
+      h3 { font-size: 17px; font-weight: 600; margin: 26px 0 8px; }
+      p { margin-bottom: 15px; max-width: 68ch; }
+      ul { margin: 0 0 15px 20px; max-width: 68ch; }
+      li { margin-bottom: 8px; }
+      strong { font-weight: 600; }
+      code, .mono { font-family: var(--mono); font-size: 13px; background: var(--chalk); padding: 1px 5px; border-radius: 4px; }
+      a { color: var(--sea-500); text-underline-offset: 3px; }
+
+      /* One flame per region, and it goes here: the things we chose not to
+         collect are the point of the document. */
+      .keystone {
+        border-left: 3px solid var(--flame); background: #fff;
+        padding: 20px 22px; margin: 26px 0; border-radius: 0 10px 10px 0;
+        box-shadow: 0 1px 2px rgba(14,17,22,0.04);
+      }
+      .keystone h3 { margin-top: 0; }
+      .keystone p:last-child { margin-bottom: 0; }
+
+      table { border-collapse: collapse; width: 100%; margin: 16px 0 22px; font-size: 14.5px; }
+      th {
+        text-align: left; font-family: var(--mono); font-size: 11px; font-weight: 500;
+        text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-500);
+        border-bottom: 1px solid var(--ink-100); padding: 0 12px 8px 0;
+      }
+      td { padding: 11px 12px 11px 0; border-bottom: 1px solid var(--ink-100); vertical-align: top; }
+      tr:last-child td { border-bottom: 0; }
+
+      footer {
+        margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--ink-100);
+        font-size: 13.5px; color: var(--ink-500);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <span class="mark">
+          <svg width="26" height="26" viewBox="0 0 32 32" role="img" aria-label="cuesea">
+            <path d="M 25.01 9.69 A 11 11 0 1 0 25.01 22.31" fill="none"
+                  stroke="#0E1116" stroke-width="4.4" stroke-linecap="round" />
+            <circle cx="16" cy="16" r="3.1" fill="#FF6B2C" />
+          </svg>
+          <span class="wordmark">cue<span class="sea">sea</span></span>
+        </span>
+
+        <h1>Privacy</h1>
+        <p class="stand">
+          cuesea helps a retail associate help the person in front of them. This
+          page says what that requires us to collect, what we deliberately
+          refuse to collect, and which promises the software currently keeps.
+        </p>
+        <p class="dates">
+          Effective 14 August 2026 · Version 1.0
+        </p>
+      </header>
+
+      <div class="keystone">
+        <h3>The short version</h3>
+        <p>
+          There is <strong>no camera</strong> on the glasses and no facial
+          recognition anywhere in the product. A customer is only ever
+          recognised if they <strong>opted in</strong> with the retailer and
+          identified themselves — by scanning a code — at that visit. We store a
+          <strong>reference</strong> to the retailer's own customer record, never
+          a copy of it. The microphone opens only when an associate deliberately
+          presses for it, and closes itself when they stop speaking.
+        </p>
+      </div>
+
+      <h2>Who is responsible for what</h2>
+      <p>
+        cuesea is sold to retailers. When a retailer uses it in their stores,
+        <strong>the retailer decides</strong> what customer data exists and why;
+        we process it on their instructions. In data-protection terms they are
+        the controller and we are the processor. If you are a shopper and want
+        to know what a particular retailer holds about you, or want it deleted,
+        that request goes to them — and we support them in answering it.
+      </p>
+      <p>
+        For the accounts we create for store staff, and for our own service
+        logs, we are the controller.
+      </p>
+
+      <h2>What the glasses do and don't capture</h2>
+
+      <h3>Display and input</h3>
+      <p>
+        The Even Realities G2 renders text and takes gestures. It has
+        <strong>no camera and no speaker</strong>. The omission is deliberate,
+        not an oversight of a first version: a camera on a shop floor changes
+        what the product is, and what it would take to approve it.
+      </p>
+
+      <h3>Microphone</h3>
+      <p>
+        Our app requests the <code>g2-microphone</code> permission. It is not a
+        continuous recording. The microphone opens only on an explicit double
+        press by the associate, streams audio while they ask a question, and
+        closes automatically when they stop speaking — with a hard limit of a
+        few seconds. A live level indicator is shown in the lens the entire time
+        it is open, so it is never ambiguous whether the microphone is live.
+      </p>
+      <p>
+        The audio is transcribed so the question can be answered, and the
+        <strong>audio itself is not retained</strong> after that. The
+        <strong>transcript is not stored either</strong>, unless a retailer
+        explicitly turns transcript storage on for their own account; it is
+        <strong>off by default</strong>. What we keep is the kind of question it
+        was, whether it was answered, and how long it took.
+      </p>
+      <p>
+        The feature is designed for the associate to ask a question, not to
+        capture a conversation. Retailers are responsible for how they use it,
+        including under laws that require all parties to consent to a recording.
+      </p>
+
+      <h3>Network</h3>
+      <p>
+        Our app requests the <code>network</code> permission and talks to
+        exactly one host — our own service at
+        <span class="mono">realtime-production-80f4.up.railway.app</span>. No
+        advertising networks, no third-party analytics in the glasses app, and
+        no keys of any kind inside the installed package.
+      </p>
+
+      <h2>What we store</h2>
+      <table>
+        <thead>
+          <tr><th>What</th><th>Why</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Staff accounts</strong><br />name, work email, role, store, password (hashed), sign-in times</td>
+            <td>So the right people can sign in and see only their own store.</td>
+          </tr>
+          <tr>
+            <td><strong>Devices</strong><br />model, serial, who it's assigned to, last seen</td>
+            <td>So activity can be credited to the person wearing the glasses.</td>
+          </tr>
+          <tr>
+            <td><strong>Interactions</strong><br />store, associate, zone, start and end time, outcome, sale amount, and a <em>reference</em> to the retailer's customer record</td>
+            <td>Reporting for the retailer, and the recommendation shown in the lens.</td>
+          </tr>
+          <tr>
+            <td><strong>Questions asked</strong><br />intent, whether it was answered, how long it took, seconds of audio</td>
+            <td>To tell whether the product works, and to bill for usage.</td>
+          </tr>
+          <tr>
+            <td><strong>Usage totals</strong><br />daily counts per store</td>
+            <td>Invoicing.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>What we do not store</h3>
+      <ul>
+        <li><strong>Customer profiles.</strong> Interactions carry the retailer's own identifier for a customer and nothing else — no name, no contact details, no purchase history copied across. Those stay in the retailer's system, and we read them only when needed to render a recommendation.</li>
+        <li><strong>Images or video.</strong> There is no camera on the glasses.</li>
+        <li><strong>Biometric identifiers.</strong> No face, voice, or gait recognition is used to identify anyone, at any point.</li>
+        <li><strong>Location traces.</strong> We record which zone of a store an interaction happened in. We do not request or record device location.</li>
+        <li><strong>Audio recordings.</strong> See above.</li>
+      </ul>
+
+      <h2>Who else is involved</h2>
+      <p>We use a small number of service providers, each with a specific job:</p>
+      <ul>
+        <li><strong>Railway</strong> — runs our services and database (United States).</li>
+        <li><strong>Vercel</strong> — serves our web interfaces.</li>
+        <li><strong>Even Realities</strong> — makes the glasses and the phone app that carries our display to them.</li>
+        <li><strong>The retailer's own commerce platform</strong> (for example Shopify) — the source of product and customer information, connected by the retailer with their own credentials.</li>
+        <li><strong>A speech-to-text provider</strong>, where a retailer has enabled real transcription, to convert a spoken question to text. Audio is sent for that purpose only and is not used to train their models.</li>
+      </ul>
+      <p>We do not sell personal information, and we do not share it for advertising.</p>
+
+      <h2>How long we keep things</h2>
+      <p>
+        Each retailer has a retention setting on their account, which defaults to
+        <strong>90 days</strong> for interaction records.
+      </p>
+      <p>
+        <strong>Being straight about the current state:</strong> that setting is
+        recorded and honoured in what we newly collect, but automatic deletion of
+        older records is not yet running in the product. Until it is, deletion
+        happens on request — a retailer can ask us to remove their data, or a
+        specific customer's records, and we will do it. We would rather say this
+        plainly than describe a schedule the software does not yet keep. This
+        page will be updated when enforcement ships.
+      </p>
+      <p>
+        Staff accounts and their activity are kept for as long as the retailer
+        uses cuesea, and removed when the account is closed.
+      </p>
+
+      <h2>Security</h2>
+      <ul>
+        <li>Traffic is encrypted in transit.</li>
+        <li>Passwords are stored as salted <span class="mono">scrypt</span> hashes; we never see or store the original.</li>
+        <li>Sign-in tokens are stored hashed, so a copy of our database does not hand over live sessions.</li>
+        <li>Every store's data is separated at the query level, through a single code path built for that purpose rather than a convention applied by hand.</li>
+        <li>Staff can only see their own store. The people who can see across retailers are cuesea employees, on a separate internal system that customers cannot reach.</li>
+      </ul>
+
+      <h2>Your rights</h2>
+      <p>
+        Depending on where you live, you may have the right to see what is held
+        about you, correct it, delete it, or object to its use. If you are a
+        shopper, contact the retailer you shopped with; they hold the
+        relationship and we act on their instruction. If you are a member of
+        store staff, or you would rather come to us directly, write to the
+        address below and we will help.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        If we change this page materially we will update the version and
+        effective date above, and tell the retailers using cuesea. We won't
+        quietly broaden what we collect.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        <a href="mailto:privacy@cuesea.ai">privacy@cuesea.ai</a><br />
+        cuesea · Future Basics
+      </p>
+
+      <footer>
+        This page covers the cuesea platform, including the Cue Lens app for
+        Even Realities G2 glasses and the Cue Studio web interface.
+      </footer>
+    </div>
+  </body>
+</html>
