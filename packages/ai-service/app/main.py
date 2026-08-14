@@ -49,6 +49,13 @@ def _startup() -> None:
         print(f"[cue] database ready ({len(applied)} migration(s) applied)", flush=True)
     except Exception as e:  # a bad migration must not take the lens offline
         print(f"[cue] WARNING: migrations failed: {e}", flush=True)
+        return
+
+    try:
+        from .seed import bootstrap
+        bootstrap()
+    except Exception as e:
+        print(f"[cue] WARNING: bootstrap failed: {e}", flush=True)
 
 # Browsers should not reach this service directly any more — the realtime
 # server proxies on their behalf. Keep an allowlist for local development

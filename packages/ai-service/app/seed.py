@@ -67,6 +67,42 @@ def ensure_user(email: str, name: str, role: str, tenant_id, password: str | Non
     return row
 
 
+def bootstrap() -> None:
+    """Idempotent boot-time seed, for platforms with no shell.
+
+    Railway gives no console to run `python -m app.seed` in, so a deploy would
+    otherwise come up with a working database and no way to log into it. This
+    runs on startup and is a no-op once things exist.
+
+    Creating the first admin requires BOTH env vars to be set explicitly. No
+    default password is ever generated here — a publicly reachable service
+    that mints an account with a guessable password is a back door, and unlike
+    the CLI path there is nobody watching stdout to catch what it chose.
+    """
+    for spec in TENANTS:
+        ensure_tenant(spec)
+
+    email = os.environ.get("CUE_ADMIN_EMAIL")
+    password = os.environ.get("CUE_ADMIN_PASSWORD")
+    if not email or not password:
+        if not db.query_one("SELECT id FROM users WHERE role = 'cue_admin' LIMIT 1"):
+            print(
+                "[cue] no admin account yet — set CUE_ADMIN_EMAIL and "
+                "CUE_ADMIN_PASSWORD to create the first one on next boot",
+                flush=True,
+            )
+        return
+
+    existing = db.query_one("SELECT id FROM users WHERE lower(email) = lower(%s)", (email,))
+    if existing:
+        return
+    identity.create_user(
+        email=email, name=os.environ.get("CUE_ADMIN_NAME", "Cue Admin"),
+        role="cue_admin", tenant_id=None, password=password,
+    )
+    print(f"[cue] created first admin: {email}", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed the Cue control plane")
     parser.add_argument("--demo", action="store_true",
