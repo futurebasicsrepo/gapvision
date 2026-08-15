@@ -520,17 +520,20 @@ def mail_test(authorization: str | None = BearerHeader):
         return {
             "ok": False, "provider": st["provider"], "to": to,
             "detail": "Not configured, so nothing was attempted. Set "
-                      "CUE_SMTP_HOST, CUE_SMTP_USER and CUE_SMTP_PASSWORD on "
-                      "the service, then try again.",
+                      "RESEND_API_KEY on the service — or the CUE_SMTP_* trio "
+                      "if you are relaying through your own server — then try "
+                      "again.",
         }
 
     res = mailer.send_test(to=to, name=me.get("name"))
     if res.get("delivered"):
+        ident = f" Message {res['id']}." if res.get("id") else ""
         return {
-            "ok": True, "provider": "smtp", "to": to,
-            "detail": f"Accepted by {st['host']} for delivery to {to}, sent as "
-                      f"{st['from']}. If it hasn't arrived in a minute look in "
-                      f"spam before changing anything — the server took it.",
+            "ok": True, "provider": res.get("provider"), "to": to,
+            "id": res.get("id"),
+            "detail": f"Accepted for delivery to {to}, sent as {st['from']}.{ident} "
+                      f"If it hasn't arrived in a minute look in spam before "
+                      f"changing anything — the provider took it.",
         }
 
     return {
