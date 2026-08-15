@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 794 1123" width="794" height="1123">
+<rect width="794" height="1123" fill="#FBF9F5"/>
+<path d="M 73.29 49.40 A 15 15 0 1 0 73.29 66.60" fill="none" stroke="#0E1116" stroke-width="5.45" stroke-linecap="round"/><circle cx="61" cy="58" r="3.95" fill="#FF6B2C"/>
+<text x="86" y="64" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="21" fill="#0E1116" font-weight="600" text-anchor="start">Cue Lens</text>
+<text x="748" y="52" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="9.5" fill="#4E545C" font-weight="500" text-anchor="end" letter-spacing="0.12em">YOUR GLASSES, IN ONE PAGE</text>
+<text x="748" y="68" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="end">Keep this. It is the whole thing.</text>
+<line x1="46" y1="86" x2="748" y2="86" stroke="#D9D5CE" stroke-width="1"/>
+<text x="46" y="112" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="12" fill="#0E1116" font-weight="600" text-anchor="start" letter-spacing="0.1em">1 · TURN THEM ON</text>
+<text x="46" y="130" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#FF6B2C" font-weight="600" text-anchor="start">There is no power button. The case is the switch.</text>
+<rect x="46" y="142" width="702" height="128" rx="10" fill="#FFFFFF" stroke="#D9D5CE" stroke-width="1"/>
+<rect x="70" y="178" width="74" height="44" rx="9" fill="none" stroke="#0E1116" stroke-width="2"/>
+<line x1="70" y1="200" x2="144" y2="200" stroke="#0E1116" stroke-width="1.4"/>
+<circle cx="107" cy="160" r="11" fill="#0A2E63"/><text x="107" y="164" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#FBF9F5" font-weight="600" text-anchor="middle">1</text>
+<text x="107" y="252" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="9.5" fill="#4E545C" font-weight="400" text-anchor="middle">Glasses in, lid shut</text>
+<path d="M 238 222 L 238 200 L 312 200 L 312 222 Z" fill="none" stroke="#0E1116" stroke-width="2"/>
+<path d="M 242 196 L 260 170 L 316 170 L 308 196 Z" fill="none" stroke="#0E1116" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="275" cy="211" r="5" fill="#FBF9F5" stroke="#0E1116" stroke-width="1.6"/>
+<circle cx="275" cy="160" r="11" fill="#0A2E63"/><text x="275" y="164" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#FBF9F5" font-weight="600" text-anchor="middle">2</text>
+<text x="275" y="252" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="9.5" fill="#4E545C" font-weight="400" text-anchor="middle">Open the lid — they wake up</text>
+<circle cx="414" cy="192" r="8" fill="#FFFFFF" stroke="#0E1116" stroke-width="1.6"/>
+<text x="432" y="196" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10.5" fill="#0E1116" font-weight="500" text-anchor="start">White — charged and ready</text>
+<circle cx="414" cy="216" r="8" fill="#FF6B2C"/>
+<text x="432" y="220" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10.5" fill="#0E1116" font-weight="500" text-anchor="start">Orange — still charging, or seated wrong</text>
+<text x="390" y="244" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="9.5" fill="#4E545C" font-weight="400" text-anchor="start">Flashing orange — they are not sitting on the</text>
+<text x="390" y="257" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="9.5" fill="#4E545C" font-weight="400" text-anchor="start">charging pins. Take them out and reseat them.</text>
+<circle cx="390" cy="160" r="11" fill="#0A2E63"/><text x="390" y="164" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#FBF9F5" font-weight="600" text-anchor="middle">3</text>
+<text x="46" y="300" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="12" fill="#0E1116" font-weight="600" text-anchor="start" letter-spacing="0.1em">2 · PAIR THEM, ONCE</text>
+<text x="46" y="318" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#4E545C" font-weight="400" text-anchor="start">Only the first time. After that they connect themselves.</text>
+<rect x="46" y="326" width="702" height="124" rx="10" fill="#FFFFFF" stroke="#D9D5CE" stroke-width="1"/>
+<rect x="72" y="348" width="46" height="76" rx="7" fill="none" stroke="#0E1116" stroke-width="2"/>
+<line x1="87" y1="356" x2="103" y2="356" stroke="#0E1116" stroke-width="2" stroke-linecap="round"/>
+<path d="M 104.01 383.69 A 11 11 0 1 0 104.01 396.31" fill="none" stroke="#0E1116" stroke-width="4.00" stroke-linecap="round"/><circle cx="95" cy="390" r="2.90" fill="#FF6B2C"/>
+<text x="95" y="436" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="9.5" fill="#4E545C" font-weight="400" text-anchor="middle">The Even app</text>
+<circle cx="164" cy="356" r="11" fill="#0A2E63"/><text x="164" y="360" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#FBF9F5" font-weight="600" text-anchor="middle">1</text>
+<text x="184" y="360" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11" fill="#0E1116" font-weight="500" text-anchor="start">Open the Even app and sign in.</text>
+<circle cx="164" cy="379" r="11" fill="#0A2E63"/><text x="164" y="383" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#FBF9F5" font-weight="600" text-anchor="middle">2</text>
+<text x="184" y="383" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11" fill="#0E1116" font-weight="500" text-anchor="start">Take the glasses out of the open case.</text>
+<text x="414" y="383" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="9.5" fill="#4E545C" font-weight="400" text-anchor="start">They are only discoverable while awake.</text>
+<circle cx="164" cy="402" r="11" fill="#0A2E63"/><text x="164" y="406" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#FBF9F5" font-weight="600" text-anchor="middle">3</text>
+<text x="184" y="406" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11" fill="#0E1116" font-weight="500" text-anchor="start">Pick your G2 from the list the app finds.</text>
+<circle cx="164" cy="425" r="11" fill="#0A2E63"/><text x="164" y="429" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#FBF9F5" font-weight="600" text-anchor="middle">4</text>
+<text x="184" y="429" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11" fill="#0E1116" font-weight="500" text-anchor="start">Wait for it to say Connected.</text>
+<text x="414" y="429" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="9.5" fill="#4E545C" font-weight="400" text-anchor="start">Then open Cue.</text>
+<text x="46" y="482" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="12" fill="#0E1116" font-weight="600" text-anchor="start" letter-spacing="0.1em">3 · CONTROL IT</text>
+<text x="46" y="498" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#4E545C" font-weight="400" text-anchor="start">Use the ring. Your temple does the same things — but reaching up is a tell, and the customer sees it.</text>
+<rect x="46" y="508" width="343.0" height="208" rx="10" fill="#FFFFFF" stroke="#D9D5CE" stroke-width="1"/>
+<rect x="405.0" y="508" width="343.0" height="208" rx="10" fill="#FFFFFF" stroke="#D9D5CE" stroke-width="1"/>
+<text x="64" y="532" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="10" fill="#0A2E63" font-weight="600" text-anchor="start" letter-spacing="0.09em">NOBODY IN FRONT OF YOU</text>
+<text x="423.0" y="532" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="10" fill="#0A2E63" font-weight="600" text-anchor="start" letter-spacing="0.09em">WITH A CUSTOMER</text>
+<circle cx="72" cy="568" r="12" fill="none" stroke="#0E1116" stroke-width="2"/><circle cx="72" cy="568" r="4.5" fill="#FF6B2C"/><text x="96" y="566" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#0E1116" font-weight="600" text-anchor="start">Press</text><text x="96" y="581" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">Ask a question out loud</text>
+<circle cx="72" cy="606" r="12" fill="none" stroke="#0E1116" stroke-width="2"/><circle cx="67.5" cy="606" r="3.4" fill="#FF6B2C"/><circle cx="76.5" cy="606" r="3.4" fill="#FF6B2C"/><text x="96" y="604" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#0E1116" font-weight="600" text-anchor="start">Press twice</text><text x="96" y="619" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">Puts the glasses away</text>
+<circle cx="72" cy="644" r="12" fill="none" stroke="#0E1116" stroke-width="2"/><path d="M 72 650 L 72 638" stroke="#FF6B2C" stroke-width="2.4" stroke-linecap="round"/><path d="M 67.5 643 L 72 638 L 76.5 643" fill="none" stroke="#FF6B2C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><text x="96" y="642" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#0E1116" font-weight="600" text-anchor="start">Scroll up</text><text x="96" y="657" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">Type size check (for us, not you)</text>
+<circle cx="72" cy="682" r="12" fill="none" stroke="#0E1116" stroke-width="2"/><path d="M 72 676 L 72 688" stroke="#FF6B2C" stroke-width="2.4" stroke-linecap="round"/><path d="M 67.5 683 L 72 688 L 76.5 683" fill="none" stroke="#FF6B2C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><text x="96" y="680" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#0E1116" font-weight="600" text-anchor="start">Scroll down</text><text x="96" y="695" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">The floor — messages, and replies</text>
+<circle cx="431.0" cy="568" r="12" fill="none" stroke="#0E1116" stroke-width="2"/><path d="M 431.0 562 L 431.0 574" stroke="#FF6B2C" stroke-width="2.4" stroke-linecap="round"/><path d="M 426.5 569 L 431.0 574 L 435.5 569" fill="none" stroke="#FF6B2C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><text x="455.0" y="566" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#0E1116" font-weight="600" text-anchor="start">Scroll</text><text x="455.0" y="581" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">Move through their cards</text>
+<circle cx="431.0" cy="606" r="12" fill="none" stroke="#0E1116" stroke-width="2"/><circle cx="431.0" cy="606" r="4.5" fill="#FF6B2C"/><text x="455.0" y="604" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#0E1116" font-weight="600" text-anchor="start">Press</text><text x="455.0" y="619" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">Back to the cue. Again to finish</text>
+<circle cx="431.0" cy="644" r="12" fill="none" stroke="#0E1116" stroke-width="2"/><circle cx="426.5" cy="644" r="3.4" fill="#FF6B2C"/><circle cx="435.5" cy="644" r="3.4" fill="#FF6B2C"/><text x="455.0" y="642" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#0E1116" font-weight="600" text-anchor="start">Press twice</text><text x="455.0" y="657" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">Ask a question out loud</text>
+<circle cx="431.0" cy="682" r="12" fill="none" stroke="#0E1116" stroke-width="2"/><circle cx="431.0" cy="682" r="4.5" fill="#FF6B2C"/><text x="455.0" y="680" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#0E1116" font-weight="600" text-anchor="start">Press on an urgent message</text><text x="455.0" y="695" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">Takes it — replies On my way</text>
+<text x="46" y="736" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10.5" fill="#0E1116" font-weight="600" text-anchor="start">Their cards, in order:</text>
+<rect x="174" y="724" width="31" height="18" rx="9" fill="none" stroke="#D9D5CE" stroke-width="1"/>
+<text x="189.4" y="737" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="8.5" fill="#4E545C" font-weight="500" text-anchor="middle">CUE</text>
+<rect x="211.8" y="724" width="44" height="18" rx="9" fill="none" stroke="#D9D5CE" stroke-width="1"/>
+<text x="233.8" y="737" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="8.5" fill="#4E545C" font-weight="500" text-anchor="middle">SIZES</text>
+<rect x="262.8" y="724" width="37" height="18" rx="9" fill="none" stroke="#D9D5CE" stroke-width="1"/>
+<text x="281.5" y="737" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="8.5" fill="#4E545C" font-weight="500" text-anchor="middle">CART</text>
+<rect x="307.2" y="724" width="57" height="18" rx="9" fill="none" stroke="#D9D5CE" stroke-width="1"/>
+<text x="335.8" y="737" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="8.5" fill="#4E545C" font-weight="500" text-anchor="middle">HISTORY</text>
+<rect x="371.4" y="724" width="37" height="18" rx="9" fill="none" stroke="#D9D5CE" stroke-width="1"/>
+<text x="390.09999999999997" y="737" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="8.5" fill="#4E545C" font-weight="500" text-anchor="middle">SHIP</text>
+<rect x="415.79999999999995" y="724" width="57" height="18" rx="9" fill="none" stroke="#D9D5CE" stroke-width="1"/>
+<text x="444.4" y="737" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="8.5" fill="#4E545C" font-weight="500" text-anchor="middle">CONTACT</text>
+<rect x="479.99999999999994" y="724" width="44" height="18" rx="9" fill="none" stroke="#D9D5CE" stroke-width="1"/>
+<text x="501.99999999999994" y="737" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="8.5" fill="#4E545C" font-weight="500" text-anchor="middle">PICKS</text>
+<text x="46" y="760" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="12" fill="#0E1116" font-weight="600" text-anchor="start" letter-spacing="0.1em">4 · WHAT YOU SEE</text>
+<text x="46" y="778" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11.5" fill="#4E545C" font-weight="400" text-anchor="start">Only you can see it. It is not a screen the customer can read over your shoulder.</text>
+<rect x="46" y="788" width="702" height="182" rx="10" fill="#FFFFFF" stroke="#D9D5CE" stroke-width="1"/>
+<rect x="74" y="804" width="300" height="150" rx="6" fill="#04122E"/>
+<path d="M 97.25 813.66 A 6.770833333333334 6.770833333333334 0 1 0 97.25 821.43" fill="none" stroke="#FBF9F5" stroke-width="2.46" stroke-linecap="round"/><circle cx="91.70833333333334" cy="817.5416666666666" r="1.79" fill="#FF6B2C"/>
+<text x="360" y="819.625" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="9" fill="#8FC7F0" font-weight="500" text-anchor="end">14·32</text>
+<rect x="84.41666666666667" y="831.0833333333334" width="87.5" height="81.25" rx="3" fill="none" stroke="#8FC7F0" stroke-opacity="0.5" stroke-width="1"/>
+<text x="88.58333333333333" y="841.5" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="7.5" fill="#FBF9F5" font-weight="500" text-anchor="start">SARAH CHEN</text>
+<text x="88.58333333333333" y="855.0416666666666" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="7.5" fill="#8FC7F0" font-weight="500" text-anchor="start">ICON</text>
+<text x="88.58333333333333" y="868.5833333333334" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="7.5" fill="#8FC7F0" font-weight="500" text-anchor="start">4200 PTS</text>
+<text x="88.58333333333333" y="882.125" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="7.5" fill="#8FC7F0" font-weight="500" text-anchor="start">TOP M</text>
+<text x="88.58333333333333" y="895.6666666666666" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="7.5" fill="#8FC7F0" font-weight="500" text-anchor="start">BTM 28X30</text>
+<text x="179.20833333333334" y="841.5" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="8.5" fill="#FBF9F5" font-weight="500" text-anchor="start">IN CART CASHSOFT CREW</text>
+<text x="179.20833333333334" y="858.1666666666666" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="8.5" fill="#FBF9F5" font-weight="500" text-anchor="start">BOUGHT BARREL JEANS</text>
+<text x="179.20833333333334" y="874.8333333333334" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="8.5" fill="#FBF9F5" font-weight="500" text-anchor="start">OFFER IT IN SIZE M</text>
+<text x="84.41666666666667" y="940.4583333333334" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="7.5" fill="#8FC7F0" font-weight="500" text-anchor="start">DENIM WALL</text>
+<text x="179.20833333333334" y="940.4583333333334" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="7.5" fill="#8FC7F0" font-weight="500" text-anchor="start">CUE 1/7</text>
+<circle cx="400" cy="824" r="3" fill="#FF6B2C"/>
+<text x="412" y="828" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11" fill="#0E1116" font-weight="600" text-anchor="start">Who they are</text>
+<text x="412" y="843" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="9.5" fill="#4E545C" font-weight="400" text-anchor="start">Stays put on the left while you scroll.</text>
+<circle cx="400" cy="872" r="3" fill="#FF6B2C"/>
+<text x="412" y="876" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11" fill="#0E1116" font-weight="600" text-anchor="start">What to say</text>
+<text x="412" y="891" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="9.5" fill="#4E545C" font-weight="400" text-anchor="start">Three lines. Never more — you are talking, not reading.</text>
+<circle cx="400" cy="920" r="3" fill="#FF6B2C"/>
+<text x="412" y="924" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="11" fill="#0E1116" font-weight="600" text-anchor="start">Where you are</text>
+<text x="412" y="939" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="9.5" fill="#4E545C" font-weight="400" text-anchor="start">CUE 1/7 means card one of seven.</text>
+<line x1="46" y1="981" x2="748" y2="981" stroke="#D9D5CE" stroke-width="1"/>
+<text x="46" y="1001" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="10" fill="#0E1116" font-weight="600" text-anchor="start" letter-spacing="0.09em">IF SOMETHING IS WRONG</text>
+<text x="46" y="1019" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#0E1116" font-weight="600" text-anchor="start">Nothing on the glass</text>
+<text x="214" y="1019" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">Take them off and put them back on.</text>
+<text x="46" y="1034" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#0E1116" font-weight="600" text-anchor="start">Cue will not open</text>
+<text x="214" y="1034" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">Check the Even app says Connected.</text>
+<text x="46" y="1049" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#0E1116" font-weight="600" text-anchor="start">A tap did something odd</text>
+<text x="214" y="1049" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">You were in Even's own menu, not Cue. Press twice to come back.</text>
+<text x="46" y="1064" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#0E1116" font-weight="600" text-anchor="start">Still wrong</text>
+<text x="214" y="1064" font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="10" fill="#4E545C" font-weight="400" text-anchor="start">Tell your manager. Do not factory reset them.</text>
+<text x="748" y="1097" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="9.5" fill="#4E545C" font-weight="400" text-anchor="end" letter-spacing="0.08em">cuesea.ai</text>
+</svg>

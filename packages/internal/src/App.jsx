@@ -33,6 +33,7 @@ const SECTIONS = [
       { key: "architecture", name: "Architecture", hint: "how it all fits" },
       { key: "features", name: "What Cue does", hint: "built, partial, not built" },
       { key: "onboarding", name: "Onboarding", hint: "adding a retailer, step by step" },
+      { key: "onepager", name: "Employee one-pager", hint: "print this for the floor" },
       { key: "brand", name: "Brand", hint: "tokens, mark, voice" },
     ],
   },
@@ -44,6 +45,7 @@ const TITLES = {
   architecture: ["Architecture", "The system, the decisions behind it, and what's still missing."],
   features: ["What Cue does", "Read off the code, not the roadmap — and honest about the difference."],
   onboarding: ["Onboarding a retailer", "Console only. No terminal, no code."],
+  onepager: ["Employee one-pager", "Turn on, pair, control. Print it and put it in the stock room."],
   brand: ["Brand & identity", "Generated from the same tokens that build the products."],
 };
 
@@ -164,6 +166,22 @@ export default function App() {
           )}
           {view === "onboarding" && (
             <div className="card span-12"><Doc source={onboardingMd} /></div>
+          )}
+          {view === "onepager" && (
+            <div className="card span-12">
+              <div className="card-head">
+                <h3>One page, for whoever is wearing them</h3>
+                <a className="dl-all" href="/docs/cue-employee-one-pager.pdf"
+                   target="_blank" rel="noreferrer">Print-ready PDF</a>
+              </div>
+              <p className="card-note">
+                A4. Generated from the same gesture table the plugin runs, so it
+                cannot drift from the glasses — a printed control scheme goes
+                wrong silently, on a wall nobody re-reads.
+              </p>
+              <img className="onepager" alt="Cue employee one-pager"
+                   src="/docs/cue-employee-one-pager.svg" />
+            </div>
           )}
           {view === "brand" && <Brand />}
         </div>

@@ -487,3 +487,12 @@ body {
 .doc-md .table-wrap { margin: 0 0 18px; }
 .doc-md a { color: var(--sea-300); }
 .doc-md strong { color: var(--paper); font-weight: 600; }
+
+
+/* The employee one-pager, shown at full width on a paper ground because that
+   is what it is — a printed page, not a product screen. */
+.onepager {
+  display: block; width: 100%; height: auto;
+  border-radius: 8px; border: 1px solid rgba(143, 199, 240, 0.12);
+  background: var(--paper);
+}
