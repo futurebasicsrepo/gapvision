@@ -1,13 +1,13 @@
 {
   "name": "@gapvision/glasses-plugin",
   "private": true,
-  "version": "0.1.7",
+  "version": "0.1.8",
   "type": "module",
   "scripts": {
     "dev": "vite --port 5180",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "pack": "CUE_PACK=1 vite build && npx @evenrealities/evenhub-cli pack app.json dist -o cue-lens-$npm_package_version.ehpk"
+    "pack": "CUE_PACK=1 vite build && node test/packaged-bundle.test.mjs && npx @evenrealities/evenhub-cli pack app.json dist -o cue-lens-$npm_package_version.ehpk"
   },
   "dependencies": {
     "@evenrealities/even_hub_sdk": "^0.0.13",

@@ -16,7 +16,7 @@
  * So the invariant this file defends: any two cues that need different
  * containers must not be considered the same shape.
  */
-import { assertBudget, buildCue } from "../dist-test/layout.mjs";
+import { assertBudget, buildCue, buildRuler, RULER_HEIGHTS } from "../dist-test/layout.mjs";
 
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -36,7 +36,7 @@ const shapeOf = (cue) => {
 };
 
 const IDLE = { lines: ["CUESEA READY", "GAP · DEMO", "AWAITING GUEST SIGNAL"],
-               meta: ["PRESS TO ASK", "2X PRESS EXITS"] };
+               meta: ["PRESS TO ASK", "2X EXIT"] };
 const RAIL = ["ICON", "4200 PTS", "TOPS M", "BOTTOMS 28X30"];
 const GUEST = { lines: ["SARAH CHEN", "IN CART CASHSOFT CREW", "OFFER IT IN SIZE M"],
                 facts: RAIL, meta: ["DENIM WALL"],
@@ -160,13 +160,48 @@ check("the mark and the wordmark are different shapes",
     ...(p.listObject || []).map((c) => [c.containerName,
       c.height / c.itemContainer.itemCount]),
   ];
-  const short = rows.filter(([, h]) => h < 20);
-  check("no row is under the host's legible floor of 20px",
+  // The floor has moved twice as the hardware told us more: 20, then 24, and
+  // 24 still clipped the clock's bottom edge. 26 is the lowest height never
+  // reported clipped (the sentence lines). `buildRuler()` is what will replace
+  // this guess with a measurement — when it does, change this number and the
+  // rows that fail are the rows to fix.
+  const FLOOR = 26;
+  const short = rows.filter(([, h]) => h < FLOOR);
+  check(`no row is under the host's observed legible floor of ${FLOOR}px`,
     short.length === 0, short.map(([n, h]) => `${n}=${h}`).join(", ") || "all clear");
 
   const bottom = Math.max(...p.textObject.map((c) => c.yPosition + c.height));
   check("nothing is drawn past the bottom of the display",
     bottom <= 288, `lowest edge ${bottom}`);
+}
+
+// --- the ruler ---------------------------------------------------------------
+// The diagnostic page that is supposed to end the guessing. If it were itself
+// over budget it would render as nothing at all, and we would read that as
+// "the ruler doesn't work" rather than "the page was dropped" — the exact
+// confusion it exists to remove.
+{
+  const p = buildRuler();
+  check("the ruler is inside the host budget",
+    p.textObject.length <= 8 && p.textObject.length === RULER_HEIGHTS.length + 1,
+    `${p.textObject.length} text for ${RULER_HEIGHTS.length} heights`);
+
+  check("the ruler brackets the current row height",
+    Math.min(...RULER_HEIGHTS) < 26 && Math.max(...RULER_HEIGHTS) > 26,
+    RULER_HEIGHTS.join(", "));
+
+  const bottom = Math.max(...p.textObject.map((c) => c.yPosition + c.height));
+  check("the ruler fits on the display", bottom <= 288, `lowest edge ${bottom}`);
+
+  // Rows must not overlap, or "is this row clipped" becomes unanswerable.
+  const sorted = [...p.textObject].sort((a, b) => a.yPosition - b.yPosition);
+  const overlaps = sorted.filter((c, i) =>
+    i > 0 && c.yPosition < sorted[i - 1].yPosition + sorted[i - 1].height);
+  check("no two ruler rows overlap", overlaps.length === 0,
+    overlaps.map((c) => c.containerName).join(", ") || "all clear");
+
+  check("the ruler has exactly one gesture receiver",
+    p.textObject.filter((c) => c.isEventCapture === 1).length === 1);
 }
 
 const failed = results.filter((r) => !r).length;

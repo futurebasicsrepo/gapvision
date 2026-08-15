@@ -34,6 +34,7 @@
     "build:internal": "npm run build --workspace=packages/internal",
     "test:console": "node packages/internal/test/console-browser.mjs",
     "test:attribution": "node packages/internal/test/attribution-e2e.mjs",
-    "render:lens": "npx esbuild packages/glasses-plugin/src/layout.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/layout.mjs && python3 packages/glasses-plugin/test/render-lens.py"
+    "render:lens": "npx esbuild packages/glasses-plugin/src/layout.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/layout.mjs && python3 packages/glasses-plugin/test/render-lens.py",
+    "test:bundle": "node packages/glasses-plugin/test/packaged-bundle.test.mjs"
   }
 }

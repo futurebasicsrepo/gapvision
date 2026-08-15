@@ -11,13 +11,13 @@
  */
 import { buildCue, IDLE_CUE } from "../dist-test/layout.mjs";
 
-const RAIL = ["SARAH CHEN", "ICON", "4200 PTS", "TOP M", "BTM 28X30"];
+const RAIL = ["SARAH C", "ICON", "4200 PTS", "TOP M", "BTM 28X30"];
 
 const pages = {
   idle: buildCue({
     ...IDLE_CUE,
     lines: ["CUESEA READY", "GAP · DEMO", "AWAITING GUEST SIGNAL"],
-    meta: ["V0·1·7", "PRESS TO ASK", "2X PRESS EXITS"],
+    meta: ["V0·1·8", "PRESS TO ASK", "2X EXIT", "UP FOR RULER"],
     logo: true,
     clock: "14·32",
   }),

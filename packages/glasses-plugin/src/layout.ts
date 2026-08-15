@@ -55,12 +55,14 @@ export const FACT_SLOTS = 6;
  * off" was.
  *
  * So the budgets are derived instead, from the one ratio that governs them.
- * 0.55 is measured off the preview render, not off the G2: the host's own
- * font is very likely narrower, in which case this is conservative and costs
- * a few characters. Calibrating it on glass is a one-line change here, and
- * every budget in the file moves with it.
+ * 0.60 is the widest advance the preview render measures — 0.57 at 24px and
+ * 0.60 at 28px, so it is taken at the worst case rather than the average,
+ * because being one character optimistic here means a clipped word on a
+ * customer's face. It is measured off the preview font, not off the G2, and
+ * the G2's is very likely narrower. Calibrating it on glass is a one-line
+ * change here and every budget in the file moves with it.
  */
-const CHAR_ASPECT = 0.55;
+const CHAR_ASPECT = 0.60;
 
 /** How many characters fit a box, given the host scales glyphs to its height. */
 export function fitChars(width: number, height: number): number {
@@ -97,19 +99,31 @@ const MODULE_W = DISPLAY_W - MODULE_X - X;
  * control, and everything below is one block because tuning it is going to
  * take a pass or two on real glass.
  *
- * Was 38/44 and unreadably large on a G2. Then two complaints off the glass
- * turned out to be one fault: the header read as "too large for its
- * container" at 16 and the meta strip read as "cut off" at 18 — opposite
- * descriptions of the same thing, which is that the host has a floor under
- * how small it will draw a glyph. Below roughly 20px the text no longer fits
- * the box it was given and the box wins. So both went up, and they went up to
- * the same number: 24 is the smallest row this display renders whole.
+ * Was 38/44 and unreadably large. Then 16 and 18, which Kyle read as "too
+ * large for its container" and "cut off" — opposite descriptions of one
+ * thing: **the host has a floor under how small it will draw a glyph, and a
+ * box below that floor does not shrink the text, it clips it.** Then 24, and
+ * the clock still lost its bottom edge, so the floor is above 24. The three
+ * sentence lines at 26 have never been reported clipped, so it is at or just
+ * under 26.
+ *
+ * `ROW_H` is 28 — the first value clear of every observation. It is still an
+ * inference from three data points and a guess at the fourth, which is two
+ * more guesses than this has earned. **`buildRuler()` below settles it**: one
+ * screen showing the same word at five heights, reachable by scrolling up at
+ * idle. Whatever Kyle reads off it is the number, and it goes here.
+ *
+ * Worth saying plainly because it constrains the design: if the host has a
+ * floor, the supporting rows *cannot* be made smaller than the sentence. The
+ * type hierarchy the brand asks for is not available on this hardware. What
+ * is available is choosing what earns a row at all.
  */
-const HEADER_H = 24;
+const ROW_H = 28;
+const HEADER_H = ROW_H;
 const LINE_H = 26;        // ← the sentence's type size
 const LINE_STEP = 32;     // baseline-to-baseline
-const RAIL_ROW = 24;      // ← the rail's type size, and the floor
-const META_H = 24;        // ← the floor, again
+const RAIL_ROW = ROW_H;   // ← the rail's type size
+const META_H = ROW_H;     // ← and the supporting rows
 const PAD = 4;            // breathing room inside every box
 
 const HEADER_Y = 12;
@@ -319,7 +333,11 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
   // Idle is that case, and idle is the one screen whose meta strip is load
   // bearing: it carries the two gestures, one of which quits the app. Held to
   // a rail's width it fitted the build number and dropped both of them.
-  const metaW = hasRail ? RAIL_W : showModules ? MODULE_X - X - GUTTER : W;
+  // The footer's left cell runs to where the module column starts, not to
+  // where the rail's border does — the gutter above it is dead space, and at
+  // this type size the strip is nine characters against ten. "DENIM WALL" is
+  // exactly the fact that falls off the end of it.
+  const metaW = hasRail || showModules ? MODULE_X - X : W;
   const footRight = latencyMs ? `${(latencyMs / 1000).toFixed(1)}S` : "";
   if (showModules) {
     // "2/3", not dots. The glass charset is [A-Z0-9 ·%$£€/+-] — a filled dot
@@ -393,6 +411,53 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
 }
 
 /**
+ * The ruler — the same word at five container heights, labelled.
+ *
+ * Three builds have now gone out with the type size set by inference from a
+ * sentence of feedback, and two of them were wrong. The variable is a single
+ * number and the hardware is the only instrument that can read it, so this
+ * puts all five candidates on the glass at once and asks one question:
+ * **which of these rows is whole, and which is clipped?**
+ *
+ * The label is inside the row it measures, deliberately — a legend in a
+ * different box would be rendered at a different size and would be the thing
+ * under test. Each row says its own height in its own type.
+ *
+ * Reachable by scrolling up at idle, which is otherwise a no-op. It is not
+ * hidden and does not need to be: an associate who finds it sees a screen of
+ * numbers and presses to leave.
+ */
+export const RULER_HEIGHTS = [20, 24, 26, 28, 32];
+
+export function buildRuler(): PageSpec {
+  let y = 16;
+  const textObject: TextContainer[] = RULER_HEIGHTS.map((h, i) => {
+    const row = {
+      xPosition: X, yPosition: y, width: W, height: h,
+      paddingLength: PAD,
+      containerID: 1 + i, containerName: `ruler-${h}`, zOrderIndex: 1 + i,
+      // Digits, caps and a descender-free word: if the bottom edge is missing
+      // it is the box clipping, not the glyph having nothing down there.
+      content: `${h} SIZE 28X30 WHOLE`,
+      // One receiver, so a tap leaves the way every other page leaves.
+      isEventCapture: (i === 0 ? 1 : 0) as 0 | 1,
+    };
+    y += h + 8;
+    return row;
+  });
+
+  textObject.push({
+    xPosition: X, yPosition: DISPLAY_H - 30, width: W, height: 26,
+    paddingLength: PAD,
+    containerID: 8, containerName: "ruler-exit", zOrderIndex: 8,
+    content: "PRESS TO GO BACK",
+    isEventCapture: 0,
+  });
+
+  return assertBudget({ containerTotalNum: textObject.length, textObject });
+}
+
+/**
  * Refuse to hand the host a page it will silently drop.
  *
  * The budgets are the host's, not ours: 8 text containers, 12 in total. Going
@@ -422,5 +487,5 @@ export const IDLE_CUE: Cue = {
   // The only screen that spends space on controls. Everywhere else the
   // gestures follow from what's on the glass; here they don't, and one of
   // them exits the app.
-  meta: ["PRESS TO ASK", "2X PRESS EXITS"],
+  meta: ["PRESS TO ASK", "2X EXIT"],
 };

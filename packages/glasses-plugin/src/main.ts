@@ -21,15 +21,24 @@
 import { io, type Socket } from "socket.io-client";
 import { getBridge, type GlassesBridge } from "./bridge";
 import { decodeGesture, describeGesture, type DecodedGesture } from "./gestures";
-import { buildCue, CUE_LINES, IDLE_CUE, toDisplayText, type Cue } from "./layout";
+import { buildCue, buildRuler, CUE_LINES, IDLE_CUE, RULER_HEIGHTS, toDisplayText, type Cue } from "./layout";
 import { markBytes } from "./mark";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
 
-/** Everything goes through the realtime server. The plugin is a static
- *  bundle, so it cannot hold the AI service key — the server holds it and
- *  proxies. There is deliberately no VITE_AI_URL any more: a build flag that
- *  points the plugin straight at the AI service would quietly undo that. */
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:4000";
+/**
+ * Everything goes through the realtime server. The plugin is a static bundle,
+ * so it cannot hold the AI service key — the server holds it and proxies.
+ * There is deliberately no VITE_AI_URL any more: a build flag that points the
+ * plugin straight at the AI service would quietly undo that.
+ *
+ * Defaulted from the manifest's own network whitelist (see vite.config.ts), not
+ * from an environment variable. `VITE_SERVER_URL` still overrides for local
+ * work against a server on this machine — but a missing `.env` now costs you
+ * nothing, where it used to cost an upload: the packed plugin dialled
+ * localhost from a phone, installed clean, rendered the HUD correctly, and
+ * silently had no socket at all.
+ */
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || __REALTIME_URL__;
 
 /** Tenant = which retail world this launch belongs to ("gap" demo | "shopify"
  *  live). Carried by the launch URL, i.e. the QR code that opened us. */
@@ -90,6 +99,9 @@ let pageBuilt = false;
  * empty every time, so `pushMark` runs after every build, not just the first.
  */
 let useMark = true;
+/** On the type ruler — a diagnostic page that is not a cue and must not be
+ *  treated as one. See showRuler(). */
+let onRuler = false;
 let engaged = false;
 
 /** What the associate is currently looking at — the context a voice question
@@ -242,6 +254,23 @@ function moduleLabel() { return recIndex < 0 ? "CUE" : "PICK"; }
  * six questions, and three of them were about a size or a colour. So sizes
  * lead, and tier and points follow because they change how you open.
  */
+/**
+ * "SARAH CHEN" -> "SARAH C".
+ *
+ * The rail is 168px wide and holds about nine characters at this type size.
+ * A full name does not fit, and the version that clips — "SARAH CHE" — is
+ * worse than useless: it reads as a broken display rather than a shortened
+ * name. The surname is the half you can drop, because the associate is about
+ * to say the first name out loud and the full name is on the guest card when
+ * they arrive.
+ */
+function railName(name?: string): string {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0]}`;
+}
+
 function railFor(payload: DisplayPayload): string[] {
   const g = payload.guest as any;
   if (!g) return [];
@@ -255,7 +284,7 @@ function railFor(payload: DisplayPayload): string[] {
   // losing the inseam, which is the half of that fact worth having. Abbreviate
   // the label and the value survives.
   return [
-    g.name || "",
+    railName(g.name),
     g.tier || "",
     typeof g.points === "number" ? `${g.points} PTS` : "",
     sizes.tops ? `TOP ${sizes.tops}` : "",
@@ -263,7 +292,25 @@ function railFor(payload: DisplayPayload): string[] {
   ].filter(Boolean);
 }
 
+/**
+ * Put the type ruler on the glass.
+ *
+ * Deliberately bypasses `renderCue` — no rail, no clock, no mark, nothing
+ * that could be mistaken for the row under test. It rebuilds unconditionally
+ * because its shape shares no container ids with any cue page, and the cheap
+ * path cannot create containers.
+ */
+async function showRuler() {
+  onRuler = true;
+  const page = buildRuler();
+  if (!pageBuilt) { await bridge.createStartUpPageContainer(page); pageBuilt = true; }
+  else await bridge.rebuildPageContainer(page);
+  currentShape = "";   // force a rebuild on the way back out
+  log(`ruler: rows at ${RULER_HEIGHTS.join(", ")}px — which are whole?`);
+}
+
 async function showIdle() {
+  onRuler = false;
   engaged = false;
   engagedGuestId = null;
   focusSku = null;
@@ -276,10 +323,12 @@ async function showIdle() {
     // The build, on the glass. An install that silently did not roll over is
     // indistinguishable from a fix that did not work, and we burned two
     // uploads on exactly that ambiguity.
-    // "2X PRESS EXITS", not "DOUBLE PRESS EXITS": the strip holds 39
-    // characters and the long form made it 41, so the exit hint — the one
-    // gesture nobody discovers by accident — was the fact that got dropped.
-    meta: [`V${__APP_VERSION__.replace(/\./g, "·")}`, "PRESS TO ASK", "2X PRESS EXITS"],
+    // Abbreviated to the bone. The strip holds 31 characters at this row
+    // height and the long forms ran to 46, so the exit hint — the one gesture
+    // nobody discovers by accident — was what fell off the end. The version
+    // stays because an install that silently did not roll over has cost more
+    // evenings than any single bug.
+    meta: [`V${__APP_VERSION__.replace(/\./g, "·")}`, "PRESS TO ASK", "2X EXIT"],
   });
   ui.sessionInfo.textContent = "No active session";
 }
@@ -399,6 +448,9 @@ function onGesture(g: DecodedGesture) {
 
   switch (g.action) {
     case "click":
+      // The ruler is a dead end by design: it eats one press to leave, so
+      // nobody can start a voice query from a diagnostic screen by accident.
+      if (onRuler) { onRuler = false; void showIdle(); return; }
       // A click first dismisses whatever voice put on the lens; only then does
       // it mean "I'm done with this guest".
       if (voice.dismiss()) return;
@@ -461,6 +513,11 @@ function onGesture(g: DecodedGesture) {
       return;
 
     case "scroll-up":
+      // Scrolling at idle has never done anything — there is no carousel until
+      // a guest arrives. So it is where the type ruler lives: the one screen
+      // that answers, on the hardware, how small this display will actually
+      // draw a row. See buildRuler() in layout.ts.
+      if (!engaged && voice.current === "idle") { void showRuler(); return; }
       void cycleRecommendations(-1);
       return;
 
