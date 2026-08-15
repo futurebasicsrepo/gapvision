@@ -183,11 +183,36 @@ class MockBridge implements GlassesBridge {
   }
 
   /**
-   * Opening the mock mic streams synthetic 16 kHz PCM: ~2.2 s of
-   * speech-shaped noise, then silence. That exercises the real thing —
-   * chunking, the level meter, silence endpointing — in a plain browser, so
-   * the voice path is testable and demo-able with no glasses in the room.
+   * Opening the mock mic streams 16 kHz PCM of an actual spoken question,
+   * then silence, so chunking, the level meter and silence endpointing all
+   * exercise the real path in a plain browser.
+   *
+   * It used to stream a 180 Hz sine plus noise. That was fine while STT was
+   * `mock` — the mock returns a scripted transcript regardless of the audio,
+   * so the demo looked like it worked. The moment Deepgram went live the
+   * browser demo started answering "didn't catch that" every time, because a
+   * sine wave is not speech. A recorded utterance is the only version of this
+   * that stays honest as the backend gets more real.
+   *
+   * The asset is fetched lazily from the app origin rather than bundled: it
+   * costs nothing in the JS the G2 loads, and if it is missing the tone still
+   * drives endpointing and the meter.
    */
+  private static utterance: Promise<Int16Array | null> | null = null;
+
+  private static loadUtterance(): Promise<Int16Array | null> {
+    if (!MockBridge.utterance) {
+      MockBridge.utterance = fetch("dev-utterance.pcm")
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+        .then((buf) => new Int16Array(buf))
+        .catch(() => {
+          console.log("[mock] no dev-utterance.pcm — falling back to a tone");
+          return null;
+        });
+    }
+    return MockBridge.utterance;
+  }
+
   async audioControl(isOpen: boolean, _source?: unknown) {
     console.log(`[mock] audioControl(${isOpen})`);
     if (this.audioTimer) { clearInterval(this.audioTimer); this.audioTimer = null; }
@@ -195,20 +220,35 @@ class MockBridge implements GlassesBridge {
 
     const FRAME_MS = 100;
     const SAMPLES = (16000 * FRAME_MS) / 1000;
+    const speech = await MockBridge.loadUtterance();
+    // The mic may have closed while we were fetching.
+    if (!isOpen) return true;
+
     let elapsed = 0;
+    let offset = 0;
     this.audioTimer = setInterval(() => {
-      const speaking = elapsed < 2200;
       const bytes = new Uint8Array(SAMPLES * 2);
       const view = new DataView(bytes.buffer);
-      for (let i = 0; i < SAMPLES; i++) {
-        // Rough vowel-ish tone + noise while "speaking"; near-zero after.
-        const t = (elapsed / 1000) + i / 16000;
-        const amp = speaking ? 6000 + 3000 * Math.sin(t * 3) : 20;
-        const sample = speaking
-          ? amp * Math.sin(2 * Math.PI * 180 * t) + (Math.random() - 0.5) * amp * 0.6
-          : (Math.random() - 0.5) * amp;
-        view.setInt16(i * 2, Math.max(-32768, Math.min(32767, sample)), true);
+
+      if (speech && offset < speech.length) {
+        // Real speech, 100 ms at a time, then let it fall silent so the
+        // plugin's own endpointing decides when the question ended.
+        for (let i = 0; i < SAMPLES; i++) {
+          view.setInt16(i * 2, offset + i < speech.length ? speech[offset + i] : 0, true);
+        }
+        offset += SAMPLES;
+      } else {
+        const speaking = !speech && elapsed < 2200;
+        for (let i = 0; i < SAMPLES; i++) {
+          const t = elapsed / 1000 + i / 16000;
+          const amp = speaking ? 6000 + 3000 * Math.sin(t * 3) : 20;
+          const sample = speaking
+            ? amp * Math.sin(2 * Math.PI * 180 * t) + (Math.random() - 0.5) * amp * 0.6
+            : (Math.random() - 0.5) * amp;
+          view.setInt16(i * 2, Math.max(-32768, Math.min(32767, sample)), true);
+        }
       }
+
       this.listeners.forEach((cb) => cb({ audioEvent: { audioPcm: bytes, source: "glasses" } }));
       elapsed += FRAME_MS;
     }, FRAME_MS);
