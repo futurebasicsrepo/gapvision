@@ -4,20 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cue Lens — cuesea</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <!-- Doto is the dot-matrix face and exists for exactly one place: the glass.
-       Everything around it is Instrument Sans, identifiers in Plex Mono. -->
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Doto:wght@400;600&display=swap" rel="stylesheet" />
+  <!-- No webfonts. `app.json` tells the reviewer every request goes to cuesea's
+       own service, and three faces from fonts.googleapis.com made that untrue.
+       It is also a bad dependency for the deployment: a shop floor is not where
+       you want to discover the CDN is blocked or the wifi is captive.
+
+       The cost lands only on this phone page. The G2 renders its own face — the
+       dot-matrix look below is a *simulation* of the glass for dev preview, not
+       the glass — so the lens is unaffected. Named faces stay first in each
+       stack, so a self-hosted build restores them by adding @font-face and
+       changing nothing else. -->
   <style>
     /* cuesea tokens — see packages/web/src/brand.css for the full system. */
     :root{--sea-900:#04122E;--sea-800:#06193A;--sea-700:#0A2E63;--sea-600:#0F3F80;
       --sea-500:#1560B8;--sea-300:#3E9BE8;--sea-200:#8FC7F0;--sea-100:#BFE0F7;
       --flame:#FF6B2C;--flame-300:#FFB08A;--paper:#FBF9F5;
       --hud-500:#4BFF9A;--hud-400:#35E585;--hud-300:#22B869;
-      --sans:"Instrument Sans",system-ui,sans-serif;
-      --mono:"IBM Plex Mono",ui-monospace,monospace;
-      --matrix:"Doto","IBM Plex Mono",monospace}
+      --sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+      --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      --matrix:"Doto","IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:var(--sans);background:var(--sea-900);color:var(--paper);
       max-width:520px;margin:0 auto;padding:16px 16px 40px}
