@@ -216,7 +216,9 @@ Pin one transcript for a scripted demo with
 | `CUE_STT_MODEL` | per-provider | Override the transcription model |
 | `CUE_STT_MOCK_TRANSCRIPT` | — | Pin the mock transcript for demos |
 | `OPENAI_API_KEY` / `GROQ_API_KEY` / `DEEPGRAM_API_KEY` | — | Key for the selected STT provider |
-| `GAPVISION_LLM` | `mock` | LLM provider: `mock`, `anthropic`, `openai`, `google` |
+| `GAPVISION_LLM` | `mock` | LLM provider: `mock`, `grok`, `anthropic`, `openai`, `google` |
+| `XAI_API_KEY` | — | Grok key (`xai-…`) when `GAPVISION_LLM=grok` |
+| `CUE_LLM_MODEL` | `grok-4.20-0309-non-reasoning` | Override the model. The non-reasoning default is deliberate: reasoning models measured ~9.6s vs ~1.2s for a one-line opener |
 | `GAPVISION_CRM` | `mock` | CRM provider: `mock`, `shopify` (Gap adapter later) |
 | `CUE_CRED_KEY` | — | **Required to connect any store.** 32 bytes (`openssl rand -hex 32`) sealing merchants' CRM tokens at rest. Without it the service refuses to store one |
 | `CUE_CRED_KEY_OLD` | — | The previous sealing key, during a rotation. Drop it once `/api/admin/platform` stops reporting rows on the old key |
