@@ -289,6 +289,61 @@ def test_two_tenants_get_two_adapters(client, auth):
     assert a._cache is not b._cache
 
 
+def test_an_unknown_provider_refuses_instead_of_building_a_shopify_client(
+        client, auth, monkeypatch):
+    """The trap this guards: `_build` used to construct a ShopifyCRM from any
+    credential row without reading `provider`. Harmless with one adapter, and
+    silently wrong the day an enterprise row gets handed to the Shopify client.
+    Gap is the expected second case — their own cloud, no store domain.
+    """
+    from app import crm_provider, db
+
+    connect(client, auth("a.admin@cred.example.com"), "c_alpha", "alpha-store", TOKEN_A)
+
+    # Simulate the row a future adapter would write, without writing one.
+    db.execute(
+        "UPDATE tenant_crm_credentials SET provider = 'gap_enterprise' "
+        " WHERE tenant_id = (SELECT id FROM tenants WHERE slug = 'c_alpha')"
+    )
+    crm_provider.invalidate("c_alpha")
+
+    with pytest.raises(crm_provider.TenantNotConfigured) as e:
+        crm_provider.get_crm_for("c_alpha")
+    assert "gap_enterprise" in str(e.value)
+    assert "shopify" in str(e.value)      # names what it *does* have
+
+
+def test_the_registry_is_what_adds_an_adapter(client, auth):
+    """Registering a builder is the whole cost of a new CRM — no change to
+    routing, caching, sealing, or tenant isolation."""
+    from app import crm_provider
+
+    class FakeEnterpriseCRM:
+        def __init__(self, cred, secret):
+            self.cred, self.secret = cred, secret
+
+        def all_guests(self): return []
+        def get_guest(self, gid): return None
+        def floor_inventory(self): return []
+
+    connect(client, auth("a.admin@cred.example.com"), "c_alpha", "alpha-store", TOKEN_A)
+    from app import db
+    db.execute(
+        "UPDATE tenant_crm_credentials SET provider = 'acme' "
+        " WHERE tenant_id = (SELECT id FROM tenants WHERE slug = 'c_alpha')"
+    )
+    crm_provider.ADAPTER_BUILDERS["acme"] = FakeEnterpriseCRM
+    try:
+        crm_provider.invalidate("c_alpha")
+        crm = crm_provider.get_crm_for("c_alpha")
+        assert isinstance(crm, FakeEnterpriseCRM)
+        # The sealed secret still opens — sealing is provider-agnostic.
+        assert crm.secret["admin_token"] == TOKEN_A
+    finally:
+        crm_provider.ADAPTER_BUILDERS.pop("acme", None)
+        crm_provider.invalidate("c_alpha")
+
+
 def test_connecting_takes_the_tenant_off_demo_data_and_disconnect_restores_it(client, auth):
     from app import crm_provider
     from app.crm_provider import MockCRM

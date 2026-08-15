@@ -8,9 +8,15 @@ never confuse them". A tenant's adapter is built from that tenant's row in
 Resolution order for a tenant slug:
 
   1. `tenants.crm_provider = 'mock'`      → the demo dataset
-  2. a `tenant_crm_credentials` row       → a live store, credentials from it
+  2. a `tenant_crm_credentials` row       → the adapter named by its `provider`,
+                                            built from that row (ADAPTER_BUILDERS)
   3. the legacy `SHOPIFY_*` env vars      → deprecated, slug 'shopify' only
   4. otherwise                            → TenantNotConfigured (503)
+
+Adding a CRM is an entry in `ADAPTER_BUILDERS` and a provider in
+`crm_credentials.PROVIDERS`. The adapter contract is three methods —
+`all_guests()`, `get_guest(id)`, `floor_inventory()` — and nothing above this
+module knows which backend a tenant is on.
 
 Step 3 exists so the original single-store pilot keeps working through this
 deploy. It is the last thing consulted, so a tenant that has been connected
@@ -94,11 +100,33 @@ def _credential_row(tenant_id) -> dict | None:
         return None
 
 
+def _shopify_from_credential(cred: dict, secret: dict):
+    from .crm_shopify import ShopifyCRM
+    return ShopifyCRM(
+        domain=cred["store_domain"],
+        admin_token=secret.get("admin_token"),
+        client_id=secret.get("client_id"),
+        client_secret=secret.get("client_secret"),
+    )
+
+
+# provider name → how to build its adapter from a stored credential.
+#
+# Shopify is the only entry today, and the registry exists anyway because the
+# alternative is what this code did first: build a ShopifyCRM from *any*
+# credential row without reading `provider` at all. That is harmless while one
+# provider exists and silently wrong the moment a second one lands — an
+# enterprise adapter's row would be handed to the Shopify client, which would
+# fail somewhere far from the cause. Gap is the expected second case: their
+# standing plan is an enterprise adapter running in their own cloud, so it will
+# not be a store domain and a token, and it should not be forced into that
+# shape. Adding an adapter is one entry here plus a `crm_credentials` provider.
+ADAPTER_BUILDERS = {"shopify": _shopify_from_credential}
+
+
 def _build(slug: str) -> tuple[object, str]:
     """Return (adapter, signature). The signature changes when the credential
     behind the adapter changes, which is how the cache knows to rebuild."""
-    from .crm_shopify import ShopifyCRM
-
     tenant = _tenant_row(slug)
 
     # 1. explicitly a demo tenant, or no such tenant and nothing else to try
@@ -110,6 +138,18 @@ def _build(slug: str) -> tuple[object, str]:
         cred = _credential_row(tenant["id"])
         if cred is not None:
             from . import crm_credentials
+
+            provider = cred.get("provider") or tenant.get("crm_provider") or ""
+            builder = ADAPTER_BUILDERS.get(provider)
+            if builder is None:
+                # Checked before decrypting: no reason to open a secret we have
+                # nothing to hand it to.
+                raise TenantNotConfigured(
+                    f"Tenant '{slug}' has credentials for CRM provider "
+                    f"'{provider}', which this service has no adapter for. "
+                    f"Adapters available: {', '.join(sorted(ADAPTER_BUILDERS))}."
+                )
+
             try:
                 secret = crm_credentials.load_secret(cred)
             except Exception as e:
@@ -121,18 +161,12 @@ def _build(slug: str) -> tuple[object, str]:
                     f"Tenant '{slug}' has a stored store credential that cannot "
                     f"be opened: {e}"
                 ) from e
-            return (
-                ShopifyCRM(
-                    domain=cred["store_domain"],
-                    admin_token=secret.get("admin_token"),
-                    client_id=secret.get("client_id"),
-                    client_secret=secret.get("client_secret"),
-                ),
-                f"db:{cred['updated_at'].isoformat()}",
-            )
+
+            return builder(cred, secret), f"db:{cred['updated_at'].isoformat()}"
 
     # 3. deprecated environment fallback, original pilot store only
     if slug == "shopify" and env_shopify_configured():
+        from .crm_shopify import ShopifyCRM
         return ShopifyCRM.from_env(), "env"
 
     # 4. no tenant row at all and nothing configured — the historic behaviour
@@ -141,9 +175,10 @@ def _build(slug: str) -> tuple[object, str]:
     if tenant is None and slug != "shopify":
         return _MOCK, "mock"
 
+    provider = (tenant or {}).get("crm_provider") or "shopify"
     raise TenantNotConfigured(
-        f"Tenant '{slug}' is set to the Shopify adapter but has no store "
-        "connected. Add one in Cue Console → Tenants → Connect Shopify."
+        f"Tenant '{slug}' is set to the '{provider}' adapter but has nothing "
+        "connected. Add it in Cue Console → Tenants."
     )
 
 
