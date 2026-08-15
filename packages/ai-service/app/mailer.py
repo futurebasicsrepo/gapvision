@@ -3,7 +3,7 @@
 Two transports, tried in that order:
 
     RESEND_API_KEY     HTTPS to api.resend.com. Preferred.
-    CUE_MAIL_FROM      "Cue <kr@cuesea.ai>"
+    CUE_MAIL_FROM      "CueSea <kr@cuesea.ai>"
 
     CUE_SMTP_HOST      fallback, only if no API key is set
     CUE_SMTP_PORT      587
@@ -177,7 +177,7 @@ def _app_url(role: str) -> str:
 
     A cue_admin lives in the Console and everyone else in Studio. Sending a
     retailer's manager a link to internal.cuesea.ai would show them a
-    dead-end page and make Cue look broken at the exact moment they are
+    dead-end page and make CueSea look broken at the exact moment they are
     already having trouble getting in.
     """
     if role == "cue_admin":
@@ -196,14 +196,14 @@ def send_invite(*, to: str, name: str | None, role: str, token: str,
     where = f" at {tenant_name}" if tenant_name else ""
     return send(
         to,
-        "Set up your Cue account",
+        "Set up your CueSea account",
         f"Hi {who},\n\n"
-        f"You've been given a Cue account{where}. Set your password here:\n\n"
+        f"You've been given a CueSea account{where}. Set your password here:\n\n"
         f"{url}\n\n"
         f"The link works once and expires in {hours // 24} days.\n\n"
         f"If you weren't expecting this, you can ignore it — the account "
         f"can't be used until a password is set.\n\n"
-        f"— Cue\n",
+        f"— CueSea\n",
     )
 
 
@@ -266,13 +266,13 @@ def send_test(*, to: str, name: str | None) -> dict[str, Any]:
     who = (name or "").split(" ")[0] or "there"
     return send(
         to,
-        "Cue can send email",
+        "CueSea can send email",
         f"Hi {who},\n\n"
-        f"Somebody pressed Send a test in Cue Console and this arrived, which "
+        f"Somebody pressed Send a test in CueSea Console and this arrived, which "
         f"means outbound email works. Invitations and password resets will now "
         f"reach people instead of being written to the service log.\n\n"
         f"Nothing about your account changed.\n\n"
-        f"— Cue\n",
+        f"— CueSea\n",
     )
 
 
@@ -352,14 +352,14 @@ def send_reset(*, to: str, name: str | None, role: str, token: str,
     who = (name or "").split(" ")[0] or "there"
     return send(
         to,
-        "Reset your Cue password",
+        "Reset your CueSea password",
         f"Hi {who},\n\n"
-        f"Someone asked to reset the password for this Cue account. If it was "
+        f"Someone asked to reset the password for this CueSea account. If it was "
         f"you, set a new one here:\n\n"
         f"{url}\n\n"
         f"The link works once and expires in {hours} hour"
         f"{'s' if hours != 1 else ''}.\n\n"
         f"If it wasn't you, nothing has changed and you can ignore this. "
         f"Your current password still works.\n\n"
-        f"— Cue\n",
+        f"— CueSea\n",
     )

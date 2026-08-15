@@ -1,5 +1,5 @@
 /**
- * Cue voice client — double-press the temple, ask, read the answer in-lens.
+ * CueSea voice client — double-press the temple, ask, read the answer in-lens.
  *
  * Flow
  *   double-press -> audioControl(true, glasses)

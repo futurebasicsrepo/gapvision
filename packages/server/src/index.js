@@ -1,5 +1,5 @@
 /**
- * Cue Realtime Server — the Nervous System.
+ * CueSea Realtime Server — the Nervous System.
  *
  * Routes events between associates (glasses/phone clients), the manager
  * dashboard, and the AI service. In-memory state here stands in for Redis;
@@ -252,7 +252,7 @@ io.on("connection", (socket) => {
     const state = stateFor(t);
     // Attribution for the control plane. The glasses identify themselves by
     // serial — the Even SDK exposes no email — and the AI service resolves
-    // that to whoever the device is assigned to in Cue Console. Email is the
+    // that to whoever the device is assigned to in CueSea Console. Email is the
     // fallback for the simulator and the dashboard's associate view, which do
     // have one. With neither, activity is still recorded against the tenant,
     // just unattributed.
@@ -843,7 +843,7 @@ app.get("/health", (_req, res) => {
 /**
  * The AI service's own health, relayed.
  *
- * Cue Console needs to show whether Depth is up, but the AI service keeps a
+ * CueSea Console needs to show whether Depth is up, but the AI service keeps a
  * CORS allowlist and a browser on a different origin can't read it directly —
  * a healthy service would report as "failed to fetch", which is the exact
  * false alarm a health panel must never produce. This origin is already

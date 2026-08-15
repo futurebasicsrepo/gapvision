@@ -1,8 +1,8 @@
 /**
- * Cue — Even Hub plugin entry.
+ * CueSea — Even Hub plugin entry.
  *
  * Runs in the Even App WebView on the associate's phone. Connects to the
- * Cue realtime server, renders guest context to the glasses via the
+ * CueSea realtime server, renders guest context to the glasses via the
  * Even Hub bridge, and maps ring and temple gestures to session actions.
  *
  * Control scheme is ring-first. An associate standing in front of a customer
@@ -586,7 +586,7 @@ function onRootPage(): boolean {
   catch { resumable = false; }
   // The floor menu, an urgent message, a guest request and the ruler are all
   // pages: a double press on any of them means "back", never "quit the app".
-  // Getting this wrong is how double-tap once closed Cue instead of stopping
+  // Getting this wrong is how double-tap once closed CueSea instead of stopping
   // the mic — and a request is the worst place to get it wrong, because the
   // app would quit while a customer stands in a fitting room waiting.
   return !engaged && !resumable && cardIndex === 0 && voice.current === "idle"

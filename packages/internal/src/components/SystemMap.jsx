@@ -80,7 +80,7 @@ export default function SystemMap() {
   return (
     <div className="sysmap">
       <svg viewBox="0 0 1180 560" role="img"
-           aria-label="Cue system architecture: guest signal through the glasses and phone to the realtime server, the AI service, Postgres and the retailer's CRM."
+           aria-label="CueSea system architecture: guest signal through the glasses and phone to the realtime server, the AI service, Postgres and the retailer's CRM."
            style={{ width: "100%", height: "auto", display: "block" }}>
         <defs>
           <marker id="arrowhead" markerWidth="7" markerHeight="7"
@@ -105,7 +105,7 @@ export default function SystemMap() {
               fontFamily="var(--mono)" letterSpacing="0.08em">ON THE FLOOR</text>
 
         <Node x={16} y={92} name="Guest signal" sub="opt-in only" tone="edge" />
-        <Node x={16} y={214} name="Cue Lens" sub="G2 · 576×288" />
+        <Node x={16} y={214} name="Lens" sub="G2 · 576×288" />
         <Node x={16} y={336} name="Even App" sub="phone · WebView" tone="edge" />
 
         <Arrow from={[90, 154]} to={[90, 210]} />
@@ -114,8 +114,8 @@ export default function SystemMap() {
         {/* ---- the browsers ------------------------------------------------- */}
         <text x={232} y={44} fill="var(--sea-200)" fontSize="10.5"
               fontFamily="var(--mono)" letterSpacing="0.08em">BROWSERS</text>
-        <Node x={232} y={92} name="Cue Studio" sub="retailer" tone="edge" />
-        <Node x={232} y={214} name="Cue Console" sub="cuesea staff" tone="edge" />
+        <Node x={232} y={92} name="Studio" sub="retailer" tone="edge" />
+        <Node x={232} y={214} name="Console" sub="cuesea staff" tone="edge" />
 
         {/* ---- our services -------------------------------------------------- */}
         <Node x={480} y={214} name="Realtime" sub="socket.io + proxy" w={168} />
@@ -124,7 +124,7 @@ export default function SystemMap() {
 
         {/* phone -> realtime, the hot path */}
         {/* Routed *under* the browser column rather than over it — bending
-            the other way put this line straight through the Cue Console box
+            the other way put this line straight through the Console box
             and dropped its label on top of the console's own. */}
         <Arrow from={[164, 367]} to={[476, 268]} label="socket" bend={62} />
         {/* browsers -> realtime proxy: they never hold the key */}
@@ -153,7 +153,7 @@ export default function SystemMap() {
           <tspan x={952} dy="15" fill="var(--flame-300)">We store a pointer.</tspan>
         </text>
 
-        {/* Cue's own mark, small, bottom-left — the only flame on the page. */}
+        {/* CueSea's own mark, small, bottom-left — the only flame on the page. */}
         <circle cx={30} cy={470} r="4" fill="var(--flame)" />
         <text x={44} y={474} fill="var(--sea-200)" fontSize="11"
               fontFamily="var(--mono)" letterSpacing="0.04em">

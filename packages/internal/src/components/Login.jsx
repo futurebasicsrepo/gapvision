@@ -38,7 +38,7 @@ export default function Login({ onSignedIn }) {
       <form className="signin" onSubmit={submit}>
         <Wordmark size={22} />
         <h2>Sign in</h2>
-        <p className="signin-sub">Cue Console</p>
+        <p className="signin-sub">Console</p>
 
         {error && <div className="notice error">{error}</div>}
 

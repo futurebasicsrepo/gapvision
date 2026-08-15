@@ -9,7 +9,7 @@ import "./index.css";
  *
  * `/here` is the guest page a plate points at — public, paper-toned, and the
  * only route in this app that must never sit behind a sign-in. Everything
- * else is Cue Studio. A path check is enough for two routes and cheaper than
+ * else is CueSea Studio. A path check is enough for two routes and cheaper than
  * a dependency; if a third public route ever appears, that is the moment to
  * add one.
  *

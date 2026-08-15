@@ -49,8 +49,8 @@ function singleFile() {
       // that look like production numbers are how invented figures end up in
       // a deck.
       source = source
-        .replace("<title>Cue Console — cuesea</title>",
-                 "<title>Cue Console — preview (sample data)</title>")
+        .replace("<title>Console — cuesea</title>",
+                 "<title>Console — preview (sample data)</title>")
         .replace("<body>", `<body>
     <div id="preview-banner">
       Preview build · sample data · nothing here reads or writes a real tenant
@@ -89,7 +89,7 @@ export default defineConfig({
       : [],
   },
   build: preview ? { outDir: "dist-preview", assetsInlineLimit: 1e9 } : {},
-  // 5174 is Cue Studio's preview port; the console sits next to it on 5176 so
+  // 5174 is CueSea Studio's preview port; the console sits next to it on 5176 so
   // both can run at once when you're checking that a change to one didn't leak
   // into the other.
   server: { port: 5176 },

@@ -2,7 +2,7 @@
 
 What this is for: a merchant's Shopify Admin token. That token can read every
 customer, every order, and every price in their store. It is the most dangerous
-thing Cue will ever hold on someone else's behalf, and it has to sit in a
+thing CueSea will ever hold on someone else's behalf, and it has to sit in a
 database that gets backed up, replicated, and occasionally handed to a support
 engineer at 2am.
 
@@ -27,7 +27,7 @@ comparing key material. Drop `CUE_CRED_KEY_OLD` once no row reports the old id.
 The AAD binds each ciphertext to the tenant it belongs to. Moving a sealed
 token from one tenant's row to another — the obvious move for someone with
 write access to the database but not the key — fails to open rather than
-silently pointing Cue at a store it should not read.
+silently pointing CueSea at a store it should not read.
 """
 from __future__ import annotations
 

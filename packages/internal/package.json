@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Cue Console — cuesea staff only. Deliberately a separate build from Cue Studio so no customer ever receives this bundle.",
+  "description": "CueSea Console — cuesea staff only. Deliberately a separate build from CueSea Studio so no customer ever receives this bundle.",
   "scripts": {
     "dev": "vite",
     "build": "node scripts/sync-docs.mjs && vite build",

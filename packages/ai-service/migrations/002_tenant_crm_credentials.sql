@@ -1,4 +1,4 @@
--- Per-tenant CRM credentials — one Cue deployment, many merchants' stores.
+-- Per-tenant CRM credentials — one CueSea deployment, many merchants' stores.
 --
 -- Until this migration, SHOPIFY_STORE_DOMAIN and the Admin token were
 -- process-wide environment variables. That is fine for one pilot store and

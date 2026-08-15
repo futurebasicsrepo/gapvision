@@ -248,7 +248,7 @@ def require(principal: Principal, role: str) -> None:
 def scope_tenant(principal: Principal, requested: str | None = None) -> str:
     """The tenant this request may read, or raise.
 
-    Cue staff may target any tenant and must name one. Everyone else is
+    CueSea staff may target any tenant and must name one. Everyone else is
     pinned to their own regardless of what they ask for — a manager passing
     someone else's tenant id gets their own data, not a 403, because there is
     no legitimate reason for them to be asking and no information to leak in
@@ -284,7 +284,7 @@ def create_user(
     if role not in ROLES:
         raise HTTPException(status_code=400, detail=f"Unknown role: {role}")
     if role == "cue_admin" and tenant_id is not None:
-        raise HTTPException(status_code=400, detail="Cue staff do not belong to a tenant")
+        raise HTTPException(status_code=400, detail="CueSea staff do not belong to a tenant")
     if role != "cue_admin" and tenant_id is None:
         raise HTTPException(status_code=400, detail="A tenant is required for this role")
 

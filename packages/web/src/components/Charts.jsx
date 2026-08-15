@@ -8,7 +8,7 @@
  * is weighted the way it is — so it takes the flame, and sales and guests
  * ride two steps of the sea ramp.
  *
- * Validated against the Cue Studio card surface (sea-800 #06193A), analysed
+ * Validated against the CueSea Studio card surface (sea-800 #06193A), analysed
  * the way it is actually constructed rather than as a flat categorical set:
  *   · the two sea steps as an ordinal ramp — monotone lightness, ΔL ≥ 0.06,
  *     light end 4.19:1, single hue (11° spread). All pass.

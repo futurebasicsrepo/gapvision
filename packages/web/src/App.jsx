@@ -85,7 +85,7 @@ export default function App() {
     return (
       <div className="app-shell">
         <div className="card signin-error" style={{ marginTop: 40 }}>
-          Associates don't have a dashboard — your surface is Cue Lens, in the glass.
+          Associates don't have a dashboard — your surface is Lens, in the glass.
           <button className="linkish" onClick={signOut}>Sign out</button>
         </div>
       </div>
@@ -101,7 +101,7 @@ export default function App() {
         <div className="brand">
           <Wordmark size={20} />
           <span className="brand-sub">
-            Cue Studio · {user.tenant_slug
+            Studio · {user.tenant_slug
               ? `${user.tenant_slug} · ${user.role.replace("_", " ")}`
               : "all tenants"}
           </span>
@@ -125,7 +125,7 @@ export default function App() {
       {view === "simulator" && (
         <>
           <p className="card-note" style={{ marginBottom: 12 }}>
-            Demo harness — drives the same backend as Cue Lens. Anything you do
+            Demo harness — drives the same backend as Lens. Anything you do
             here is recorded against the {user.tenant_slug || "demo"} tenant.
           </p>
           <AssociateView />

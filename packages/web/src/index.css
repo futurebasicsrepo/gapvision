@@ -1,7 +1,7 @@
 @import "./brand.css";
 
 /**
- * Cue Studio — the back-office surface.
+ * CueSea Studio — the back-office surface.
  *
  * Sea-toned dense UI. Plex Mono carries every identifier (ids, latencies,
  * counts in a column, eyebrows); Instrument Sans does everything else.
@@ -140,7 +140,7 @@ body {
 }
 .rec em { font-style: normal; color: var(--slate-300); }
 
-/* The answer, under its question. This is the half that says whether Cue was
+/* The answer, under its question. This is the half that says whether CueSea was
    any good, so it gets paper-weight text rather than meta grey. */
 .qa-answer {
   margin: 0 0 0 12px; padding: 7px 11px;
@@ -154,7 +154,7 @@ body {
   color: var(--slate-200); letter-spacing: 0.06em; white-space: nowrap;
 }
 /* Flame is scarce on purpose — that scarcity is what makes it read as a cue.
-   In Cue Studio it appears in exactly two places: the assists series on the
+   In CueSea Studio it appears in exactly two places: the assists series on the
    leaderboard (the point that card is making), and a genuinely missed
    question. An engagement that ended without a sale is an ordinary outcome,
    not an alarm, so it stays sea. */

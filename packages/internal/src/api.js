@@ -1,13 +1,13 @@
 /**
- * Cue Console API client.
+ * CueSea Console API client.
  *
- * Same backend as Cue Studio, reached through the realtime server's
+ * Same backend as CueSea Studio, reached through the realtime server's
  * passthrough routes so there is one origin to allow and no service key in a
  * browser. The difference from Studio's client is the role gate below.
  */
 const BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:4000";
 
-/** Deliberately a different key from Cue Studio's `cue.token`. They're on
+/** Deliberately a different key from CueSea Studio's `cue.token`. They're on
  *  separate origins so they can't collide anyway, but if the two are ever
  *  served from one host by accident, signing into one must not sign you into
  *  the other. */
@@ -70,7 +70,7 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
 /**
  * The role gate.
  *
- * The API already refuses everyone but Cue staff — every staff route calls
+ * The API already refuses everyone but CueSea staff — every staff route calls
  * `require(me, "cue_admin")`, and the schema forbids a cue_admin from having a
  * tenant at all. This check adds nothing to that; it exists so a retailer's
  * admin who somehow reaches this URL gets a clear "not for you" instead of a

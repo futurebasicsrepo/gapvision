@@ -107,7 +107,7 @@ export const api = {
       // you nothing about what the panel looks like when it matters.
       checks: [
         { key: "schema", label: "Database schema", status: "ok", detail: "1 migration(s) applied" },
-        { key: "staff", label: "Cue staff accounts", status: "ok", detail: "2 able to sign in" },
+        { key: "staff", label: "CueSea staff accounts", status: "ok", detail: "2 able to sign in" },
         { key: "tenant_admins", label: "Every active tenant has an admin", status: "warn", detail: "no client_admin: northfield" },
         { key: "voice", label: "Voice success rate (24h)", status: "ok", detail: "94/97 answered" },
         { key: "latency", label: "Voice p95 latency (24h)", status: "warn", detail: "3140 ms" },
@@ -133,7 +133,7 @@ export const api = {
 
 export async function probe(name) {
   await wait(300 + Math.round(Math.abs(Math.sin(name.length)) * 400));
-  if (name === "Cue Lens") {
+  if (name === "Lens") {
     return { name, ok: true, status: null, ms: 604, opaque: true };
   }
   return { name, ok: true, status: 200, ms: name === "AI service" ? 214 : 61 };

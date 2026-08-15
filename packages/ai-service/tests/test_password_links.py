@@ -80,7 +80,7 @@ def _sent(monkeypatch):
 
 def test_forgot_cannot_be_used_to_discover_who_has_an_account(client, tenant, monkeypatch):
     """A real address and a made-up one must be indistinguishable. Otherwise
-    this endpoint answers "does this person work for a Cue customer" to anyone
+    this endpoint answers "does this person work for a CueSea customer" to anyone
     who asks, one address at a time."""
     _sent(monkeypatch)
     _user(tenant, "real@invite.example.com", PW)

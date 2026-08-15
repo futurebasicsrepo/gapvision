@@ -74,7 +74,7 @@ try {
   await page.goto(`${URL}/here?p=${token}`, { waitUntil: "networkidle" });
   await page.waitForSelector(".here-h1", { timeout: 15000 });
 
-  check("the plate lands on the guest page, not on Cue Studio",
+  check("the plate lands on the guest page, not on CueSea Studio",
     !(await page.isVisible(".signin")) && await page.isVisible(".here-card"));
 
   // The URL is the whole point of the token: a photograph of this plate tells

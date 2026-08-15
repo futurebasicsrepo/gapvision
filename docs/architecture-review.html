@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cue — system architecture, for technical review</title>
+<title>CueSea — system architecture, for technical review</title>
 <style>
   :root{
     --sea-900:#04122E; --sea-800:#06193A; --sea-700:#0A2E63; --sea-600:#0F3F80;
@@ -71,7 +71,7 @@
 
 <header>
   <div class="eyebrow">cuesea · architecture review · 15 August 2026</div>
-  <h1>Cue — how the system is put together</h1>
+  <h1>CueSea — how the system is put together</h1>
   <p class="lede">Clienteling for a shop floor: a guest opts in, and the associate helping
   them sees who they are and what they want on the inside of their glasses. Everything below is
   read off the code at <code>072b7bb</code>, not off a roadmap — where something is partial or
@@ -83,14 +83,14 @@
 <div class="rule"><strong>The service key never leaves our services.</strong> Nothing in a
 browser, on a phone, or inside a released glasses package has ever held it.</div>
 
-<div class="rule"><strong>The customer record never enters ours.</strong> Cue stores a pointer
+<div class="rule"><strong>The customer record never enters ours.</strong> CueSea stores a pointer
 into the retailer's CRM — never a name, an address or an order. What is on the glass is fetched
 for that moment and not kept.</div>
 
 <h2>1 · The system</h2>
 
 <figure>
-<svg viewBox="0 0 1180 620" role="img" aria-label="Cue system component map">
+<svg viewBox="0 0 1180 620" role="img" aria-label="CueSea system component map">
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M0 0 L10 5 L0 10 z" fill="#8FC7F0"/>
@@ -114,7 +114,7 @@ for that moment and not kept.</div>
   <!-- IN STORE -->
   <g>
     <rect x="20" y="48" width="350" height="96" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
-    <text x="38" y="76" fill="#FBF9F5" font-size="15" font-weight="600">Cue Lens — Even Realities G2</text>
+    <text x="38" y="76" fill="#FBF9F5" font-size="15" font-weight="600">CueSea Lens — Even Realities G2</text>
     <text x="38" y="98" fill="#BFE0F7" font-size="12.5">Sideloaded .ehpk · 576×288 monochrome · ring + temple</text>
     <text x="38" y="118" fill="#BFE0F7" font-size="12.5">TypeScript, socket.io client, no keys, no network allow-</text>
     <text x="38" y="134" fill="#BFE0F7" font-size="12.5">list entry but our own realtime host</text>
@@ -134,13 +134,13 @@ for that moment and not kept.</div>
   </g>
   <g>
     <rect x="20" y="376" width="350" height="80" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
-    <text x="38" y="404" fill="#FBF9F5" font-size="15" font-weight="600">Cue Studio — app.cuesea.ai</text>
+    <text x="38" y="404" fill="#FBF9F5" font-size="15" font-weight="600">CueSea Studio — app.cuesea.ai</text>
     <text x="38" y="426" fill="#BFE0F7" font-size="12.5">Manager floor view. Holds a <tspan font-family="ui-monospace,monospace" font-size="11.5">user</tspan> bearer token,</text>
     <text x="38" y="442" fill="#BFE0F7" font-size="12.5">never a service key.</text>
   </g>
   <g>
     <rect x="20" y="476" width="350" height="80" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
-    <text x="38" y="504" fill="#FBF9F5" font-size="15" font-weight="600">Cue Console — internal.cuesea.ai</text>
+    <text x="38" y="504" fill="#FBF9F5" font-size="15" font-weight="600">CueSea Console — internal.cuesea.ai</text>
     <text x="38" y="526" fill="#BFE0F7" font-size="12.5">cuesea staff only. Health, tenants, people, devices,</text>
     <text x="38" y="542" fill="#BFE0F7" font-size="12.5">credential connect (write-only).</text>
   </g>
@@ -148,7 +148,7 @@ for that moment and not kept.</div>
   <!-- EDGE -->
   <g>
     <rect x="410" y="48" width="440" height="200" rx="12" fill="#0A2E63" stroke="rgba(143,199,240,.4)"/>
-    <text x="430" y="78" fill="#FBF9F5" font-size="16" font-weight="600">Cue Realtime — the nervous system</text>
+    <text x="430" y="78" fill="#FBF9F5" font-size="16" font-weight="600">CueSea Realtime — the nervous system</text>
     <text x="430" y="100" fill="#BFE0F7" font-size="12.5">Node · Express · socket.io · Railway</text>
     <text x="430" y="128" fill="#8FC7F0" font-size="12" font-family="ui-monospace,monospace">socket  register · voice:* · radio:send · request:claim</text>
     <text x="430" y="146" fill="#8FC7F0" font-size="12" font-family="ui-monospace,monospace">emits   glasses:display · request:new · radio:message</text>
@@ -235,10 +235,10 @@ deliberately does not: those routes carry the signed-in human's own token, forwa
 <table>
   <thead><tr><th>Component</th><th>Holds</th><th>Cannot reach</th></tr></thead>
   <tbody>
-    <tr><td>Cue Lens (.ehpk)</td><td>Nothing. Its network allow-list contains only our realtime host.</td><td>The AI service, any third party, any credential. A released package is extractable — so nothing goes in it.</td></tr>
+    <tr><td>CueSea Lens (.ehpk)</td><td>Nothing. Its network allow-list contains only our realtime host.</td><td>The AI service, any third party, any credential. A released package is extractable — so nothing goes in it.</td></tr>
     <tr><td>Guest phone</td><td>An <code>anon-…</code> reference it minted itself, for one visit, in sessionStorage.</td><td>Everything. Every call it makes is to an open route on the realtime server.</td></tr>
-    <tr><td>Cue Studio / Console</td><td>A <em>user</em> bearer token, 12-hour session, scoped to one tenant (or to staff).</td><td>The service key. Analytics routes authorise on the user's own token; the proxy deliberately does not attach ours.</td></tr>
-    <tr><td>Cue Realtime</td><td><code>GAPVISION_API_KEY</code> — the service key.</td><td>The credential-encryption key. It never sees a merchant token, sealed or otherwise.</td></tr>
+    <tr><td>CueSea Studio / Console</td><td>A <em>user</em> bearer token, 12-hour session, scoped to one tenant (or to staff).</td><td>The service key. Analytics routes authorise on the user's own token; the proxy deliberately does not attach ours.</td></tr>
+    <tr><td>CueSea Realtime</td><td><code>GAPVISION_API_KEY</code> — the service key.</td><td>The credential-encryption key. It never sees a merchant token, sealed or otherwise.</td></tr>
     <tr><td>Depth (AI service)</td><td>Service key, <code>CUE_CRED_KEY</code>, model and speech keys.</td><td>Nothing above it. This is the only place a merchant credential is opened, in memory, per call.</td></tr>
     <tr><td>Postgres</td><td>Ciphertext and pointers.</td><td>The key that would open the ciphertext. A stolen dump is inert.</td></tr>
   </tbody>
@@ -248,7 +248,7 @@ deliberately does not: those routes carry the signed-in human's own token, forwa
 <p>A merchant's Shopify Admin token can read every customer, order and price in their store. It
 is sealed AES-256-GCM in the application, so the database only ever holds ciphertext, and the AAD
 binds it to the tenant — moving a sealed row between tenants fails to open rather than silently
-pointing Cue at the wrong shop. It is <strong>write-only</strong>: no API surface and no cuesea
+pointing CueSea at the wrong shop. It is <strong>write-only</strong>: no API surface and no cuesea
 employee can read a token back, only a fingerprint and a key id. Rotation is supported
 (<code>CUE_CRED_KEY_OLD</code>), and every row records which key sealed it.</p>
 
@@ -374,10 +374,10 @@ about a <em>person</em> and keeps what says something about a <em>shift</em>.</d
   <thead><tr><th>Surface</th><th>Where</th><th>Notes</th></tr></thead>
   <tbody>
     <tr><td>Depth (AI service)</td><td>Railway, <code>sfo</code>, one replica</td><td>Auto-deploys from <code>main</code>. Migrations run on boot and are additive.</td></tr>
-    <tr><td>Cue Realtime</td><td>Railway</td><td>Same. In-memory tenant state; Redis is the scale story.</td></tr>
-    <tr><td>Cue Studio + guest page</td><td>Vercel — app.cuesea.ai</td><td>SSO on preview URLs, open on the custom domain. <code>/here</code> is emitted as a file, not a rewrite rule.</td></tr>
-    <tr><td>Cue Console</td><td>Vercel — internal.cuesea.ai</td><td>Separate build. Staff only.</td></tr>
-    <tr><td>Cue Lens</td><td>Vercel, sideloaded via Even Hub</td><td>The realtime URL is injected from the package's own network allow-list at build, and a pack-time test refuses localhost, off-list hosts and anything resembling a key.</td></tr>
+    <tr><td>CueSea Realtime</td><td>Railway</td><td>Same. In-memory tenant state; Redis is the scale story.</td></tr>
+    <tr><td>CueSea Studio + guest page</td><td>Vercel — app.cuesea.ai</td><td>SSO on preview URLs, open on the custom domain. <code>/here</code> is emitted as a file, not a rewrite rule.</td></tr>
+    <tr><td>CueSea Console</td><td>Vercel — internal.cuesea.ai</td><td>Separate build. Staff only.</td></tr>
+    <tr><td>CueSea Lens</td><td>Vercel, sideloaded via Even Hub</td><td>The realtime URL is injected from the package's own network allow-list at build, and a pack-time test refuses localhost, off-list hosts and anything resembling a key.</td></tr>
   </tbody>
 </table>
 
@@ -405,11 +405,11 @@ card · 10 tenant-isolation · 9 endpointing.</p>
   <li><strong>The enterprise adapter is the real Gap dependency.</strong> The seam exists and is
   three methods wide; nothing above it knows which backend a tenant is on.</li>
   <li><strong>Naming debt:</strong> the repo, Railway project and environment variables still say
-  <code>gapvision</code> while the product is Cue.</li>
+  <code>gapvision</code> while the product is CueSea.</li>
 </ul>
 
 <footer>
-Read off <code>main</code> at <code>072b7bb</code>, 15 August 2026 · cuesea · Cue Lens 0.1.11 ·
+Read off <code>main</code> at <code>072b7bb</code>, 15 August 2026 · cuesea · CueSea Lens 0.1.11 ·
 8 migrations · 15 tables
 </footer>
 

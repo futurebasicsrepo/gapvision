@@ -7,7 +7,7 @@ import { api, probe, compact, when } from "../api.js";
  * Two sources, deliberately kept apart:
  *
  *   · `/api/admin/platform` — what the AI service can see about itself and the
- *     database. Authenticated, cross-tenant, Cue staff only.
+ *     database. Authenticated, cross-tenant, CueSea staff only.
  *   · direct probes from this browser — whether each service answers *from
  *     where a person sits*. A service can be healthy from inside Railway and
  *     unreachable from a store's wifi, and only the second one matters.
@@ -20,8 +20,8 @@ import { api, probe, compact, when } from "../api.js";
 const REALTIME = import.meta.env.VITE_SERVER_URL || "https://realtime-production-80f4.up.railway.app";
 
 const SURFACES = [
-  { name: "Cue Studio", url: "https://app.cuesea.ai", note: "retailer back office" },
-  { name: "Cue Lens", url: "https://cuesea-lens.vercel.app", note: "sideloaded to the G2" },
+  { name: "Studio", url: "https://app.cuesea.ai", note: "retailer back office" },
+  { name: "Lens", url: "https://cuesea-lens.vercel.app", note: "sideloaded to the G2" },
 ];
 
 function Check({ status, label, detail }) {

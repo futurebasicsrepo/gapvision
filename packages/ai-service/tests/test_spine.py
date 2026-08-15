@@ -273,7 +273,7 @@ def test_full_engagement_flow_reaches_the_dashboard(client):
 
 def test_transcripts_are_not_stored_unless_the_tenant_opts_in(client):
     """The default is off. An associate's speech near a customer should not
-    accumulate in Cue as a side effect of asking about stock."""
+    accumulate in CueSea as a side effect of asking about stock."""
     client.post("/api/ingest/voice", headers=service_key(), json={
         "tenant": "t_alpha", "intent": "price", "ok": True,
         "transcript": "this should not be stored", "audio_seconds": 1.0,
@@ -330,7 +330,7 @@ def test_the_answer_rides_the_same_privacy_flag_as_the_question(client):
 
 
 def test_an_engagement_records_what_was_actually_shown(client):
-    """Recording that an engagement happened, without what Cue said, makes
+    """Recording that an engagement happened, without what CueSea said, makes
     "was the cue any good" unanswerable — which is the only question a pilot
     has to answer."""
     recs = [
@@ -510,7 +510,7 @@ def test_health_reports_database_state(client):
     assert body["database"]["migrations"] >= 1
 
 
-# --- platform console (Cue staff only) ---------------------------------------
+# --- platform console (CueSea staff only) ------------------------------------
 #
 # This is the one endpoint that deliberately ignores tenant scoping, so the
 # negative cases matter more here than anywhere else in the suite.

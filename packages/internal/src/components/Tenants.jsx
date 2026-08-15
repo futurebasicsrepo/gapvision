@@ -8,7 +8,7 @@ import { api, compact, when, session, ApiError } from "../api.js";
  * other surface goes through `scope_tenant()` precisely so this can't happen
  * by accident anywhere else.
  *
- * Note what is *not* here: guests. Cue stores a CRM reference and never a
+ * Note what is *not* here: guests. CueSea stores a CRM reference and never a
  * customer profile, so there is nothing to browse and no screen where someone
  * could go looking. That is a property of the schema, not a UI decision.
  */
@@ -42,7 +42,7 @@ function CreateTenant({ onDone, onCancel }) {
     <form className="card span-12" onSubmit={submit}>
       <h3>New tenant</h3>
       <p className="card-note">
-        The slug is permanent and load-bearing — it's what the Cue Lens launch
+        The slug is permanent and load-bearing — it's what the Lens launch
         URL carries (<code>?tenant=gap</code>) and what every scoped query keys
         on. Lowercase, hyphens allowed.
       </p>
@@ -547,7 +547,7 @@ function TenantDetail({ tenant, onChanged }) {
           </label>
         </div>
         <p className="meta" style={{ marginBottom: 16, lineHeight: 1.5 }}>
-          Commercial terms are Cue-side only — a retailer's own admin can set
+          Commercial terms are CueSea-side only — a retailer's own admin can set
           their privacy posture but can't change either of these.
         </p>
 
@@ -581,7 +581,7 @@ function TenantDetail({ tenant, onChanged }) {
         </div>
         <p className="meta" style={{ marginBottom: 16, lineHeight: 1.5 }}>
           With this on, the manager dashboard shows the question the floor asked
-          and the answer Cue gave. Both halves move together — an answer quotes
+          and the answer CueSea gave. Both halves move together — an answer quotes
           the guest's own record back at them, and a question with no answer
           beside it can't be judged.{" "}
           <strong>Retention is not enforced yet</strong>; the number is recorded

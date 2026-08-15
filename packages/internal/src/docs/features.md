@@ -1,6 +1,6 @@
 <!-- GENERATED — do not edit. Source: FEATURES.md. Run `npm run docs:sync`. -->
 
-# Cue — features as of 15 August 2026
+# CueSea — features as of 15 August 2026
 
 Plugin `0.1.11`, `main` at `10158d5`. Read off the code, not the roadmap:
 everything in **Works today** is built, wired and deployed. Everything else is
@@ -10,7 +10,7 @@ in its own section, and the sections are honest about the difference.
 
 ## Works today
 
-### Cue Lens — the glasses (Even Realities G2)
+### CueSea Lens — the glasses (Even Realities G2)
 
 | | |
 |---|---|
@@ -54,7 +54,7 @@ matching in both directions.
   leaderboard and stats are partitioned; socket rooms are per-tenant; a
   socket's tenant is pinned at register and cannot be changed mid-flight.
 - **Per-merchant Shopify credentials**, sealed AES-256-GCM under a key Postgres
-  never sees, bound to the tenant. Write-only: no surface and no Cue employee
+  never sees, bound to the tenant. Write-only: no surface and no CueSea employee
   can read a token back — only a fingerprint. Key rotation supported.
 - **Live Shopify adapter** — real Admin GraphQL, both static admin tokens and
   client-credentials with automatic re-minting before expiry. Connection
@@ -69,7 +69,7 @@ matching in both directions.
 - **Invites and password resets.** Creating a person without a password emails
   them a single-use link to set their own. `/auth/forgot` answers identically
   whether or not the address exists, so it cannot be used to discover who works
-  for a Cue customer. Login and reset are throttled per-email *and* per-IP,
+  for a CueSea customer. Login and reset are throttled per-email *and* per-IP,
   because a shop floor is one NAT.
 - **Retention, enforced.** Aged personal data is redacted per tenant on that
   tenant's own window; the shape of the shift survives. Every sweep leaves a
@@ -83,28 +83,28 @@ matching in both directions.
   tenants, voice success rate and p95 latency, unassigned devices, stranded
   engagements, credential key state and stale credential tests.
 
-### Cue Studio — the retailer dashboard
+### CueSea Studio — the retailer dashboard
 
 Manager sign-in, then one floor view: guests helped, attributed sales, assists
 and questions asked; who is on the floor right now; leaderboard; recent guests;
-and the questions the floor actually asked, over 1, 7 or 30 days. Cue staff get
+and the questions the floor actually asked, over 1, 7 or 30 days. CueSea staff get
 a store picker.
 
-**Recent guests show what Cue actually said** — the three lines the associate
+**Recent guests show what CueSea actually said** — the three lines the associate
 read off the glass and the products offered, stored as sent rather than
 re-derived, because stock moves. **Questions show the answer beside them**, so
 a manager can see not just that the floor asked about stock but whether we told
 them something true.
 
 Both of those last two ride the tenant's `store_transcripts` setting, off by
-default, now toggleable in Cue Console rather than only by a hand-written API
+default, now toggleable in CueSea Console rather than only by a hand-written API
 call. The question and the answer move together: an answer quotes the guest's
 own record back at them, and a question with no answer beside it can't be
 judged.
 
 ### The guest page — app.cuesea.ai/here
 
-The only surface a customer touches, and the only route in Cue Studio that is
+The only surface a customer touches, and the only route in CueSea Studio that is
 public by design. Tap or scan a plate, land on paper-toned page that names the
 room you are in, say what you need, and it is on an associate's glass before
 you have put your phone away. Stop is on the same screen, one tap, and it takes
@@ -114,7 +114,7 @@ Out-of-stock sizes are shown and marked `check` rather than hidden: what we
 know is that our count says none, which is weaker than "out", and the floor
 routinely holds stock the system has not caught up with.
 
-### Cue Console — cuesea staff only
+### CueSea Console — cuesea staff only
 
 Platform health, cross-tenant usage, tenant creation, people and device
 management, and the Connect Shopify panel — which stores, tests and reports
@@ -131,12 +131,12 @@ The left rail is ten panels in two groups:
 |---|---|
 | **Health** | What the platform can prove about itself right now. |
 | **Tenants** | Every retailer, their people, their hardware, what they've used. |
-| **Cue staff** | Accounts with no tenant — us. Invite a colleague, change a role, end a session. |
+| **CueSea staff** | Accounts with no tenant — us. Invite a colleague, change a role, end a session. |
 | **Plates** | Every printed door, how hard each is being used, and revocation. |
 | **Retention** | Each store's window, and what the last sweep actually deleted. |
-| **Architecture** · **What Cue does** · **Onboarding** · **Employee one-pager** · **Brand** | Reference. |
+| **Architecture** · **What CueSea does** · **Onboarding** · **Employee one-pager** · **Brand** | Reference. |
 
-**Cue staff is the only screen that creates an account with no tenant.** That
+**CueSea staff is the only screen that creates an account with no tenant.** That
 restriction is in the API, not the interface: `POST /api/admin/users` with role
 `cue_admin` requires the caller to already be `cue_admin` and forces
 `tenant_id` to null, so a retailer's own admin cannot mint one of us by
@@ -152,14 +152,14 @@ guessing a payload.
 | **Size labels are passed through verbatim** | Verified against the seeded store, and this is the next real gap. `_variant_sizes()` reads the option named "size" and emits its value unchanged, which is right for `32`, `M` and `10`, and wrong the moment a merchant writes `W30 L32`, `EU 41`, `UK 9` or `15 / 33`. A guest asking for "a 32" gets no match against a product whose sizes are `W30 L32` / `W32 L32`, even though the 32 is sitting there. What is confirmed working on live data: the size comes from the option and not the variant title, so a two-option product sums `S / Fog` and `S / Ink` into one `S` instead of leaking the colour; `Default Title` is correctly skipped so a tie reports no sizes rather than a size called "Default Title"; and a zero reaches the answer as a zero. |
 | **Completeness of an empty answer** | Not fixed, and the seeded store is what will prove it. `main.py` calls `crm.floor_inventory()` bare, so an empty or partial inventory is indistinguishable from "not carried" — the floor hears *"We don't carry that on this floor"* either way. The adapter needs to be able to say **"I can't see stock right now"** as a distinct outcome. This bug exists at one data source; it gets worse with two. |
 | **Floor location** | The Shopify adapter hardcodes location to "Floor". Per-zone placement needs a product metafield. |
-| **Voice and gestures in the browser** | Fully wired server-side and covered by tests, but Cue Studio has no UI that drives them — they are exercised from the glasses or the test harness. |
+| **Voice and gestures in the browser** | Fully wired server-side and covered by tests, but CueSea Studio has no UI that drives them — they are exercised from the glasses or the test harness. |
 | **The demo harness** | The associate view with its beacon buttons and its leaderboard names is demo-only, and the seeded names appear for the `gap` tenant alone. |
 | **Floor comms** | Built and unblocked by the locked-phone test. Not yet exercised by two people on a real floor, which is the only test that matters for the phrase vocabulary — seven phrases written from a whiteboard. |
 | **Customer depth** | Built. Address, contact and order history reach both the cards and the voice answers. Against a live Shopify store the fields come from `defaultAddress` and the customer record, so a store with sparse customer data shows sparse cards — correctly, but a demo on a thin store will look thinner than the mock. |
 | **Outbound email** | Sent over **HTTPS to the provider's API**, not SMTP and not Gmail. Two dead ends got us here and both are worth knowing: Google does not offer app passwords to Workspace accounts, and **Railway disables outbound SMTP below the Pro plan** — every port, so an alternate port does not help, and it surfaces as a timeout rather than a refusal because nothing ever answers. Port 443 is blocked nowhere. `RESEND_API_KEY` selects the HTTPS transport; the `CUE_SMTP_*` trio remains as a fallback for a deployment that has to relay through its own server. Unset both and the provider is `console`: written to the service log, and Health says so rather than showing green. Health → **Send a test** does one real send to the caller's own address and names the specific failure. |
 | **Domain email authentication** | **`cuesea.ai` has no SPF record** — the only TXT on the apex is a Google site verification. Nothing is signed and nothing is aligned, which costs deliverability on every message the domain sends, including from Gmail. Nameservers are GoDaddy. Wanted: `v=spf1 include:_spf.google.com ~all` on the apex for Workspace mail, whatever records the SMTP provider issues for its own sending subdomain, DKIM switched on in Workspace admin, and then a `_dmarc` record at `p=none` to watch before enforcing. |
 | **Guest roster endpoint** | Deliberately gated off for non-demo tenants. A list of every customer in the store is exactly the shape the tap-to-reveal design exists to eliminate. |
-| **User management** | Done in the Console. Create, invite, re-invite, change a role, disable — all reachable from Tenants → People for a retailer's staff, and from the Cue staff panel for ours. The role select is capped at the operator's own rank, so the interface cannot offer an escalation the API would refuse. What is still API-only: hard-deleting a person, which is deliberate — disabling is the reversible thing and should be the easy one. |
+| **User management** | Done in the Console. Create, invite, re-invite, change a role, disable — all reachable from Tenants → People for a retailer's staff, and from the CueSea staff panel for ours. The role select is capped at the operator's own rank, so the interface cannot offer an escalation the API would refuse. What is still API-only: hard-deleting a person, which is deliberate — disabling is the reversible thing and should be the easy one. |
 | **Retention** | Enforced. Aged personal data is redacted on a timer, per tenant, on that tenant's own window — transcripts, answers, the CRM pointer, cue lines, recommendations, assist notes. The operational skeleton (intent, latency, zone, outcome, sale) survives deliberately, so turning the control on does not cost a retailer their quarter. Every sweep leaves a receipt in `retention_runs`. |
 
 ---

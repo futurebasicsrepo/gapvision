@@ -124,7 +124,7 @@ def test_seal_round_trip_and_tenant_binding():
     assert TOKEN_A.encode() not in blob      # not merely encoded — encrypted
 
     # The move an attacker with database write access would make: copy a sealed
-    # token onto another tenant's row so Cue reads a store it shouldn't.
+    # token onto another tenant's row so CueSea reads a store it shouldn't.
     with pytest.raises(ValueError):
         secrets_box.open_sealed(blob, aad="tenant:two")
 
@@ -191,7 +191,7 @@ def test_a_bare_word_can_only_ever_become_a_shopify_subdomain():
 ])
 def test_domain_rejects_anything_not_a_shopify_store(raw):
     """The service fetches this string. Without a narrow rule it is an SSRF
-    primitive pointed at Cue's own network."""
+    primitive pointed at CueSea's own network."""
     from app.crm_credentials import CredentialError, normalize_domain
     with pytest.raises(CredentialError):
         normalize_domain(raw)

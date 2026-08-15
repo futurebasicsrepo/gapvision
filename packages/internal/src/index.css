@@ -1,9 +1,9 @@
 @import "./brand.css";
 
 /**
- * Cue Console — the cuesea staff surface.
+ * CueSea Console — the cuesea staff surface.
  *
- * Shares Cue Studio's language on purpose: same sea ground, same Plex Mono for
+ * Shares CueSea Studio's language on purpose: same sea ground, same Plex Mono for
  * identifiers, same card rhythm. Someone who works in both should not have to
  * learn two visual systems.
  *
@@ -40,7 +40,7 @@ body {
 /* No flame edge here, tempting as it was. The rail is one screen region and
    the budget is one flame: it goes on the active item, where it does work.
    "CUE CONSOLE · STAFF" is what keeps a screenshot of this from being
-   mistaken for a customer's Cue Studio. */
+   mistaken for a customer's CueSea Studio. */
 .rail-brand { padding: 0 20px 12px; }
 .rail-role {
   display: flex; align-items: center; gap: 7px; padding: 0 20px 20px;

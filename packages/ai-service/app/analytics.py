@@ -104,7 +104,7 @@ def record_voice_query(
 
     The transcript and the answer are dropped unless the tenant has explicitly
     opted in. What the associate said standing next to a customer is not
-    something Cue should accumulate by default, and the operational analytics
+    something CueSea should accumulate by default, and the operational analytics
     don't need it — intent, outcome and latency do that work.
 
     Both halves ride the same flag on purpose. The answer quotes the guest's
@@ -311,7 +311,7 @@ def usage(tenant_id: str, days: int = 30) -> list[dict]:
 
 
 def usage_all_tenants(days: int = 30) -> list[dict]:
-    """Cue-side billing view: one row per tenant for the window."""
+    """CueSea-side billing view: one row per tenant for the window."""
     return db.query(
         """
         SELECT t.id, t.slug, t.name, t.billing_plan, t.status,

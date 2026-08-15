@@ -78,7 +78,7 @@ def forgot(req: ForgotRequest, request: Request):
 
     **Always 202**, whether or not that address has an account. Anything else
     turns this endpoint into a membership oracle: try an email, read the
-    status, learn whether that person works at a Cue customer. The cost is
+    status, learn whether that person works at a CueSea customer. The cost is
     that a typo looks identical to success — which is why the response says
     "if there's an account" rather than "sent".
 

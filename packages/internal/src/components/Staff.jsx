@@ -3,7 +3,7 @@ import { api, ApiError } from "../api.js";
 import { PersonRow } from "./Tenants.jsx";
 
 /**
- * Cue staff.
+ * CueSea staff.
  *
  * The endpoint has always been able to mint staff — role cue_admin, tenant
  * forced to null, and only a cue_admin may do it. Nothing in the Console
@@ -31,13 +31,13 @@ export default function Staff() {
   return (
     <div className="card span-12">
       <div className="card-head">
-        <h2>Cue staff</h2>
+        <h2>CueSea staff</h2>
         {!adding && (
           <button className="btn small" onClick={() => setAdding(true)}>Add staff</button>
         )}
       </div>
       <p className="card-note">
-        Accounts with no tenant. The schema enforces that — Cue staff
+        Accounts with no tenant. The schema enforces that — CueSea staff
         structurally cannot belong to a retailer, which is what keeps the
         boundary real rather than a matter of who remembered to set a field.
       </p>
@@ -123,7 +123,7 @@ function AddStaff({ onDone, onCancel }) {
       <p className="meta" style={{ marginTop: 8, lineHeight: 1.5 }}>
         They get an emailed invite — single use, expires in a week, which is
         long enough to survive a weekend. Role is cue_admin: staff have no
-        lesser tier, because a Cue account that cannot see across tenants has
+        lesser tier, because a CueSea account that cannot see across tenants has
         nothing to do.
       </p>
       <div className="btn-row" style={{ marginTop: 12 }}>

@@ -77,7 +77,7 @@ export const api = {
     request("/auth/reset", { method: "POST", auth: false, body: { token, password } }),
   me: () => request("/auth/me"),
 
-  // Cue staff aren't scoped to a retailer, so they name the tenant. Everyone
+  // CueSea staff aren't scoped to a retailer, so they name the tenant. Everyone
   // else is pinned to their own and the parameter is ignored server-side.
   summary: (days = 1, t) => request(`/api/analytics/summary?days=${days}${tq(t)}`),
   leaderboard: (days = 7, t) => request(`/api/analytics/leaderboard?days=${days}${tq(t)}`),

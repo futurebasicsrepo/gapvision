@@ -1,4 +1,4 @@
-"""CRM provider selection — the seam where Cue plugs into any retailer.
+"""CRM provider selection — the seam where CueSea plugs into any retailer.
 
 Multi-tenant in the sense that actually matters: not "one deployment can label
 its data two ways", but "one deployment can hold two merchants' credentials and
@@ -178,7 +178,7 @@ def _build(slug: str) -> tuple[object, str]:
     provider = (tenant or {}).get("crm_provider") or "shopify"
     raise TenantNotConfigured(
         f"Tenant '{slug}' is set to the '{provider}' adapter but has nothing "
-        "connected. Add it in Cue Console → Tenants."
+        "connected. Add it in Console → Tenants."
     )
 
 
@@ -236,7 +236,7 @@ def _active_slugs() -> list[str]:
 def tenant_status_detail() -> dict:
     """Per-tenant readiness, by slug. Names no credential and no store domain.
 
-    Cue staff only — see `tenant_status()` for why.
+    CueSea staff only — see `tenant_status()` for why.
     """
     out: dict[str, str] = {}
     for slug in _active_slugs():
@@ -255,7 +255,7 @@ def tenant_status() -> dict:
 
     Deliberately not a list of slugs. /health is open on purpose so the
     scheduled check can poll it without a credential, and the set of tenant
-    slugs is the set of Cue's customers — a thing worth not publishing to
+    slugs is the set of CueSea's customers — a thing worth not publishing to
     anyone who curls the hostname. The named breakdown lives behind
     `/api/admin/platform`, which requires a cue_admin.
     """

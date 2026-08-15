@@ -2,16 +2,16 @@
 
 # Onboarding a retailer
 
-Everything here happens in Cue Console. No terminal, no code, no Railway. If a
+Everything here happens in CueSea Console. No terminal, no code, no Railway. If a
 step asks you to open something else, it says so.
 
 Two paths, and the difference is one decision made once at the start: **is this
 retailer on Shopify?** Steps 1 and 3 onward are identical either way; only
 step 2 differs.
 
-> **Looking for how to add someone to Cue itself — a colleague, not a
+> **Looking for how to add someone to CueSea itself — a colleague, not a
 > retailer's employee?** That is a different screen and it is at the bottom of
-> this page: [Adding a Cue colleague](#adding-a-cue-colleague). Everything
+> this page: [Adding a CueSea colleague](#adding-a-cuesea-colleague). Everything
 > between here and there is about onboarding a *retailer*.
 
 ---
@@ -28,7 +28,7 @@ You need three things from the retailer:
 3. **If they are on Shopify:** an Admin API access token from a custom app in
    their own Shopify admin. What to ask for is in step 2a.
 
-You do not need their customer data. Cue never holds a copy of it.
+You do not need their customer data. CueSea never holds a copy of it.
 
 ---
 
@@ -46,7 +46,7 @@ You do not need their customer data. Cue never holds a copy of it.
 The tenant appears in the table immediately. Click the row to open it — every
 remaining step happens inside that panel.
 
-> **Only Cue staff can create tenants or change billing.** A retailer's own
+> **Only CueSea staff can create tenants or change billing.** A retailer's own
 > admin can manage their people, devices and privacy posture, and nothing else.
 > That is enforced in the API, not just hidden in the interface.
 
@@ -78,7 +78,7 @@ here rather than three weeks later when an associate asks about a size and gets
 
 Three things worth knowing:
 
-- **The token is write-only.** After saving, nobody — no screen, no Cue
+- **The token is write-only.** After saving, nobody — no screen, no CueSea
   employee — can read it back. You will see a fingerprint and the key id, which
   is enough to confirm *which* token is stored and nothing more. If a retailer
   loses their copy, they issue a new one; we cannot recover it for them.
@@ -140,7 +140,7 @@ If an invitation expires or the address was wrong, fix the address and use
 
 **Tenant → Hardware & terms.**
 
-Glasses register themselves. Have someone put a pair on and open Cue; the
+Glasses register themselves. Have someone put a pair on and open CueSea; the
 serial appears in the device table within a few seconds. Then assign it to a
 person from the dropdown.
 
@@ -160,7 +160,7 @@ say it before it does.
 **Tenant → Hardware & terms → Store what was said.**
 
 Off by default. On means the manager dashboard shows the question an associate
-asked and the answer Cue gave. Both halves move together, because an answer
+asked and the answer CueSea gave. Both halves move together, because an answer
 quotes the guest's own record back at them and a question without its answer
 cannot be judged anyway.
 
@@ -181,7 +181,7 @@ for no privacy gain.
 
 Send the admin:
 
-- **Cue Studio — https://app.cuesea.ai** — their dashboard. They will already
+- **CueSea Studio — https://app.cuesea.ai** — their dashboard. They will already
   have set a password via the invitation.
 - **The lens** — sideloaded onto the glasses via Even Hub, not from an app
   store.
@@ -207,7 +207,7 @@ and no warnings against their name.
 
 ## What we never do
 
-- **We never ask for a customer list.** Cue holds a pointer to a record in the
+- **We never ask for a customer list.** CueSea holds a pointer to a record in the
   retailer's system and nothing else. There is no screen to browse guests
   because there is no data to browse.
 - **We never identify anyone who has not opted in.** No cameras, no face
@@ -218,9 +218,9 @@ and no warnings against their name.
 
 ---
 
-## Adding a Cue colleague
+## Adding a CueSea colleague
 
-**Console → Cue staff → Invite a colleague.** Not Tenants. This is the one
+**Console → CueSea staff → Invite a colleague.** Not Tenants. This is the one
 screen in the system that creates an account belonging to no retailer.
 
 Name, work email, role. Leave the password blank — that sends them an
@@ -237,9 +237,9 @@ Three things worth knowing before you invite somebody:
 
 - **`cue_admin` is not a small grant.** It reads across every retailer on the
   platform — the one place in the system where tenant scoping is deliberately
-  absent. There is no read-only tier of Cue staff yet. If you want one, that is
+  absent. There is no read-only tier of CueSea staff yet. If you want one, that is
   a real piece of work, not a checkbox.
-- **Only Cue staff can create Cue staff.** `POST /api/admin/users` with role
+- **Only CueSea staff can create CueSea staff.** `POST /api/admin/users` with role
   `cue_admin` requires the caller to already be `cue_admin` and forces the
   tenant to null. A retailer's `client_admin` cannot reach it by guessing a
   payload — the check is in the API, not in the interface.

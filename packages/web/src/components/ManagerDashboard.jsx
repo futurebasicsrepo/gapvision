@@ -39,7 +39,7 @@ export default function ManagerDashboard({ user }) {
    * Which retailer's floor we're looking at.
    *
    * A manager or client admin is pinned to their own tenant and this is just
-   * their slug. Cue staff belong to no tenant, so they have to pick one — the
+   * their slug. CueSea staff belong to no tenant, so they have to pick one — the
    * API refuses an unscoped request rather than guessing, which is correct,
    * and the UI has to offer the choice rather than firing requests that
    * cannot succeed.
@@ -106,14 +106,14 @@ export default function ManagerDashboard({ user }) {
 
   if (loading) return <div className="empty">Loading the floor…</div>;
 
-  // Cue staff with no tenant chosen yet. Ask, rather than render nothing.
+  // CueSea staff with no tenant chosen yet. Ask, rather than render nothing.
   if (isCueStaff && !tenant) {
     return (
       <div className="grid grid-dashboard">
         <div className="card span-12">
           <h3>Choose a store</h3>
           <p className="card-note">
-            You're signed in as Cue staff, so you aren't scoped to one retailer.
+            You're signed in as CueSea staff, so you aren't scoped to one retailer.
             Pick whose floor to look at.
           </p>
           {error && <div className="signin-error" role="alert">{error}</div>}
@@ -336,7 +336,7 @@ export default function ManagerDashboard({ user }) {
                   <span className="meta">{v.latency_ms ? `${v.latency_ms}ms` : ""}</span>
                 </div>
               </div>
-              {/* The answer is the half that says whether Cue was any good.
+              {/* The answer is the half that says whether CueSea was any good.
                   A question with no answer beside it cannot be judged — you
                   can see the floor asked about stock, but not whether we told
                   them something true. */}

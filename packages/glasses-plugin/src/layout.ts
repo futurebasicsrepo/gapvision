@@ -1,5 +1,5 @@
 /**
- * Cue Lens — the cue, as the glass renders it.
+ * CueSea Lens — the cue, as the glass renders it.
  *
  * The identity system specifies this surface tighter than anything else in
  * the product, and the constraint is the point:

@@ -7,7 +7,7 @@ personas, and live floor inventory — all from the merchant's existing data.
 
 Credentials are per tenant, not per deployment: the store domain and token live
 in `tenant_crm_credentials`, sealed (see `crm_credentials.py`), and are passed
-into `ShopifyCRM` explicitly. One Cue deployment therefore serves any number of
+into `ShopifyCRM` explicitly. One CueSea deployment therefore serves any number of
 merchants' stores. The `SHOPIFY_*` environment variables are a deprecated
 fallback for the original single-store pilot — `ShopifyCRM.from_env()`.
 

@@ -30,7 +30,7 @@ railway up --service realtime     --path-as-root packages/server
 | `GAPVISION_LLM` | `mock` (or `anthropic` + `ANTHROPIC_API_KEY` when ready) |
 
 Shopify credentials are **not** environment variables any more. Connect each
-retailer in Cue Console → Tenants → Shopify; the domain and token are stored
+retailer in CueSea Console → Tenants → Shopify; the domain and token are stored
 per tenant and encrypted at rest. The old `GAPVISION_CRM` / `SHOPIFY_*` vars
 still serve the `shopify` tenant as a deprecated fallback — remove them from
 Railway once that tenant has been connected through the console.

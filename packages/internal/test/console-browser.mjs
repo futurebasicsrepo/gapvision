@@ -1,5 +1,5 @@
 /**
- * Cue Console, headless.
+ * CueSea Console, headless.
  *
  * The checks that matter here are the negative ones. A console that shows
  * cuesea staff the right numbers is table stakes; a console that shows a
@@ -172,7 +172,7 @@ check("the mark renders at all three compensation sizes",
 
 check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
 
-// --- 4. isolation: the console never ships inside Cue Studio -----------------
+// --- 4. isolation: the console never ships inside CueSea Studio -------------
 {
   const dir = fileURLToPath(new URL("../../web/dist/assets/", import.meta.url));
   let studio = null;
@@ -184,14 +184,14 @@ check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | ")
   } catch { /* not built — reported below */ }
 
   if (studio === null) {
-    console.log("SKIP  Cue Studio not built — run `npm run build:web` to include this check");
+    console.log("SKIP  CueSea Studio not built — run `npm run build:web` to include this check");
   } else {
     // Separate origins are only worth the extra Vercel project if the code
     // really is separate. If this ever fails, someone has imported a console
     // component into Studio and a customer is downloading it.
-    const leaked = ["Cue Console", "api/admin/platform", "cue.console.token"]
+    const leaked = ["Console · staff", "api/admin/platform", "cue.console.token"]
       .filter((s) => studio.includes(s));
-    check("Cue Studio's bundle contains nothing from the console",
+    check("CueSea Studio's bundle contains nothing from the console",
       leaked.length === 0, leaked.join(", "));
   }
 }

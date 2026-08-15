@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 def _own_tenant(me, id_or_slug: str) -> dict:
     """Resolve a tenant this principal is allowed to administer, or raise.
 
-    Cue staff reach any tenant; a client_admin reaches exactly their own. Same
+    CueSea staff reach any tenant; a client_admin reaches exactly their own. Same
     check as the tenant routes below, factored out because every credential
     route needs it and one of them getting it wrong hands a merchant's store to
     another merchant.
@@ -37,7 +37,7 @@ def _own_tenant(me, id_or_slug: str) -> dict:
     return tenant
 
 
-# --- tenants (Cue staff) -----------------------------------------------------
+# --- tenants (CueSea staff) --------------------------------------------------
 
 class TenantCreate(BaseModel):
     slug: str
@@ -106,7 +106,7 @@ def update_tenant(id_or_slug: str, req: TenantUpdate,
         raise HTTPException(status_code=403, detail="Not your tenant")
 
     # A retailer's admin controls their own privacy posture and display config.
-    # Status and billing plan are commercial terms — Cue side only.
+    # Status and billing plan are commercial terms — CueSea side only.
     allowed = {"name", "config", "privacy"}
     if me.role == "cue_admin":
         allowed |= {"crm_provider", "billing_plan", "status"}
@@ -252,7 +252,7 @@ def connect_tenant_crm(id_or_slug: str, req: CrmCredentialIn,
         raise HTTPException(status_code=400, detail=str(e))
 
     # Who installed which store, and when. The one action in the console that
-    # points Cue at a real customer database deserves a line in the log.
+    # points CueSea at a real customer database deserves a line in the log.
     print(f"[cue] tenant {tenant['slug']}: store {cred['store_domain']} "
           f"connected by {me['email']} (key {cred['key_id']})", flush=True)
 
@@ -328,7 +328,7 @@ def list_users(tenant: str | None = None, authorization: str | None = BearerHead
 
 @router.get("/staff")
 def list_staff(authorization: str | None = BearerHeader):
-    """Cue staff — the accounts with no tenant.
+    """CueSea staff — the accounts with no tenant.
 
     Its own route rather than a flag on /users, deliberately. That endpoint is
     manager-and-up and tenant-scoped by construction: scope_tenant() refuses a
@@ -353,7 +353,7 @@ def create_user(req: UserCreate, authorization: str | None = BearerHeader):
     require(me, "client_admin")
 
     if req.role == "cue_admin":
-        # Only Cue staff can mint Cue staff, and never inside a tenant.
+        # Only CueSea staff can mint CueSea staff, and never inside a tenant.
         require(me, "cue_admin")
         tenant_id = None
     else:
@@ -508,7 +508,7 @@ def mail_test(authorization: str | None = BearerHeader):
 
     Sends to the caller's own address and nowhere else. An endpoint that mails
     an arbitrary recipient is an open relay that happens to have a login on it,
-    and this one is reachable by anybody holding a Cue staff token.
+    and this one is reachable by anybody holding a CueSea staff token.
     """
     me = current_user(authorization)
     require(me, "cue_admin")
@@ -618,7 +618,7 @@ def update_device(device_id: str, req: DeviceUpdate,
     return {"device": row}
 
 
-# --- platform (Cue staff only) -----------------------------------------------
+# --- platform (CueSea staff only) --------------------------------------------
 #
 # The lesson from the first production deploy was that "reachable" is not
 # "working": the service reported a healthy database while the schema did not
@@ -669,7 +669,7 @@ def _platform_checks() -> list[dict]:
     )
     n_staff = (staff or {}).get("n", 0)
     checks.append(_check(
-        "staff", "Cue staff accounts", "ok" if n_staff else "fail",
+        "staff", "CueSea staff accounts", "ok" if n_staff else "fail",
         f"{n_staff} able to sign in" if n_staff
         else "no active cue_admin with a password — bootstrap did not run",
     ))
@@ -911,7 +911,7 @@ def run_retention(authorization: str | None = BearerHeader):
 
 @router.get("/platform")
 def platform(authorization: str | None = BearerHeader):
-    """Cross-tenant operational state. Cue staff only — this is the one view
+    """Cross-tenant operational state. CueSea staff only — this is the one view
     that deliberately ignores tenant scoping, so it gets the strictest role."""
     me = current_user(authorization)
     require(me, "cue_admin")

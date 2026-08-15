@@ -2,8 +2,8 @@
 --
 -- The spine recorded that an engagement happened, its outcome and its sale,
 -- and that a voice query happened, its intent and its latency. A manager
--- reading that can tell you how much the floor used Cue. They cannot tell you
--- what Cue said, or whether it was any good — which is the question anyone
+-- reading that can tell you how much the floor used CueSea. They cannot tell you
+-- what CueSea said, or whether it was any good — which is the question anyone
 -- evaluating this will actually ask, and the question a pilot has to answer.
 --
 -- Three columns, all nullable, all additive. Nothing that reads the old shape
@@ -22,7 +22,7 @@ ALTER TABLE engagements
 ALTER TABLE engagements
     ADD COLUMN IF NOT EXISTS cue_lines text[];
 
--- What Cue answered out loud, beside what was asked.
+-- What CueSea answered out loud, beside what was asked.
 --
 -- Gated by exactly the same `privacy.store_transcripts` flag as the
 -- transcript, and for the same reason: the answer quotes the customer's

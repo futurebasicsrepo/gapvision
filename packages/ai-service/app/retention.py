@@ -17,7 +17,7 @@ for losing it. A retailer who turned on a 30-day window and then found their
 quarter had evaporated would be right to be angry, and would never turn it on
 again — which is how a privacy control ends up disabled everywhere.
 
-And it is not what the promise means. The promise is that Cue stops holding
+And it is not what the promise means. The promise is that CueSea stops holding
 information about *people* after N days. So the sweep nulls the columns that
 say something about a person and leaves the skeleton that says something about
 a shift:
@@ -190,7 +190,7 @@ def sweep_all() -> list[dict[str, Any]]:
     """Every tenant that is not archived.
 
     Suspended tenants are swept too, deliberately. A retailer who stopped
-    paying has not thereby consented to Cue keeping their customers' data
+    paying has not thereby consented to CueSea keeping their customers' data
     indefinitely — if anything that is the case where holding it is least
     defensible.
     """

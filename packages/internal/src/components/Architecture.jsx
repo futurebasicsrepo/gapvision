@@ -16,7 +16,7 @@ const PIPELINE = [
     note: "A QR check-in or beacon. No camera, no face. Nobody is identified who didn't ask to be.",
   },
   {
-    name: "Cue Lens",
+    name: "Lens",
     sub: "Even Realities G2",
     note: "The plugin, sideloaded. 576×288 monochrome. Three lines and up to three supporting facts — never more.",
   },
@@ -43,9 +43,9 @@ const PIPELINE = [
 ];
 
 const SERVICES = [
-  ["Cue Lens", "packages/glasses-plugin", "Vercel", "cuesea-lens.vercel.app", "Sideloaded by QR. Not in any store."],
-  ["Cue Studio", "packages/web", "Vercel", "app.cuesea.ai", "Retailer back office."],
-  ["Cue Console", "packages/internal", "Vercel", "internal.cuesea.ai", "This. Staff only, separate build on purpose."],
+  ["Lens", "packages/glasses-plugin", "Vercel", "cuesea-lens.vercel.app", "Sideloaded by QR. Not in any store."],
+  ["Studio", "packages/web", "Vercel", "app.cuesea.ai", "Retailer back office."],
+  ["Console", "packages/internal", "Vercel", "internal.cuesea.ai", "This. Staff only, separate build on purpose."],
   ["Realtime", "packages/server", "Railway", "realtime-production-80f4", "Socket.io + the AI proxy."],
   ["Depth", "packages/ai-service", "Railway", "ai-service-production-a3af", "FastAPI. Owns the database."],
   ["Postgres", "—", "Railway", "DATABASE_URL reference", "Referenced, not pasted — survives a password rotation."],
@@ -169,7 +169,7 @@ export default function Architecture() {
           </ul>
           <p>
             Activity from an unassigned device is still recorded against the
-            tenant — it just has no name on it, which is why Cue Studio says{" "}
+            tenant — it just has no name on it, which is why Studio says{" "}
             <em>unassigned device</em> rather than <em>unattributed</em>. One
             says what to do about it.
           </p>
@@ -181,7 +181,7 @@ export default function Architecture() {
         <div className="doc">
           <p>
             <strong>Guest profiles.</strong> Engagements carry the CRM's id and
-            nothing else. Cue is not a second home for a retailer's customer
+            nothing else. CueSea is not a second home for a retailer's customer
             database, and an opt-in product should not accumulate profiles as a
             side effect of running. There is no screen to browse guests because
             there is no data to browse.

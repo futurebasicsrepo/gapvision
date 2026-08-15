@@ -1,6 +1,6 @@
 """Seed the control plane.
 
-    python -m app.seed                 # tenants + a Cue admin, idempotent
+    python -m app.seed                 # tenants + a CueSea admin, idempotent
     python -m app.seed --demo          # also a store manager and associates
 
 Idempotent by design: safe to run against a database that already has data,
@@ -104,7 +104,7 @@ def bootstrap() -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Seed the Cue control plane")
+    parser = argparse.ArgumentParser(description="Seed the CueSea control plane")
     parser.add_argument("--demo", action="store_true",
                         help="also create a demo manager and associates")
     args = parser.parse_args()
@@ -130,7 +130,7 @@ def main() -> None:
                     "cue_admin", None, admin_password)
     else:
         print("  · set CUE_ADMIN_EMAIL (and optionally CUE_ADMIN_PASSWORD) to "
-              "create the first Cue admin")
+              "create the first CueSea admin")
 
     if args.demo:
         gap = tenants["gap"]

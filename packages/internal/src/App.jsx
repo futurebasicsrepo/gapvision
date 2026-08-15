@@ -29,7 +29,7 @@ const SECTIONS = [
     items: [
       { key: "health", name: "Health", hint: "services and checks" },
       { key: "tenants", name: "Tenants", hint: "retailers, people, billing" },
-      { key: "staff", name: "Cue staff", hint: "us, and who can sign in" },
+      { key: "staff", name: "CueSea staff", hint: "us, and who can sign in" },
       { key: "plates", name: "Plates", hint: "printed doors, and revocation" },
       { key: "retention", name: "Retention", hint: "windows, and what was deleted" },
     ],
@@ -38,7 +38,7 @@ const SECTIONS = [
     label: "Reference",
     items: [
       { key: "architecture", name: "Architecture", hint: "how it all fits" },
-      { key: "features", name: "What Cue does", hint: "built, partial, not built" },
+      { key: "features", name: "What CueSea does", hint: "built, partial, not built" },
       { key: "onboarding", name: "Onboarding", hint: "adding a retailer, step by step" },
       { key: "onepager", name: "Employee one-pager", hint: "print this for the floor" },
       { key: "brand", name: "Brand", hint: "tokens, mark, voice" },
@@ -48,12 +48,12 @@ const SECTIONS = [
 
 const TITLES = {
   health: ["Health", "What the platform can prove about itself right now."],
-  staff: ["Cue staff", "Accounts with no tenant. Invite a colleague, change a role, end a session."],
+  staff: ["CueSea staff", "Accounts with no tenant. Invite a colleague, change a role, end a session."],
   tenants: ["Tenants", "Every retailer, their people, their hardware, what they've used."],
   retention: ["Retention", "Each store's window, and what the last sweep actually deleted."],
   plates: ["Plates", "Every printed door, how hard each is being used, and the one control that matters."],
   architecture: ["Architecture", "The system, the decisions behind it, and what's still missing."],
-  features: ["What Cue does", "Read off the code, not the roadmap — and honest about the difference."],
+  features: ["What CueSea does", "Read off the code, not the roadmap — and honest about the difference."],
   onboarding: ["Onboarding a retailer", "Console only. No terminal, no code."],
   onepager: ["Employee one-pager", "Turn on, pair, control. Print it and put it in the stock room."],
   brand: ["Brand & identity", "Generated from the same tokens that build the products."],
@@ -125,10 +125,10 @@ export default function App() {
             This console is for cuesea staff. Your account is a{" "}
             <strong>{user.role.replace("_", " ")}</strong>
             {user.tenant_slug ? <> at <span className="ident">{user.tenant_slug}</span></> : null}
-            {" "}— everything you need is in Cue Studio.
+            {" "}— everything you need is in Studio.
           </div>
           <div className="btn-row">
-            <a className="btn primary" href="https://app.cuesea.ai">Open Cue Studio</a>
+            <a className="btn primary" href="https://app.cuesea.ai">Open Studio</a>
             <button className="btn ghost" onClick={signOut}>Sign out</button>
           </div>
         </div>
@@ -151,7 +151,7 @@ export default function App() {
         </div>
         <div className="rail-role">
           <CueBracket size={13} arc="var(--flame-300)" />
-          <span>Cue Console · staff</span>
+          <span>Console · staff</span>
         </div>
 
         <nav className="rail-nav">
@@ -219,7 +219,7 @@ export default function App() {
                 cannot drift from the glasses — a printed control scheme goes
                 wrong silently, on a wall nobody re-reads.
               </p>
-              <img className="onepager" alt="Cue employee one-pager"
+              <img className="onepager" alt="CueSea employee one-pager"
                    src="/docs/cue-employee-one-pager.svg" />
             </div>
           )}

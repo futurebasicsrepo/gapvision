@@ -1,9 +1,9 @@
--- Cue control plane — tenants, people, devices, and the events worth keeping.
+-- CueSea control plane — tenants, people, devices, and the events worth keeping.
 --
 -- Design notes that matter more than the columns:
 --
 -- * Guests are referenced by their CRM id (`guest_ref`), never copied here.
---   Cue is not a second home for a retailer's customer database, and an
+--   CueSea is not a second home for a retailer's customer database, and an
 --   opt-in-only product should not accumulate profiles as a side effect.
 -- * Transcripts are opt-in per tenant (see tenants.privacy) and default OFF.
 --   The intent and outcome of a voice query are what the analytics need; the
@@ -34,7 +34,7 @@ CREATE TABLE tenants (
 
 -- --- people ------------------------------------------------------------------
 --
--- tenant_id IS NULL means Cue/Future Basics staff, who are not part of any
+-- tenant_id IS NULL means CueSea/Future Basics staff, who are not part of any
 -- retailer. Enforced rather than conventional: a cue_admin must not belong to
 -- a tenant, and everyone else must.
 

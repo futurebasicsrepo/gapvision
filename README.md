@@ -117,7 +117,7 @@ there is no legitimate reason to ask, and a 403 confirms the tenant exists.
 **Transcripts are off by default.** `tenants.privacy.store_transcripts` gates
 them, and the analytics work without them — intent, outcome and latency carry
 the reporting. What an associate said standing next to a customer isn't
-something Cue should accumulate as a side effect of a stock question.
+something CueSea should accumulate as a side effect of a stock question.
 
 **Leaderboards count assists.** Ranking retail staff on sales alone reliably
 produces cherry-picking and kills the habit of covering for each other, so
@@ -186,7 +186,7 @@ CRM's floor inventory; only open-ended judgement calls ("what should I show
 her next") reach the LLM. Sizing schemes are checked before anything is
 quoted — a question about a 32x30 will never be answered with the tee that
 happened to be on the lens, and a letter size is never offered as an
-alternative to a waist size. If nothing matches, Cue says so.
+alternative to a waist size. If nothing matches, CueSea says so.
 
 Context makes the deixis work: the server remembers the engaged guest and the
 product currently displayed, so "do we have **these** in a 32" and "what did
@@ -234,7 +234,7 @@ realtime server, which holds the key server-side.
 
 ## Connecting a real Shopify store
 
-Cue runs on live commerce data from any Shopify store, and credentials are **per
+CueSea runs on live commerce data from any Shopify store, and credentials are **per
 tenant**, so one deployment serves any number of merchants. Each merchant
 creates their own custom app and supplies a token — there is no Shopify app
 review in the loop, which is what makes this the wedge into every Shopify POS
@@ -255,7 +255,7 @@ in the 2026+ Dev Dashboard have no static token — use the **Client ID** and
 **Client secret** instead and the adapter mints and refreshes 24-hour tokens
 itself.
 
-**In Cue Console** — Tenants → pick the retailer → **Shopify** → paste the
+**In CueSea Console** — Tenants → pick the retailer → **Shopify** → paste the
 `.myshopify.com` domain and the token → **Connect and test**. Saving runs a live
 check immediately and reports which scopes the token actually carries, so a
 missing scope is caught at setup rather than by an associate on the floor.

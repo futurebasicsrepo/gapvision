@@ -31,7 +31,7 @@ OPTIONAL_SCOPES = {
 
 # A merchant admin supplies this string and the service then fetches it. Without
 # a strict shape that is a server-side request forgery primitive: point it at an
-# internal address and Cue becomes a proxy into its own network. Shopify store
+# internal address and CueSea becomes a proxy into its own network. Shopify store
 # domains are always <handle>.myshopify.com, so the narrow rule costs nothing.
 _DOMAIN_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,59}\.myshopify\.com$")
 
@@ -60,7 +60,7 @@ def normalize_domain(raw: str) -> str:
 
 def _aad(tenant_id) -> str:
     """Binds a ciphertext to its tenant, so a row moved between tenants in the
-    database fails to open instead of silently pointing Cue at another store."""
+    database fails to open instead of silently pointing CueSea at another store."""
     return f"cue-crm-cred:tenant:{tenant_id}"
 
 

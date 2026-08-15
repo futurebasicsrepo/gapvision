@@ -27,7 +27,7 @@ export default function Login({ onSignedIn }) {
       <form className="signin card" onSubmit={submit}>
         <Wordmark size={22} />
         <h2>Sign in</h2>
-        <p className="signin-sub">Cue Studio — floor performance and administration</p>
+        <p className="signin-sub">Studio — floor performance and administration</p>
 
         <label>
           <span>Email</span>

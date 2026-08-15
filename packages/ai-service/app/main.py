@@ -1,4 +1,4 @@
-"""Cue AI Service — FastAPI.
+"""CueSea AI Service — FastAPI.
 
 The Brain: guest context, persona matching, clienteling script generation,
 and voice queries. Multi-tenant: the `tenant` parameter selects the CRM world
@@ -37,7 +37,7 @@ from .stt import (
 )
 from .voice import answer_query
 
-app = FastAPI(title="Cue AI Service", version="0.5.0")
+app = FastAPI(title="CueSea AI Service", version="0.5.0")
 
 _AUTH_STATE = startup_check()
 
