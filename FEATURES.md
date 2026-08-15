@@ -1,6 +1,6 @@
 # Cue — features as of 15 August 2026
 
-Plugin `0.1.9`, `main` at `7911e79`. Read off the code, not the roadmap:
+Plugin `0.1.9`, `main` at `5eddb2d`. Read off the code, not the roadmap:
 everything in **Works today** is built, wired and deployed. Everything else is
 in its own section, and the sections are honest about the difference.
 
@@ -74,9 +74,20 @@ matching in both directions.
 
 Manager sign-in, then one floor view: guests helped, attributed sales, assists
 and questions asked; who is on the floor right now; leaderboard; recent guests;
-and the questions the floor actually asked, over 1, 7 or 30 days. Respects the
-tenant's transcript-storage setting — it says "transcript not stored" rather
-than showing nothing. Cue staff get a store picker.
+and the questions the floor actually asked, over 1, 7 or 30 days. Cue staff get
+a store picker.
+
+**Recent guests show what Cue actually said** — the three lines the associate
+read off the glass and the products offered, stored as sent rather than
+re-derived, because stock moves. **Questions show the answer beside them**, so
+a manager can see not just that the floor asked about stock but whether we told
+them something true.
+
+Both of those last two ride the tenant's `store_transcripts` setting, off by
+default, now toggleable in Cue Console rather than only by a hand-written API
+call. The question and the answer move together: an answer quotes the guest's
+own record back at them, and a question with no answer beside it can't be
+judged.
 
 ### Cue Console — cuesea staff only
 
@@ -84,7 +95,10 @@ Platform health, cross-tenant usage, tenant creation, people and device
 management, and the Connect Shopify panel — which stores, tests and reports
 which scopes a token actually carries, shows a fingerprint rather than a token,
 and refuses to accept credentials at all if the encryption key is missing. Plus
-a live brand reference and an architecture map.
+a live brand reference and an **architecture map with a real diagram** — an
+inline SVG built from the brand tokens, arranged around the thing people get
+wrong about this system: the service key never leaves our services, and the
+customer record never enters them.
 
 ---
 
@@ -99,6 +113,7 @@ a live brand reference and an architecture map.
 | **Radio on the glass** | The plugin already subscribes to floor messages — it writes them to a debug log instead of rendering them. Transport done, surface not built. |
 | **Guest roster endpoint** | Deliberately gated off for non-demo tenants. A list of every customer in the store is exactly the shape the tap-to-reveal design exists to eliminate. |
 | **User management** | The API can create, update, disable and delete people. The Console can only create them. Changing a role or resetting a password currently needs a direct API call. |
+| **Retention** | Now settable per tenant in the Console next to the transcript toggle — and still enforced by nothing. The number is recorded and no job deletes on it. Setting it is currently a statement of intent, which the UI says out loud. |
 
 ---
 
