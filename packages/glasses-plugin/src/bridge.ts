@@ -24,9 +24,29 @@ export interface TextContainer {
   isEventCapture: 0 | 1;
 }
 
+/** A selectable list, the shape Even's own dashboard uses. `itemName` is the
+ *  rows; `currentSelectItemIndex` comes back on a listEvent. */
+export interface ListContainer {
+  xPosition: number;
+  yPosition: number;
+  width: number;
+  height: number;
+  containerID: number;
+  containerName: string;
+  zOrderIndex?: number;
+  isEventCapture: 0 | 1;
+  itemContainer: {
+    itemCount: number;
+    itemWidth: number;
+    itemName: string[];
+    isItemSelectBorderEn?: 0 | 1;
+  };
+}
+
 export interface PageSpec {
   containerTotalNum: number;
   textObject: TextContainer[];
+  listObject?: ListContainer[];
 }
 
 export interface GlassesBridge {

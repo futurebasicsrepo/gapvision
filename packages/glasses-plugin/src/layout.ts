@@ -18,7 +18,17 @@
  * geometry below changes — so this file is the single place that has to move
  * when the hardware does.
  */
-import type { PageSpec, TextContainer } from "./bridge";
+import type { ListContainer, PageSpec, TextContainer } from "./bridge";
+
+/**
+ * The host's hard budgets, kept beside the code that has to respect them.
+ *
+ * From the SDK: `Text_Object` max_count 8, `Image_Object` max_count 4,
+ * `ContainerTotalNum` 1–12 across all kinds. Exceeding any of them does not
+ * error — the page simply never renders, and nothing says why.
+ */
+export const MAX_TEXT_CONTAINERS = 8;
+export const MAX_TOTAL_CONTAINERS = 12;
 
 export const DISPLAY_W = 576;
 export const DISPLAY_H = 288;
@@ -185,18 +195,27 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
 
   // Left rail — facts that stay put while the right side changes.
   //
-  // Modelled on the Even dashboard: persistent detail down the left, modules
-  // you scroll through on the right. The rail is what an associate glances at
-  // mid-sentence (her size, her tier), so it must not move underneath them.
-  facts.forEach((content, i) => {
-    textObject.push({
-      xPosition: X, yPosition: BODY_TOP + i * RAIL_ROW,
-      width: RAIL_W, height: 20,
-      containerID: 10 + i, containerName: `cue-fact-${i + 1}`, zOrderIndex: 10 + i,
-      content,
+  // A list container, not four text containers, and not by preference: the
+  // host caps `Text_Object` at 8 and the railed guest page needed 11. Over
+  // budget, the page does not render *and nothing says so* — which is exactly
+  // how the rail shipped twice and appeared neither time. One list holds all
+  // five rows and costs one container.
+  const listObject: ListContainer[] = [];
+  if (facts.length) {
+    listObject.push({
+      xPosition: X, yPosition: BODY_TOP,
+      width: RAIL_W, height: RAIL_ROW * facts.length,
+      containerID: 9, containerName: "cue-rail", zOrderIndex: 9,
       isEventCapture: 0,
+      itemContainer: {
+        itemCount: facts.length,
+        itemWidth: RAIL_W,
+        itemName: facts,
+        // No selection border: the rail is read, never chosen.
+        isItemSelectBorderEn: 0,
+      },
     });
-  });
+  }
 
   // Meta strip, bottom left. Interpunct-separated, never four facts.
   textObject.push({
@@ -207,7 +226,32 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     isEventCapture: 0,
   });
 
-  return { containerTotalNum: textObject.length, textObject };
+  return assertBudget({
+    containerTotalNum: textObject.length + listObject.length,
+    textObject,
+    ...(listObject.length ? { listObject } : {}),
+  });
+}
+
+/**
+ * Refuse to hand the host a page it will silently drop.
+ *
+ * The budgets are the host's, not ours: 8 text containers, 12 in total. Going
+ * over does not error — the page simply never appears, which cost two uploads
+ * and an evening. Failing loudly here turns that into a caught mistake at the
+ * one place every page is built.
+ */
+export function assertBudget(page: PageSpec): PageSpec {
+  const texts = page.textObject.length;
+  const total = texts + (page.listObject?.length ?? 0);
+  if (texts > MAX_TEXT_CONTAINERS || total > MAX_TOTAL_CONTAINERS) {
+    throw new Error(
+      `Page over the host's container budget: ${texts} text (max ` +
+      `${MAX_TEXT_CONTAINERS}), ${total} total (max ${MAX_TOTAL_CONTAINERS}). ` +
+      `The host drops an over-budget page without reporting it.`,
+    );
+  }
+  return page;
 }
 
 /** Nothing to say yet. Even the idle state obeys the grammar. */

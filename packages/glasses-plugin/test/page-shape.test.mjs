@@ -16,7 +16,7 @@
  * So the invariant this file defends: any two cues that need different
  * containers must not be considered the same shape.
  */
-import { buildCue } from "../dist-test/layout.mjs";
+import { assertBudget, buildCue } from "../dist-test/layout.mjs";
 
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -24,8 +24,15 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
 };
 
-/** Exactly what `renderCue` compares. */
-const shapeOf = (cue) => buildCue(cue).textObject.map((c) => c.containerID).join(",");
+/** Exactly what `renderCue` compares — every container kind, tagged so a text
+ *  id and a list id cannot collide. */
+const shapeOf = (cue) => {
+  const p = buildCue(cue);
+  return [
+    ...p.textObject.map((c) => `t${c.containerID}`),
+    ...(p.listObject || []).map((c) => `l${c.containerID}`),
+  ].join(",");
+};
 
 const IDLE = { lines: ["CUESEA READY", "GAP · DEMO", "AWAITING GUEST SIGNAL"],
                meta: ["PRESS TO ASK", "DOUBLE PRESS EXITS"] };
@@ -43,12 +50,34 @@ check("idle and a railed guest cue are different shapes",
   shapeOf(IDLE) !== shapeOf(GUEST),
   `idle=${shapeOf(IDLE)}  guest=${shapeOf(GUEST)}`);
 
-check("every container the guest page needs is in its shape",
-  ["8", "10", "11", "12", "13"].every((id) => shapeOf(GUEST).split(",").includes(id)),
-  shapeOf(GUEST));
+check("the rail is one list container, not four text containers",
+  buildCue(GUEST).listObject?.length === 1 &&
+  buildCue(GUEST).listObject[0].itemContainer.itemName.length === RAIL.length,
+  JSON.stringify(buildCue(GUEST).listObject?.[0]?.itemContainer?.itemName));
+
+// The budget that made the rail invisible twice: text max 8, total max 12.
+for (const [name, cue] of Object.entries({ idle: IDLE, guest: GUEST, pick: PICK })) {
+  const p = buildCue(cue);
+  const total = p.textObject.length + (p.listObject?.length || 0);
+  check(`${name} page is inside the host budget`,
+    p.textObject.length <= 8 && total <= 12,
+    `${p.textObject.length} text, ${total} total`);
+}
+
+{
+  // Hand `assertBudget` a page the host would drop, and require a throw.
+  let threw = false;
+  try {
+    assertBudget({
+      containerTotalNum: 9,
+      textObject: Array.from({ length: 9 }, (_, i) => ({ containerID: i })),
+    });
+  } catch { threw = true; }
+  check("an over-budget page throws instead of failing silently", threw);
+}
 
 check("a cue with no rail keeps the original container set",
-  shapeOf(IDLE) === "1,2,3,4,5,7", shapeOf(IDLE));
+  shapeOf(IDLE) === "t1,t2,t3,t4,t5,t7", shapeOf(IDLE));
 
 // Scrolling between modules must NOT force a rebuild — same containers, only
 // text changes. That is the whole point of the cheap path.

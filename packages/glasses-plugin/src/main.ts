@@ -99,6 +99,44 @@ let recIndex = -1;
  */
 let railFacts: string[] = [];
 
+/**
+ * Session state that has to outlive a foreground transition.
+ *
+ * Gesture telemetry from the G2 showed `foreground-exit` / `foreground-enter`
+ * pairs with `engaged=false` on every gesture afterwards, while the server
+ * still had a live engagement. The WebView is being torn down and reloaded,
+ * and module state goes with it — so scrolling silently did nothing
+ * (`cycleRecommendations` returns early on `!engaged`) and the rail had no
+ * guest to draw.
+ *
+ * sessionStorage, not localStorage: this should survive a reload, not a shift.
+ */
+const RESUME_KEY = "cue.session";
+
+function rememberSession() {
+  try {
+    sessionStorage.setItem(RESUME_KEY, JSON.stringify({
+      guestId: engagedGuestId, focusSku, tenant: TENANT,
+    }));
+  } catch { /* private mode — we just come back blank, as before */ }
+}
+
+function forgetSession() {
+  try { sessionStorage.removeItem(RESUME_KEY); } catch { /* nothing to clear */ }
+}
+
+/** Re-ask the server for the guest we were on. The card is rebuilt from the
+ *  CRM rather than restored from a stale copy, so nothing goes out of date. */
+function resumeSession() {
+  let saved: { guestId?: string; focusSku?: string } | null = null;
+  try { saved = JSON.parse(sessionStorage.getItem(RESUME_KEY) || "null"); } catch { saved = null; }
+  if (!saved?.guestId) return false;
+  focusSku = saved.focusSku ?? null;
+  log(`resuming session for ${saved.guestId}`);
+  socket?.emit("beacon:guest-enter", { guestId: saved.guestId, zone: ZONE, tenant: TENANT });
+  return true;
+}
+
 /** Render a cue. `status` is gone: the glass shows nothing it doesn't have to,
  *  and a hint row is chrome. */
 async function renderCue(cue: Cue, latencyMs?: number) {
@@ -121,7 +159,13 @@ async function renderCue(cue: Cue, latencyMs?: number) {
   // both pages have three lines, the old check said "same shape", took the
   // cheap path, and silently drew none of them. The HUD looked unchanged
   // because it was unchanged.
-  const shape = page.textObject.map((c) => c.containerID).join(",");
+  // Every container kind, not just text: the fact rail is a list container,
+  // and a rail appearing or vanishing has to force a rebuild like anything
+  // else. Keyed by kind so a text and a list id can never collide.
+  const shape = [
+    ...page.textObject.map((c) => `t${c.containerID}`),
+    ...(page.listObject || []).map((c) => `l${c.containerID}`),
+  ].join(",");
   const sameShape = pageBuilt && shape === currentShape;
 
   if (!pageBuilt) {
@@ -172,13 +216,14 @@ async function showIdle() {
   focusSku = null;
   lastDisplay = null;
   railFacts = [];
+  forgetSession();
   await renderCue({
     ...IDLE_CUE,
     lines: ["CUESEA READY", TENANT_LABEL, "AWAITING GUEST SIGNAL"],
     // The build, on the glass. An install that silently did not roll over is
     // indistinguishable from a fix that did not work, and we burned two
     // uploads on exactly that ambiguity.
-    meta: [`V${__APP_VERSION__}`, "PRESS TO ASK", "DOUBLE PRESS EXITS"],
+    meta: [`V${__APP_VERSION__.replace(/\./g, "·")}`, "PRESS TO ASK", "DOUBLE PRESS EXITS"],
   });
   ui.sessionInfo.textContent = "No active session";
 }
@@ -191,6 +236,7 @@ async function onDisplay(payload: DisplayPayload) {
   recIndex = -1;
   railFacts = railFor(payload);
   focusSku = recommendations[0]?.sku ?? focusSku;
+  rememberSession();
   await renderCue(cueOf(payload));
   ui.sessionInfo.textContent = payload.guest
     ? `Engaged: ${payload.guest.name} (${payload.guest.tier})`
@@ -263,7 +309,14 @@ async function cycleRecommendations(step: 1 | -1) {
  *  nothing voice put on the lens. Everything else is an internal page, where
  *  double-press is ours to use and mode-0 exits would be permitted. */
 function onRootPage(): boolean {
-  return !engaged && recIndex < 0 && voice.current === "idle";
+  // Root means genuinely nothing on the glass. A saved session counts as not
+  // root even before the card comes back: after a foreground transition the
+  // resume is in flight for a moment, and a double-tap landing in that window
+  // used to quit the app out from under a live engagement.
+  let resumable = false;
+  try { resumable = !!JSON.parse(sessionStorage.getItem(RESUME_KEY) || "null")?.guestId; }
+  catch { resumable = false; }
+  return !engaged && !resumable && recIndex < 0 && voice.current === "idle";
 }
 
 /**
@@ -324,6 +377,17 @@ function onGesture(g: DecodedGesture) {
         return;
       }
       void voice.toggle({ tenant: TENANT, guestId: engagedGuestId, focusSku });
+      return;
+
+    case "foreground-enter":
+      // Back from the background. Anything we knew is gone with the WebView,
+      // so ask the server to rebuild the card we were on.
+      if (!engaged) resumeSession();
+      return;
+
+    case "foreground-exit":
+      // Nothing to do, but do not fall through to the default and log it as
+      // unhandled — it is expected, not a surprise.
       return;
 
     case "scroll-up":
