@@ -73,7 +73,15 @@ Either self-host the faces, drop to system fonts on the phone page, or add the
 two hosts and give up the single-host claim. A retail floor on store wifi is
 also a poor place to depend on a CDN at launch.
 
-Then upload the `.ehpk` in the dev portal and attach `store/icon-*.png`.
+Then upload the `.ehpk` in the dev portal. **That is the whole upload** — there
+is nothing else to attach for a Test build.
+
+`store/icon-*.png` are *listing* artwork, not package contents. `app.json` has no
+icon field (check `evenhub init` — the canonical manifest has none), and the
+portal offers nowhere to attach them while an app is in Test. They are collected
+when you create a public listing, i.e. at Submitted. This file previously said to
+attach them alongside the upload, which sent Kyle hunting for a control that does
+not exist.
 
 ### Two review rules that shaped the code
 
