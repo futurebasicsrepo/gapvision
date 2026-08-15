@@ -496,3 +496,28 @@ body {
   border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.066);
   background: var(--paper);
 }
+
+/* --- plates -------------------------------------------------------------
+   Busy is flame because it is the one row in this region asking to be looked
+   at. It is deliberately not styled as an error: a fitting room is busy on a
+   Saturday. Revoked rows recede rather than disappear - a door that used to
+   exist is part of the story of a store. */
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th {
+  text-align: left; font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--slate-300);
+  font-weight: 400; padding: 0 12px 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.077);
+}
+.table td { padding: 11px 12px 11px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.044); vertical-align: middle; }
+.table tr:last-child td { border-bottom: 0; }
+.table .num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 12px; }
+.table .right { text-align: right; }
+.table .num.hot { color: var(--flame); }
+.row-muted td { opacity: 0.45; }
+.pill.hot { color: var(--flame); border-color: rgba(255, 107, 44, 0.5); }
+.btn.small { padding: 6px 12px; font-size: 12px; min-height: 34px; }
+.input-inline {
+  background: var(--slate-600); border: 1px solid rgba(255, 255, 255, 0.11);
+  color: var(--slate-100); font: inherit; font-size: 12.5px;
+  border-radius: 8px; padding: 7px 10px; min-height: 36px;
+}

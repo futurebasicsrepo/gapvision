@@ -115,6 +115,16 @@ export const api = {
   devices: (tenant) => request(`/api/admin/devices?tenant=${encodeURIComponent(tenant)}`),
   updateDevice: (id, body) => request(`/api/admin/devices/${id}`, { method: "PATCH", body }),
 
+  // --- plates ---------------------------------------------------------------
+  // These live on a second APIRouter in routes_guest.py that also mounts at
+  // /api/analytics, so grepping the source for "analytics/plates" finds
+  // nothing. The realtime proxy passes /api/analytics through, so no plumbing.
+  plates: (tenant) =>
+    request(`/api/analytics/plates?tenant=${encodeURIComponent(tenant)}`),
+  revokePlate: (tenant, token) =>
+    request(`/api/analytics/plates/${encodeURIComponent(token)}/revoke` +
+            `?tenant=${encodeURIComponent(tenant)}`, { method: "POST" }),
+
   // --- analytics, for the usage column -------------------------------------
   summary: (tenant, days = 7) =>
     request(`/api/analytics/summary?days=${days}&tenant=${encodeURIComponent(tenant)}`),
