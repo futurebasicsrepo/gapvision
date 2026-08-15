@@ -287,3 +287,69 @@ def test_login_consumes_both_an_email_bucket_and_an_ip_bucket(client, tenant):
     _user(tenant, other, PW)
     client.post("/auth/login", json={"email": other, "password": PW})
     assert f"login-email:{other}" in _hits
+
+
+# --- the half nobody was testing ------------------------------------------
+#
+# Every assertion above proves the backend does its job: a link is minted, the
+# email carries it, the token redeems, the password works. All true, and all
+# true on the day the first person we ever invited followed that link and got
+# a 404 from the CDN.
+#
+# The link is a contract between three things that live in different trees and
+# are deployed separately — the mailer that writes the URL, the frontend that
+# has to render something at that path, and the host that has to route a cold
+# navigation there instead of 404ing. Testing one third of a contract is how
+# you get a green suite and a broken invitation.
+
+import json
+import pathlib
+
+REPO = pathlib.Path(__file__).resolve().parents[3]
+LINK_PATH = "/set-password"
+
+
+def test_the_mailer_builds_the_path_the_frontends_actually_serve():
+    from app import mailer
+
+    url = mailer.link_for("cue_admin", "abc123")
+    assert LINK_PATH in url, (
+        f"mailer.link_for produced {url!r}. If this path is changing, every "
+        f"assertion below has to change with it, and so does the routing in "
+        f"both frontends."
+    )
+
+
+@pytest.mark.parametrize("package", ["internal", "web"])
+def test_the_host_routes_a_cold_navigation_to_the_link(package):
+    """A deep link is not a client-side concern.
+
+    Following an invitation from an email client is a fresh request to the CDN
+    for a path no file exists at. Without a rewrite the app's JavaScript never
+    runs, so no amount of routing inside React can save it — which is exactly
+    how this failed in production.
+    """
+    cfg = REPO / "packages" / package / "vercel.json"
+    assert cfg.exists(), (
+        f"packages/{package} has no vercel.json, so {LINK_PATH} is served by "
+        f"nothing and a cold navigation 404s."
+    )
+    rewrites = json.loads(cfg.read_text()).get("rewrites") or []
+    assert any(r.get("source") == LINK_PATH for r in rewrites), (
+        f"packages/{package}/vercel.json does not rewrite {LINK_PATH} to "
+        f"index.html. Invitations sent to this app will 404."
+    )
+
+
+@pytest.mark.parametrize("package", ["internal", "web"])
+def test_the_frontend_renders_something_at_the_link(package):
+    """And the app has to answer on it once the JavaScript does run."""
+    src = REPO / "packages" / package / "src"
+    assert (src / "components" / "SetPassword.jsx").exists(), (
+        f"packages/{package} has no SetPassword screen."
+    )
+    app = (src / "App.jsx").read_text()
+    assert LINK_PATH in app, (
+        f"packages/{package}/src/App.jsx never looks at {LINK_PATH}, so the "
+        f"rewrite lands on an app that renders the sign-in form instead."
+    )

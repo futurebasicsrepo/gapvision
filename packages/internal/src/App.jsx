@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, session, isCueStaff } from "./api.js";
 import { CueBracket, Wordmark } from "./components/Mark.jsx";
 import Login from "./components/Login.jsx";
+import SetPassword from "./components/SetPassword.jsx";
 import Health from "./components/Health.jsx";
 import Tenants from "./components/Tenants.jsx";
 import Staff from "./components/Staff.jsx";
@@ -58,11 +59,20 @@ const TITLES = {
   brand: ["Brand & identity", "Generated from the same tokens that build the products."],
 };
 
+/** The one path this app answers on other than `/`. Read once, before React
+ *  renders anything, because the answer cannot change without a navigation. */
+function invitedToken() {
+  if (typeof window === "undefined") return null;
+  if (!window.location.pathname.startsWith("/set-password")) return null;
+  return new URLSearchParams(window.location.search).get("token") || "";
+}
+
 export default function App() {
   const [user, setUser] = useState(session.user);
   const [checking, setChecking] = useState(Boolean(session.token));
   const [view, setView] = useState("health");
   const [navOpen, setNavOpen] = useState(false);
+  const [invite, setInvite] = useState(invitedToken);
 
   // A stored token may have been revoked since the tab was opened. Confirm it
   // before rendering panels that would 401 one at a time and look broken.
@@ -78,6 +88,24 @@ export default function App() {
     await api.logout();
     session.clear();
     setUser(null);
+  }
+
+  // Before the session check, not after. Somebody redeeming an invitation has
+  // no session by definition, and an expired token left in this tab must not
+  // send them to a spinner or a sign-in form instead of the link they clicked.
+  if (invite !== null) {
+    return (
+      <SetPassword
+        token={invite}
+        onDone={() => {
+          // Clear the token out of the address bar on the way to sign-in. It
+          // is spent, and leaving it in history or in a screenshot is a
+          // credential lying around for no reason.
+          window.history.replaceState({}, "", "/");
+          setInvite(null);
+        }}
+      />
+    );
   }
 
   if (checking) {

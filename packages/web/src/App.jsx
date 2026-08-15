@@ -3,6 +3,7 @@ import { socket } from "./socket.js";
 import { api, session } from "./api.js";
 import { Wordmark } from "./components/Mark.jsx";
 import Login from "./components/Login.jsx";
+import SetPassword from "./components/SetPassword.jsx";
 import ManagerDashboard from "./components/ManagerDashboard.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import AssociateView from "./components/AssociateView.jsx";
@@ -16,9 +17,18 @@ const VIEWS = {
 };
 const LABELS = { floor: "Floor", simulator: "Simulator" };
 
+/** The one path this app answers on other than `/`. Read once, before React
+ *  renders anything, because the answer cannot change without a navigation. */
+function invitedToken() {
+  if (typeof window === "undefined") return null;
+  if (!window.location.pathname.startsWith("/set-password")) return null;
+  return new URLSearchParams(window.location.search).get("token") || "";
+}
+
 export default function App() {
   const [user, setUser] = useState(session.user);
   const [checking, setChecking] = useState(Boolean(session.token));
+  const [invite, setInvite] = useState(invitedToken);
   const [view, setView] = useState("floor");
   const [connected, setConnected] = useState(socket.connected);
 
@@ -48,6 +58,23 @@ export default function App() {
     await api.logout();
     session.clear();
     setUser(null);
+  }
+
+  // Before the session check, not after. Somebody redeeming an invitation has
+  // no session by definition, and a stale token in this tab must not send them
+  // to a spinner or a sign-in form instead of the link they clicked.
+  if (invite !== null) {
+    return (
+      <SetPassword
+        token={invite}
+        onDone={() => {
+          // The token is spent. Leaving it in the address bar and in history
+          // is a credential lying around for no reason.
+          window.history.replaceState({}, "", "/");
+          setInvite(null);
+        }}
+      />
+    );
   }
 
   if (checking) return <div className="app-shell"><div className="empty">Checking your session…</div></div>;

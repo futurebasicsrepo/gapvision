@@ -2,6 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/here", "destination": "/index.html" }
+    {
+      "source": "/here",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/set-password",
+      "destination": "/index.html"
+    }
   ]
 }

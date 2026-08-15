@@ -70,6 +70,11 @@ export const api = {
   login: (email, password) =>
     request("/auth/login", { method: "POST", body: { email, password }, auth: false }),
   logout: () => request("/auth/logout", { method: "POST" }).catch(() => {}),
+  // `auth: false` on purpose. Whoever is redeeming an invite has no session
+  // — that is the entire situation — and sending a stale bearer token would
+  // make the request fail for a reason unrelated to the link.
+  setPassword: (token, password) =>
+    request("/auth/reset", { method: "POST", auth: false, body: { token, password } }),
   me: () => request("/auth/me"),
 
   // Cue staff aren't scoped to a retailer, so they name the tenant. Everyone
