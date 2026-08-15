@@ -1,7 +1,7 @@
 {
-  "$comment": "cuesea Brand & Identity System v3.0 (August 2026). CANONICAL. Every app's brand.css is generated from this file by `npm run brand:sync` — do not hand-edit the generated copies.",
-  "version": "3.0",
-  "updated": "2026-08-14",
+  "$comment": "cuesea Brand & Identity System v3.2 (August 2026). CANONICAL. Every app's brand.css is generated from this file by `npm run brand:sync` - do not hand-edit the generated copies. v3.2 adds the slate ramp: the product ground moves off sea-900 navy onto a neutral slate, which frees sea to mean measurement rather than background. Nothing was removed, so build-assets.py, build-plates.py and the Console Brand panel are unaffected.",
+  "version": "3.2",
+  "updated": "2026-08-15",
   "ramps": [
     {
       "key": "sea",
@@ -91,8 +91,8 @@
     {
       "key": "hud",
       "name": "HUD",
-      "role": "The cue inside the glass. Device-fixed, monochrome-safe on the G2's 576×288 display.",
-      "rule": "hud green never touches a light ground. Not a border, not an underline, not a chart series. It exists in the lens and nowhere else.",
+      "role": "The product's own voice. Born in the glass; now also carries the interfaces that speak for it.",
+      "rule": "hud green never touches a light ground. On dark it marks what the product itself says - the cue in the lens, a cue quoted back in Studio, and the HUD chrome of a nav. It is never a measurement: a passing check, a chart series or a bar is sea, because a wall of green ticks trains you to stop reading them.",
       "steps": [
         {
           "token": "--hud-500",
@@ -155,6 +155,49 @@
           "token": "--paper",
           "hex": "#FBF9F5",
           "note": "primary light ground"
+        }
+      ]
+    },
+    {
+      "key": "slate",
+      "name": "Slate",
+      "role": "The product ground. Neutral, so sea can mean measurement instead of background.",
+      "rule": "slate-800 is the ground and slate-100 the type on it. Never put slate-300 or lighter on slate-700 or lighter - it falls under 4.5:1.",
+      "steps": [
+        {
+          "token": "--slate-900",
+          "hex": "#141920",
+          "note": "gradient floor"
+        },
+        {
+          "token": "--slate-800",
+          "hex": "#1A2029",
+          "note": "the product ground"
+        },
+        {
+          "token": "--slate-700",
+          "hex": "#222833",
+          "note": "raised surface"
+        },
+        {
+          "token": "--slate-600",
+          "hex": "#2F3540",
+          "note": "structural line"
+        },
+        {
+          "token": "--slate-300",
+          "hex": "#7E858D",
+          "note": "muted type, 4.6:1 on slate-800"
+        },
+        {
+          "token": "--slate-200",
+          "hex": "#A5ABB3",
+          "note": "secondary type, 7.4:1"
+        },
+        {
+          "token": "--slate-100",
+          "hex": "#F6F6F4",
+          "note": "body type on the ground, 14.8:1"
         }
       ]
     }
@@ -321,22 +364,44 @@
   "surfaces": {
     "studio": {
       "label": "Cue Studio / Cue Console",
-      "note": "Sea-toned dense UI. Plex Mono for all identifiers, the depth ramp for every chart.",
+      "note": "Slate-grounded dense UI. Plex Mono for all identifiers, the depth ramp for every measurement, flame for the one thing per region that wants attention.",
       "selectors": [
         ".studio",
         ".console",
         ".app-shell"
       ],
       "vars": {
-        "--ground": "var(--sea-900)",
-        "--card": "var(--sea-800)",
-        "--edge": "rgba(143, 199, 240, 0.14)",
-        "--edge-strong": "rgba(143, 199, 240, 0.26)",
-        "--text": "var(--paper)",
-        "--text-secondary": "var(--sea-100)",
-        "--text-muted": "#7FA3C4",
+        "--ground": "var(--slate-800)",
+        "--card": "var(--slate-700)",
+        "--edge": "rgba(255, 255, 255, 0.075)",
+        "--edge-strong": "rgba(255, 255, 255, 0.14)",
+        "--text": "var(--slate-100)",
+        "--text-secondary": "var(--slate-200)",
+        "--text-muted": "var(--slate-300)",
         "--accent": "var(--sea-300)",
-        "--cue": "var(--flame)"
+        "--cue": "var(--flame)",
+        "--lens": "var(--hud-500)",
+        "--lens-dim": "var(--hud-300)"
+      }
+    },
+    "glass": {
+      "label": "The glass material",
+      "note": "Blur on exactly two surfaces - the topbar and the rail. Blur on a scrolling list is what janks a mid-range Android, so panels that scroll use --pane-solid.",
+      "selectors": [
+        ".studio",
+        ".console",
+        ".app-shell"
+      ],
+      "vars": {
+        "--pane-bg": "linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.022))",
+        "--pane-solid": "linear-gradient(180deg, #252C37, #1C222B)",
+        "--pane-edge": "rgba(255, 255, 255, 0.11)",
+        "--pane-lift": "inset 0 1px 0 rgba(255,255,255,.24), 0 16px 48px rgba(0,0,0,.32)",
+        "--hair": "rgba(255, 255, 255, 0.075)",
+        "--blur": "blur(26px) saturate(180%)",
+        "--r-pane": "20px",
+        "--r-card": "16px",
+        "--r-ctl": "12px"
       }
     }
   }
