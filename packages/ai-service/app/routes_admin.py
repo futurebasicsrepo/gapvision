@@ -817,6 +817,24 @@ def _platform_checks() -> list[dict]:
     return checks
 
 
+@router.get("/retention")
+def get_retention(authorization: str | None = BearerHeader):
+    """Every tenant's window, and what the last sweep actually deleted.
+
+    The Health panel hard-codes retention to warn because days are stored and,
+    until a sweep has run, nothing has acted on them. That warn is correct and
+    it is also a dead end — there is nowhere to go and see which store is
+    behind. This is that place.
+    """
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    return {
+        "default_days": retention.DEFAULT_DAYS,
+        "summary": retention.status(),
+        "tenants": retention.detail(),
+    }
+
+
 @router.post("/retention/run")
 def run_retention(authorization: str | None = BearerHeader):
     """Sweep now, rather than waiting for the timer.
