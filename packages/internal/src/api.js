@@ -115,6 +115,10 @@ export const api = {
   devices: (tenant) => request(`/api/admin/devices?tenant=${encodeURIComponent(tenant)}`),
   updateDevice: (id, body) => request(`/api/admin/devices/${id}`, { method: "PATCH", body }),
 
+  // --- retention ------------------------------------------------------------
+  retention: () => request("/api/admin/retention"),
+  runRetention: () => request("/api/admin/retention/run", { method: "POST" }),
+
   // --- plates ---------------------------------------------------------------
   // These live on a second APIRouter in routes_guest.py that also mounts at
   // /api/analytics, so grepping the source for "analytics/plates" finds

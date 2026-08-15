@@ -201,6 +201,40 @@ def sweep_all() -> list[dict[str, Any]]:
     return [sweep(t) for t in tenants]
 
 
+def detail() -> list[dict[str, Any]]:
+    """Every tenant's window and its most recent sweep — for the Console panel.
+
+    `status()` deliberately reports only the worst tenant, because a health
+    check that names the newest sweep looks green while one store silently
+    goes unswept for a month. A panel has the opposite job: it has to show all
+    of them, so the one that is behind can be seen next to the ones that are
+    not. Same NULLS FIRST ordering, for the same reason — never-swept sorts to
+    the top, where it cannot be missed.
+    """
+    if not db.configured():
+        return []
+    return db.query(
+        """
+        SELECT t.slug, t.name,
+               COALESCE(NULLIF(t.privacy->>'retention_days', '')::int, %s)
+                   AS retention_days,
+               r.ran_at AS last_run,
+               r.voice_redacted, r.engagements_redacted,
+               r.assists_redacted, r.requests_redacted, r.more_remaining
+          FROM tenants t
+     LEFT JOIN LATERAL (
+               SELECT * FROM retention_runs rr
+                WHERE rr.tenant_id = t.id
+             ORDER BY rr.ran_at DESC
+                LIMIT 1
+               ) r ON true
+         WHERE t.status <> 'archived'
+      ORDER BY r.ran_at ASC NULLS FIRST, t.slug ASC
+        """,
+        (DEFAULT_DAYS,),
+    )
+
+
 def status() -> dict[str, Any]:
     """What retention has actually done — for /health and the platform checks.
 
