@@ -12,6 +12,13 @@ import "./index.css";
  * else is Cue Studio. A path check is enough for two routes and cheaper than
  * a dependency; if a third public route ever appears, that is the moment to
  * add one.
+ *
+ * `vercel.json` rewrites `/here` to this bundle. It is listed explicitly
+ * rather than as a catch-all so `/privacy.html` keeps being served as itself —
+ * and the note lives here rather than in that file because Vercel validates
+ * `vercel.json` against a schema that rejects unknown keys, including a
+ * comment. It rejected one, and the deploy failed with the page written and
+ * pushed.
  */
 const guest = location.pathname.replace(/\/+$/, "") === "/here";
 

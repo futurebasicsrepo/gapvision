@@ -2,10 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "rewrites": [
-    {
-      "//": "The guest check-in page. A single-page bundle with no router, so the path has to reach index.html rather than 404 — and it is listed explicitly rather than catch-all so /privacy.html keeps being served as itself.",
-      "source": "/here",
-      "destination": "/index.html"
-    }
+    { "source": "/here", "destination": "/index.html" }
   ]
 }
