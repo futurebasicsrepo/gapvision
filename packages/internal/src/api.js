@@ -109,11 +109,22 @@ export const api = {
     request(`/api/admin/tenants/${encodeURIComponent(slug)}/crm`, { method: "DELETE" }),
 
   // --- people and hardware --------------------------------------------------
+  // Staff have no tenant, so they are unreachable through /users - that route
+  // is tenant-scoped by construction and would have to be weakened to see them.
+  staff: () => request("/api/admin/staff"),
+  createStaff: (body) => request("/api/admin/users", { method: "POST", body: { ...body, role: "cue_admin" } }),
   users: (tenant) => request(`/api/admin/users?tenant=${encodeURIComponent(tenant)}`),
   createUser: (body) => request("/api/admin/users", { method: "POST", body }),
   updateUser: (id, body) => request(`/api/admin/users/${id}`, { method: "PATCH", body }),
+  // Invites landed with the mailbox. Resend covers the two real cases: the
+  // first one expired (a week), and it went to a typo'd address.
+  resendInvite: (id) => request(`/api/admin/users/${id}/invite`, { method: "POST" }),
   devices: (tenant) => request(`/api/admin/devices?tenant=${encodeURIComponent(tenant)}`),
   updateDevice: (id, body) => request(`/api/admin/devices/${id}`, { method: "PATCH", body }),
+
+  // --- retention ------------------------------------------------------------
+  retention: () => request("/api/admin/retention"),
+  runRetention: () => request("/api/admin/retention/run", { method: "POST" }),
 
   // --- plates ---------------------------------------------------------------
   // These live on a second APIRouter in routes_guest.py that also mounts at

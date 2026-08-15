@@ -326,6 +326,27 @@ def list_users(tenant: str | None = None, authorization: str | None = BearerHead
     return {"users": [identity.public_user(r) for r in rows]}
 
 
+@router.get("/staff")
+def list_staff(authorization: str | None = BearerHeader):
+    """Cue staff — the accounts with no tenant.
+
+    Its own route rather than a flag on /users, deliberately. That endpoint is
+    manager-and-up and tenant-scoped by construction: scope_tenant() refuses a
+    cue_admin who names no tenant, and the query filters on tenant_id. Teaching
+    it to return rows outside a tenant would put a hole in the one function
+    every other read in this file depends on, to save a route.
+    """
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    rows = db.query(
+        """
+        SELECT id, tenant_id, email, name, role, status, created_at, last_login_at
+          FROM users WHERE tenant_id IS NULL ORDER BY name
+        """
+    )
+    return {"staff": [identity.public_user(r) for r in rows]}
+
+
 @router.post("/users", status_code=201)
 def create_user(req: UserCreate, authorization: str | None = BearerHeader):
     me = current_user(authorization)
@@ -794,6 +815,24 @@ def _platform_checks() -> list[dict]:
                 "before dropping CUE_CRED_KEY_OLD",
             ))
     return checks
+
+
+@router.get("/retention")
+def get_retention(authorization: str | None = BearerHeader):
+    """Every tenant's window, and what the last sweep actually deleted.
+
+    The Health panel hard-codes retention to warn because days are stored and,
+    until a sweep has run, nothing has acted on them. That warn is correct and
+    it is also a dead end — there is nowhere to go and see which store is
+    behind. This is that place.
+    """
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    return {
+        "default_days": retention.DEFAULT_DAYS,
+        "summary": retention.status(),
+        "tenants": retention.detail(),
+    }
 
 
 @router.post("/retention/run")

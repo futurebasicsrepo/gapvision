@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, compact, when } from "../api.js";
+import { api, compact, when, session, ApiError } from "../api.js";
 
 /**
  * Tenants, their people, their hardware, and what they've used.
@@ -132,9 +132,11 @@ function AddUser({ tenant, onDone, onCancel }) {
         </label>
       </div>
       <p className="meta" style={{ marginTop: 8, lineHeight: 1.5 }}>
-        There's no invite flow yet, so a blank password means this person can't
-        sign in until you come back and set one. Until that ships, type one here
-        and hand it over out of band.
+        Leave the password blank and they get an invite by email — a single-use
+        link that expires in a week, which is long enough to survive a weekend.
+        Typing one here instead means handing a credential over out of band,
+        which trains people to accept passwords through channels that should
+        never carry them. Prefer the invite.
       </p>
       <div className="btn-row" style={{ marginTop: 12 }}>
         <button className="btn primary" type="submit" disabled={busy || !form.email || !form.name}>
@@ -515,23 +517,11 @@ function TenantDetail({ tenant, onChanged }) {
           <div className="table-wrap">
             <table className="table">
               <thead>
-                <tr><th>Name</th><th>Role</th><th>Status</th><th>Last seen</th></tr>
+                <tr><th>Name</th><th>Role</th><th>Status</th><th>Last seen</th><th></th></tr>
               </thead>
               <tbody>
                 {users.map((u) => (
-                  <tr key={u.id}>
-                    <td>
-                      <div>{u.name}</div>
-                      <div className="ident" style={{ fontSize: 11 }}>{u.email}</div>
-                    </td>
-                    <td><span className="pill muted">{u.role.replace("_", " ")}</span></td>
-                    <td>
-                      {u.status === "active"
-                        ? <span className="meta">active</span>
-                        : <span className="pill flame">disabled</span>}
-                    </td>
-                    <td className="meta mono">{when(u.last_login_at)}</td>
-                  </tr>
+                  <PersonRow key={u.id} user={u} onChange={load} onError={setError} />
                 ))}
               </tbody>
             </table>
@@ -767,5 +757,103 @@ export default function Tenants() {
 
       {selected && <TenantDetail tenant={selected} onChanged={load} />}
     </div>
+  );
+}
+
+
+/**
+ * One person, operable.
+ *
+ * The API has been able to change a role, disable an account and resend an
+ * invite for a while; the Console could only create people, so in practice
+ * those things were done with curl or not at all. A permission model you
+ * cannot operate is a permission model you do not have.
+ *
+ * The role list is capped at the operator's own rank. The server enforces
+ * this too - it refuses to grant a role above your own - but offering a
+ * choice that will be rejected teaches people the UI is lying to them.
+ *
+ * Disabling is the incident control, so the confirm says the part that makes
+ * it worth pressing: it ends live sessions immediately rather than waiting
+ * for a token to expire.
+ */
+const ROLES = ["associate", "manager", "client_admin", "cue_admin"];
+
+export function PersonRow({ user, onChange, onError }) {
+  const me = session.user;
+  const myRank = ROLES.indexOf(me?.role || "associate");
+  const grantable = ROLES.filter((r) => ROLES.indexOf(r) <= myRank);
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const disabled = user.status === "disabled";
+  const isMe = me && (me.id === user.id || me.email === user.email);
+
+  async function run(fn) {
+    setBusy(true);
+    try { await fn(); onChange(); }
+    catch (e) { onError(e instanceof ApiError ? e.message : String(e)); }
+    finally { setBusy(false); }
+  }
+
+  const setRole = (role) => {
+    if (role === user.role) return;
+    run(() => api.updateUser(user.id, { role }));
+  };
+
+  const toggle = () => {
+    const next = disabled ? "active" : "disabled";
+    if (next === "disabled" && !window.confirm(
+      `Disable ${user.name}?\n\n` +
+      `Every live session of theirs ends immediately — this does not wait for ` +
+      `a token to expire. They keep their history and can be re-enabled.`
+    )) return;
+    run(() => api.updateUser(user.id, { status: next }));
+  };
+
+  const invite = () => run(async () => {
+    await api.resendInvite(user.id);
+    setSent(true);
+    setTimeout(() => setSent(false), 4000);
+  });
+
+  return (
+    <tr className={disabled ? "row-muted" : ""}>
+      <td>
+        <div>{user.name}{isMe ? <span className="meta"> · you</span> : null}</div>
+        <div className="ident" style={{ fontSize: 11 }}>{user.email}</div>
+      </td>
+      <td>
+        {isMe || grantable.length <= 1 ? (
+          <span className="pill muted">{user.role.replace("_", " ")}</span>
+        ) : (
+          <select className="input-inline" value={user.role} disabled={busy}
+                  onChange={(e) => setRole(e.target.value)}>
+            {grantable.map((r) => (
+              <option key={r} value={r}>{r.replace("_", " ")}</option>
+            ))}
+          </select>
+        )}
+      </td>
+      <td>
+        {disabled
+          ? <span className="pill flame">disabled</span>
+          : <span className="meta">active</span>}
+      </td>
+      <td className="meta mono">{when(user.last_login_at)}</td>
+      <td className="right">
+        <div className="btn-row" style={{ justifyContent: "flex-end", gap: 6 }}>
+          {!user.last_login_at && !disabled && (
+            <button className="btn small" onClick={invite} disabled={busy}>
+              {sent ? "sent" : "Invite"}
+            </button>
+          )}
+          {!isMe && (
+            <button className="btn small" onClick={toggle} disabled={busy}>
+              {disabled ? "Enable" : "Disable"}
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
   );
 }
