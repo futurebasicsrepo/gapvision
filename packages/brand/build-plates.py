@@ -12,26 +12,43 @@ Why a plate at all
 Every other way of knowing a guest is in a fitting room needs power, a mount,
 a calibration pass and a story about what it senses. **A plate is a beacon
 that costs eleven dollars and never needs a battery** — the zone is not
-inferred, it is printed on the thing and baked into the URL. Move the plate,
-the zone moves with it. Nothing in the store has to be told.
+inferred from a signal, it is a property of the object. Move the plate and the
+zone moves with it; the only thing that has to be told is the registry, and
+only if you move it somewhere it has never been.
 
 Two doors on one plate
 ----------------------
-The tap and the scan carry **different `src` values** (`nfc-plate`,
-`qr-plate`) on purpose. They are the same arrival, but they are not the same
-door, and after a month of real traffic `GET /api/analytics/doors` can answer
-which one people actually use — which is the question that decides whether the
-next hundred plates need tags in them at all.
+The tap and the scan carry **different tokens**, resolving to different
+sources (`nfc-plate`, `qr-plate`). They are the same arrival and not the same
+door: after a month of real traffic `GET /api/analytics/doors` answers which
+one people actually use — the question that decides whether the next hundred
+plates need tags in them at all — and either can be switched off without
+touching the other.
 
-What is deliberately not on the plate
--------------------------------------
-No per-plate secret and no plate id. A public URL on a wall is copyable by
-anyone who photographs it, and a signature would not change that — it would
-only add a key to manage and a reprint whenever it rotated. What bounds the
-damage is elsewhere and already built: presence expires on its own, the
-check-in page requires the guest to identify themselves, and a plate that has
-been abused is retired by changing its zone slug and reprinting one plate.
-That costs eleven dollars, which is the whole point of the format.
+What the plate says, and what it deliberately does not
+------------------------------------------------------
+The URL is a token: `?p=K7QX3MZP2A9F`. Nothing about the store is legible in
+it — not the tenant, not the zone vocabulary, not that there is a `src` field
+worth editing — and it resolves server-side or not at all.
+
+That is a reversal. When these shipped this morning the URL was readable and
+this file argued that a plate id "would only add a key to manage". It adds
+**revocation**, which is the thing that matters: one leaked token is one row
+and one eleven-dollar reprint, and the tag six inches above the QR keeps
+working because the two doors carry different tokens.
+
+What a token still cannot do is make a printed code unshareable. Anything
+printed can be photographed, and the photograph carries the token — it is a
+bearer credential for as long as it is on the wall. The only mechanism that
+ends sharing on the tap door is a tag that emits a *different* URL every read
+(NTAG 424 DNA and equivalents, which append a counter and a CMAC); the service
+verifies those, and a printed QR cannot rotate by physics. For the QR the
+honest mitigations are the ones already here: revoke and reprint, a short
+presence TTL, and `GET /api/analytics/plates` making a token used far harder
+than a fitting room could plausibly be used *visible* rather than silent.
+
+Tokens are inert until registered. `register.json` is written beside the
+artwork; nothing resolves before it is posted.
 
 The one thing that can go wrong on the wall
 -------------------------------------------
@@ -45,6 +62,7 @@ import argparse
 import importlib.util
 import json
 import re
+import secrets
 import sys
 import textwrap
 from pathlib import Path
@@ -228,8 +246,14 @@ def qr_svg(url: str, side: float, x: float, y: float,
                     f'y="{y + (quiet + r) * module:.4f}" '
                     f'width="{(c - run) * module:.4f}" height="{module:.4f}"/>')
                 run = None
+    # `crispEdges` turns off anti-aliasing for the modules. Without it a
+    # module boundary that lands mid-pixel renders as a grey seam whose
+    # position depends on the token — which showed up as roughly one plate in
+    # six failing to decode from its own proof, varying by token, which is
+    # exactly the kind of fault that reaches a print run.
     return (f'<rect x="{x:.3f}" y="{y:.3f}" width="{side:.3f}" height="{side:.3f}" '
-            f'fill="{light}"/>\n  <g fill="{dark}">' + "".join(cells) + "</g>"), n, module
+            f'fill="{light}"/>\n  <g fill="{dark}" shape-rendering="crispEdges">'
+            + "".join(cells) + "</g>"), n, module
 
 
 def nested(svg: str, x: float, y: float, w: float) -> str:
@@ -400,6 +424,8 @@ def install_svg(*, W: float, H: float, store: str, zone_label: str,
     y = step("1", "Write the tag.", [
         "NTAG213 or NTAG215, a single URL record. The URL is printed below and",
         "is also in write-tags.txt, which is there so nobody types it by hand.",
+        "It carries a token, not the room name — so it is worth exactly as much",
+        "as it is hard to copy, and step 2 is what makes that hard.",
     ], y)
     y = step("2", "Lock the tag. This is not optional.", [
         "An unlocked tag on a public wall can be rewritten by anyone who walks",
@@ -437,8 +463,13 @@ def install_svg(*, W: float, H: float, store: str, zone_label: str,
             out.append(text(ln, em=3.5, x=M, y=y, fill=INK, limit=col))
             y += 4.6
         y += 2.0
-    out.append(text("The src values differ on purpose — it is how we learn which "
-                    "door people use.", em=3.3, x=M, y=y, fill=INK_500, limit=col))
+    out.append(text("Different tokens on purpose: the tap and the scan are "
+                    "different doors, and either", em=3.3, x=M, y=y,
+                    fill=INK_500, limit=col))
+    y += 4.4
+    out.append(text("can be switched off without touching the other. Neither "
+                    "resolves until registered.", em=3.3, x=M, y=y,
+                    fill=INK_500, limit=col))
 
     # 1:1 registration.
     ry = PH - M - 6.0 - ring_r
@@ -483,6 +514,35 @@ def known_sources() -> set[str] | None:
         print(f"  ! could not read the source registry ({exc.__class__.__name__}); "
               f"skipping the door check", file=sys.stderr)
         return None
+
+
+def register(service_url: str, payload: dict) -> None:
+    """Tell the service what was printed.
+
+    The key comes from the environment and is never written to disk beside the
+    artwork — a folder of print files should be safe to hand to a print shop.
+    """
+    import json as _json
+    import os as _os
+    import urllib.request
+
+    key = _os.environ.get("GAPVISION_API_KEY")
+    if not key:
+        sys.exit("GAPVISION_API_KEY is not set, so the plates cannot be "
+                 "registered. Print files are written; register them later "
+                 "with register.json.")
+    req = urllib.request.Request(
+        service_url.rstrip("/") + "/api/ingest/plates",
+        data=_json.dumps(payload).encode(),
+        headers={"content-type": "application/json", "x-gapvision-key": key},
+        method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            n = len(_json.loads(r.read()).get("plates", []))
+        print(f"  registered {n} token(s) with {service_url}")
+    except Exception as e:
+        sys.exit(f"Could not register the plates ({e}). The artwork is written; "
+                 f"register.json can be posted later.")
 
 
 def check_base(url: str) -> None:
@@ -530,6 +590,23 @@ class _Redirected(Exception):
     pass
 
 
+#: Crockford-style: no I, L, O, U. A token gets read aloud down a phone line to
+#: a store manager and typed onto an installation sheet, and every pair those
+#: letters form is a support call. Must match `app/plates.py`.
+ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+TOKEN_LEN = 12
+
+
+def new_token() -> str:
+    """Random, never derived from the zone.
+
+    A token derived from "fitting-room-3" leaks the zone the moment somebody
+    notices the pattern, which is the thing printing a token was meant to stop.
+    `secrets`, not `random` — this is a bearer credential on a wall.
+    """
+    return "".join(secrets.choice(ALPHABET) for _ in range(TOKEN_LEN))
+
+
 def slugify(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
 
@@ -543,6 +620,15 @@ def main() -> None:
                     help="repeatable; the human label, e.g. 'Fitting room 3'")
     ap.add_argument("--base", default="https://app.cuesea.ai/here",
                     help="the check-in page the plate points at")
+    ap.add_argument("--readable", action="store_true",
+                    help="print the old ?t=&z=&src= URL instead of a token "
+                         "(the demo harness; a photograph of it is a map of "
+                         "the store)")
+    ap.add_argument("--register", metavar="AI_SERVICE_URL",
+                    help="register the minted tokens immediately; needs "
+                         "GAPVISION_API_KEY in the environment")
+    ap.add_argument("--register-url-hint", default="$AI_SERVICE/api/ingest/plates",
+                    help=argparse.SUPPRESS)
     ap.add_argument("--skip-url-check", action="store_true",
                     help="print without asking the URL whether it answers")
     ap.add_argument("--size", choices=sorted(SIZES), default="a6")
@@ -559,8 +645,10 @@ def main() -> None:
                      f"app/presence.py SOURCES before printing anything.")
 
     if not args.skip_url_check:
-        check_base(f"{args.base}?" + urlencode(
-            {"t": args.tenant, "z": "plate-check", "src": "qr-plate"}))
+        # Ask the *page* whether it exists, with no token: an unregistered
+        # token would 404 for the right reason and tell us nothing about
+        # whether the route is reachable at all.
+        check_base(args.base)
 
     W, H = SIZES[args.size]
     store = args.store or args.tenant.title()
@@ -572,9 +660,18 @@ def main() -> None:
     ]
     for label in args.zone:
         slug = slugify(label)
+        # One token per door, not one per plate. It keeps `src` out of the URL
+        # entirely — a guest cannot claim to have tapped when they scanned —
+        # and a QR that ends up on the internet can be killed without
+        # disabling the tag six inches above it.
+        tokens = {"nfc-plate": new_token(), "qr-plate": new_token()}
+
         def url(src: str) -> str:
-            return f"{args.base}?" + urlencode(
-                {"t": args.tenant, "z": slug, "src": src})
+            if args.readable:
+                return f"{args.base}?" + urlencode(
+                    {"t": args.tenant, "z": slug, "src": src})
+            return f"{args.base}?" + urlencode({"p": tokens[src]})
+
         nfc_url, qr_url = url("nfc-plate"), url("qr-plate")
 
         svg, modules, module_mm = plate_svg(
@@ -600,6 +697,7 @@ def main() -> None:
         tag_lines.append(f"{label}\t{nfc_url}")
         plates.append({
             "zone": label, "zone_slug": slug, "tenant": args.tenant,
+            "tokens": tokens,
             "size": args.size, "trim_mm": [W, H],
             "nfc_url": nfc_url, "qr_url": qr_url,
             "qr_modules": modules, "qr_module_mm": round(module_mm, 3),
@@ -610,6 +708,19 @@ def main() -> None:
               f"@ {module_mm:.2f}mm/module")
 
     (out_dir / "write-tags.txt").write_text("\n".join(tag_lines) + "\n")
+
+    # What the service needs in order to turn these tokens back into places.
+    # Until this is registered the plates resolve to nothing — which is the
+    # right failure: an unregistered token is inert rather than guessable.
+    registration = {
+        "tenant": args.tenant,
+        "plates": [] if args.readable else [
+            {"token": tok, "zone": p["zone_slug"], "source": src,
+             "label": f"{store} · {p['zone']}"}
+            for p in plates for src, tok in p["tokens"].items()
+        ],
+    }
+    (out_dir / "register.json").write_text(json.dumps(registration, indent=2) + "\n")
     (out_dir / "plates.json").write_text(json.dumps({
         "generated_from": "packages/brand/build-plates.py",
         "tokens_version": TOKENS.get("version"),
@@ -620,6 +731,16 @@ def main() -> None:
         "plates": plates,
     }, indent=2) + "\n")
     print(f"wrote {len(plates)} plate(s) to {out_dir}")
+    if not args.readable:
+        if args.register:
+            register(args.register, registration)
+        else:
+            print("\n  These tokens resolve to nothing until they are registered:\n"
+                  f"    curl -s -X POST {args.register_url_hint} \\\n"
+                  "      -H \"x-gapvision-key: $GAPVISION_API_KEY\" \\\n"
+                  "      -H 'content-type: application/json' \\\n"
+                  f"      -d @{out_dir / 'register.json'}\n"
+                  "  Or re-run with --register <ai-service-url>.")
 
 
 if __name__ == "__main__":

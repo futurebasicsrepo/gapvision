@@ -62,12 +62,25 @@ const zoneLabel = (slug) =>
 
 export default function CheckIn() {
   const params = useMemo(() => new URLSearchParams(location.search), []);
-  const tenant = params.get("t") || "gap";
-  const zone = params.get("z") || null;
-  // Passed through untouched. The tap and the scan are different doors and
-  // normalising them here would quietly destroy the only measurement that
-  // tells us whether the tags were worth paying for.
-  const src = params.get("src") || "qr-plate";
+  // The plate token. Opaque: it says nothing about the store, the zone or the
+  // door, and it resolves server-side or not at all. A photograph of a plate
+  // used to be a readable map of a shop's zone naming.
+  const plate = params.get("p");
+
+  // The old readable form. Still accepted, because the demo harness and the
+  // simulator drive it, and because a URL that has been printed once should
+  // never stop working without somebody deciding it should.
+  const [place, setPlace] = useState(() => plate ? null : {
+    tenant: params.get("t") || "gap",
+    zone: params.get("z") || null,
+    // Passed through untouched. The tap and the scan are different doors and
+    // normalising them here would quietly destroy the only measurement that
+    // tells us whether the tags were worth paying for.
+    source: params.get("src") || "qr-plate",
+  });
+  const tenant = place?.tenant || params.get("t") || "gap";
+  const zone = place?.zone ?? null;
+  const src = place?.source || "qr-plate";
 
   const [config, setConfig] = useState(null);
   const [stage, setStage] = useState("loading");
@@ -92,20 +105,51 @@ export default function CheckIn() {
     let live = true;
     (async () => {
       try {
-        const cfgRes = await fetch(
-          `${BASE}/api/checkin/config?t=${encodeURIComponent(tenant)}`);
-        const cfg = cfgRes.ok ? await cfgRes.json() : { mode: "web", needs: {} };
+        // One call when there is a token: it returns where the plate is *and*
+        // the retailer's check-in config, because a person is standing in a
+        // fitting room waiting and every round trip is a visible pause on a
+        // shop's guest wifi.
+        // Read from the URL, never from state: this effect must run exactly
+        // once, and depending on the place it sets would re-run it and check
+        // the same guest in twice.
+        let cfg, here = plate ? null : {
+          tenant: params.get("t") || "gap",
+          zone: params.get("z") || null,
+          source: params.get("src") || "qr-plate",
+        };
+        if (plate) {
+          const q = new URLSearchParams({ p: plate });
+          // A rotating-cryptogram tag appends these itself. Passed through
+          // untouched — they are the only thing that can tell a shared link
+          // from a real tap.
+          for (const k of ["counter", "cmac", "c", "e"]) {
+            const v = params.get(k);
+            if (v) q.set(k === "c" ? "counter" : k === "e" ? "cmac" : k, v);
+          }
+          const r = await fetch(`${BASE}/api/checkin/resolve?${q}`);
+          const body = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(body.detail || body.error || "This code isn't in use.");
+          if (!live) return;
+          here = { tenant: body.tenant, zone: body.zone, source: body.source };
+          setPlace(here);
+          cfg = body;
+        } else {
+          const cfgRes = await fetch(
+            `${BASE}/api/checkin/config?t=${encodeURIComponent(tenant)}`);
+          cfg = cfgRes.ok ? await cfgRes.json() : { mode: "web", needs: {} };
+        }
         if (!live) return;
         setConfig(cfg);
 
         await post("/api/presence", {
-          tenant, guest_ref: guestRef, zone, source: src,
+          tenant: here.tenant, guest_ref: guestRef, zone: here.zone,
+          source: here.source,
         });
         if (!live) return;
         setStage(cfg.mode === "app" && cfg.app_link ? "handoff" : "ask");
 
         const cat = await fetch(
-          `${BASE}/api/catalogue?t=${encodeURIComponent(tenant)}`);
+          `${BASE}/api/catalogue?t=${encodeURIComponent(here.tenant)}`);
         if (!live || !cat.ok) return;
         const data = await cat.json();
         setProducts(data.products || []);
@@ -115,7 +159,7 @@ export default function CheckIn() {
       }
     })();
     return () => { live = false; };
-  }, [tenant, zone, src, guestRef]);
+  }, [plate, guestRef, params]);
 
   const appHref = config?.app_link
     ? config.app_link

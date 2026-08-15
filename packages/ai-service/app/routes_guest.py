@@ -16,7 +16,7 @@ Three things a check-in page needs and could not previously get:
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import catalogue, db, identity
+from . import catalogue, db, identity, plates
 from . import requests as guest_requests
 from .auth import KeyHeader, guard
 from .identity import BearerHeader, current_user, require, scope_tenant
@@ -82,6 +82,28 @@ def guest_config(tenant: str, request: Request,
         "fell_back": fell_back,
         "needs": guest_requests.NEEDS,
     }
+
+
+@guest.get("/plate")
+def guest_plate(token: str, request: Request, counter: str | None = None,
+                cmac: str | None = None, x_gapvision_key: str | None = KeyHeader):
+    """A printed token, back into a place — plus everything the page needs.
+
+    One call rather than three: the page has a person standing in a fitting
+    room waiting for it, and each round trip is a visible pause on a shop's
+    guest wifi.
+
+    `counter` and `cmac` are what a rotating-cryptogram tag appends to its URL
+    on every tap. They are the only mechanism here that can tell a shared link
+    from a real one — see plates.py.
+    """
+    guard(request, None, x_gapvision_key)
+    place = plates.resolve(token, counter=counter, cmac=cmac)
+    t = _tenant(place["tenant"])
+    return {**guest_config(place["tenant"], request, x_gapvision_key),
+            "zone": place["zone"], "source": place["source"],
+            "label": place["label"], "token": place["token"],
+            "tenant": t["slug"]}
 
 
 @guest.get("/catalogue")
@@ -182,7 +204,73 @@ def ingest_open_requests(tenant: str, request: Request, zone: str | None = None,
     } for r in rows]}
 
 
+class PlateIn(BaseModel):
+    zone: str | None = None
+    source: str
+    label: str | None = None
+    token: str | None = None
+
+
+class PlatesIn(BaseModel):
+    tenant: str
+    plates: list[PlateIn]
+
+
+@ingest.post("/plates", status_code=201)
+def ingest_plates(req: PlatesIn, request: Request,
+                  x_gapvision_key: str | None = KeyHeader):
+    """Register printed plates.
+
+    Idempotent on the token, so re-running a registration after a reprint is
+    safe and un-revokes a plate that is being put back into service.
+    """
+    guard(request, None, x_gapvision_key)
+    t = _tenant(req.tenant)
+    return {"ok": True, "plates": [
+        plates.mint(t, zone=p.zone, source=p.source, label=p.label, token=p.token)
+        for p in req.plates]}
+
+
 # --- what the floor asked for, for a manager ---------------------------------
+@router.get("/plates")
+def get_plates(tenant: str | None = None, authorization: str | None = BearerHeader):
+    """Every plate in a store, and how hard each is being used.
+
+    `hits_last_hour` is the shared-token signal. Not an alarm: a fitting room
+    is busy on a Saturday. A fitting room is not busy at three in the morning.
+    """
+    me = current_user(authorization)
+    require(me, "manager")
+    tenant_id = scope_tenant(me, tenant)
+    t = db.query_one("SELECT * FROM tenants WHERE id = %s", (tenant_id,))
+    if t is None:
+        raise HTTPException(status_code=404, detail="Unknown tenant")
+    rows = plates.listing(t["id"])
+    return {"tenant": t["slug"], "busy_over": plates.BUSY_HOUR,
+            "plates": rows,
+            "busy": [r["token"] for r in rows
+                     if (r["hits_last_hour"] or 0) > plates.BUSY_HOUR]}
+
+
+@router.post("/plates/{token}/revoke")
+def revoke_plate(token: str, tenant: str | None = None,
+                 authorization: str | None = BearerHeader):
+    """Kill one door on one plate.
+
+    Deliberately not both: when a photograph of the QR ends up somewhere it
+    should not, the tag six inches above it is still fine, and disabling it
+    would cost a store its fitting room for no reason.
+    """
+    me = current_user(authorization)
+    require(me, "manager")
+    tenant_id = scope_tenant(me, tenant)
+    t = db.query_one("SELECT * FROM tenants WHERE id = %s", (tenant_id,))
+    if t is None:
+        raise HTTPException(status_code=404, detail="Unknown tenant")
+    return plates.revoke(t, token)
+
+
+
 @router.get("/requests")
 def get_requests(days: int = 7, tenant: str | None = None,
                  authorization: str | None = BearerHeader):

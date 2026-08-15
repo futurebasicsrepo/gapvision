@@ -4,14 +4,39 @@ The page a plate points at, and the only surface in this product a customer
 ever touches. Built: `packages/web/src/CheckIn.jsx`, served at `/here`.
 
 ```
-https://cuesea.ai/here?t=gap&z=fitting-room-3&src=nfc-plate
+https://app.cuesea.ai/here?p=K7QX3MZP2A9F
 ```
 
-| Param | What it is | Trust it? |
-|---|---|---|
-| `t` | tenant slug | Yes — it only selects which retailer's world this is. |
-| `z` | zone slug | Yes. The zone is printed on the plate and baked into its URL. An acrylic plate in fitting room three *is* the beacon for fitting room three. |
-| `src` | `nfc-plate` (tapped) or `qr-plate` (scanned) | Pass it through unchanged. Never default it, never rewrite it — the two doors are how we learn whether the tags were worth paying for. |
+**The URL is a token.** Nothing about the store is legible in it — not the
+tenant, not the zone vocabulary, not that there was ever a `src` field worth
+editing — and it resolves server-side or not at all. One token per *door*, so
+the tap and the scan are different tokens: a guest cannot claim the tap door,
+and a QR that ends up on the internet can be killed without disabling the tag
+six inches above it.
+
+### What a token buys, and what it does not
+
+Buys: nothing readable, nothing editable, per-door revocation, and a leaked
+plate costing eleven dollars rather than an incident.
+
+Does not buy: **unshareability.** Anything printed can be photographed, and the
+photograph carries the token — it is a bearer credential for as long as it is
+on the wall. The only mechanism that ends sharing on the *tap* door is a tag
+that emits a different URL every read (NTAG 424 DNA and equivalents, which
+append a counter and a CMAC); `plates.check_sun()` verifies those and refuses a
+replayed counter. A printed QR cannot rotate, by physics. Its honest
+mitigations are revocation, the short presence TTL, and
+`GET /api/analytics/plates` making a token used far harder than a fitting room
+plausibly could be *visible* rather than silent.
+
+Tokens are inert until registered — `register.json` is written beside the
+artwork, and nothing resolves before it is posted.
+
+### The readable form, still accepted
+
+`?t=gap&z=fitting-room-3&src=nfc-plate` still works. The demo harness drives
+it, and a URL that has been printed once should not stop working because
+somebody decided it was untidy. It is not what gets printed any more.
 
 ---
 
@@ -78,6 +103,7 @@ A browser never holds the service key. Every call below is open; the realtime
 server holds the key and calls the AI service.
 
 ```
+GET  /api/checkin/resolve?p=TOKEN     → { tenant, zone, source, mode, app_link, needs }
 GET  /api/checkin/config?t=gap        → { mode, app_link, app_name, needs }
 GET  /api/catalogue?t=gap             → { products: [{sku, name, sizes:[{size, available}]}] }
 POST /api/presence                    → { ok, zone, consent, delivered, identified }
@@ -141,9 +167,9 @@ about a shopper.
 ## Running it
 
 ```bash
-# make plates
+# make plates — mints a token per door, writes register.json beside the artwork
 python3 packages/brand/build-plates.py --tenant gap --store "Gap" \
-    --zone "Fitting room 3"
+    --zone "Fitting room 3" --register https://ai-service…up.railway.app
 
 # the whole path, in a real browser: tap → check in → ask → glasses
 node packages/web/test/checkin-browser.mjs

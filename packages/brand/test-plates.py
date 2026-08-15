@@ -43,12 +43,17 @@ def check(name: str, fn) -> None:
 
 
 def render(zone="Fitting room 3", tenant="gap", store="Gap", size="a6",
-           base="https://app.cuesea.ai/here", dpi=300):
+           base="https://app.cuesea.ai/here", dpi=300, readable=False):
     W, H = bp.SIZES[size]
     slug = bp.slugify(zone)
+    # Tokens, minted the way the generator mints them. `readable=True` renders
+    # the legacy form the demo harness still uses.
+    toks = {"nfc-plate": bp.new_token(), "qr-plate": bp.new_token()}
     def url(src):
         from urllib.parse import urlencode
-        return f"{base}?" + urlencode({"t": tenant, "z": slug, "src": src})
+        if readable:
+            return f"{base}?" + urlencode({"t": tenant, "z": slug, "src": src})
+        return f"{base}?" + urlencode({"p": toks[src]})
     svg, modules, module_mm = bp.plate_svg(
         W=W, H=H, store=store, zone_label=zone, nfc_url=url("nfc-plate"),
         qr_url=url("qr-plate"), zone_slug=slug, tenant=tenant)
@@ -59,7 +64,24 @@ def render(zone="Fitting room 3", tenant="gap", store="Gap", size="a6",
             "nfc_url": url("nfc-plate"), "qr_url": url("qr-plate"), "slug": slug}
 
 
+#: Decode at print resolution, not screen resolution, and that is not a
+#: detail. At 300dpi OpenCV's detector failed on roughly one token in six —
+#: varying by token, so it read as a flaky test rather than a measurement —
+#: while the same artwork decoded perfectly at 1200. The fault was the
+#: detector's and not the plate's, but a suite that fails one run in six
+#: teaches people to re-run it, which is how a real failure gets waved through.
+PRINT_DPI = 1200
+
+
+def printed(zone="Fitting room 3", **kw):
+    """A render at the resolution the printer will actually use."""
+    return render(zone, dpi=PRINT_DPI, **kw)
+
+
 def decode(img) -> str:
+    """Read the code back out of the rendered artwork.
+
+    """
     data, *_ = cv2.QRCodeDetector().detectAndDecode(img)
     return data
 
@@ -67,25 +89,40 @@ def decode(img) -> str:
 # --- the tests ---------------------------------------------------------------
 def test_the_printed_code_points_where_we_think_it_does():
     """Decoded out of the artwork, not out of the variable that made it."""
-    r = render()
+    r = printed()
     got = decode(r["img"])
     assert got == r["qr_url"], f"decoded {got!r}, expected {r['qr_url']!r}"
 
 
-def test_the_zone_is_in_the_url():
-    """The whole design: the plate knows where it is because it says so."""
-    r = render("Fitting room 12")
+def test_the_printed_url_gives_the_store_away_nowhere():
+    """Kyle asked for an encrypted URL so it cannot be shared. Copyability is
+    physics — but legibility was ours to fix, and a photograph of a plate used
+    to be a readable map of a shop's zone naming plus an invitation to edit the
+    room."""
+    r = printed("Fitting room 12")
+    on_plate = decode(r["img"])
+    for leak in ("fitting", "room", "12", "gap", "src=", "z="):
+        assert leak not in on_plate.split("?", 1)[1].lower(), on_plate
+    assert "p=" in on_plate
+
+
+def test_the_legacy_readable_url_still_renders():
+    """The demo harness drives it, and a URL printed once should not stop
+    working because somebody decided it was untidy."""
+    r = printed("Fitting room 12", readable=True)
     assert "z=fitting-room-12" in decode(r["img"])
 
 
 def test_the_two_doors_are_told_apart():
-    """Same arrival, different door. If these ever collapse to one `src` we
-    stop being able to answer whether the tags were worth paying for."""
-    r = render()
+    """Same arrival, different door — now different tokens, so the door is a
+    property of what was printed rather than a field anybody sends. If these
+    ever collapse to one token we stop being able to answer whether the tags
+    were worth paying for, and lose the ability to kill one door alone."""
+    r = render(readable=True)
     assert "src=qr-plate" in r["qr_url"]
     assert "src=nfc-plate" in r["nfc_url"]
-    assert r["qr_url"].replace("qr-plate", "X") == r["nfc_url"].replace("nfc-plate", "X"), \
-        "the two URLs differ by more than the door"
+    r = render()
+    assert r["qr_url"] != r["nfc_url"], "both doors printed the same token"
 
 
 def test_every_door_on_the_plate_is_one_the_service_knows():
@@ -109,7 +146,7 @@ def test_a_zone_name_that_will_not_fit_fails_loudly():
     """Silence here means an unreadable plate. It has to raise."""
     long_zone = "Fitting room on the mezzanine level behind menswear, number 14"
     try:
-        render(long_zone)
+        render(long_zone, readable=True)
     except SystemExit as exc:
         assert "fit" in str(exc).lower() or "module" in str(exc).lower(), exc
     else:
@@ -151,7 +188,7 @@ def test_the_artwork_is_a_single_svg():
 def test_the_install_sheet_carries_both_urls_verbatim():
     """Whoever writes the tag reads it off this page. If the sheet and the
     printed QR ever disagree, the plate does two different things."""
-    r = render()
+    r = printed()
     inst = bp.install_svg(
         W=105.0, H=148.0, store="Gap", zone_label="Fitting room 3",
         zone_slug="fitting-room-3", tenant="gap",
@@ -164,6 +201,8 @@ def test_the_install_sheet_carries_both_urls_verbatim():
     for svg in (r["svg"], inst):
         desc = re.search(r"<desc>(.*?)</desc>", svg, re.S).group(1)
         fields = dict(kv.split("=", 1) for kv in desc.split(" nfc=")[0].split())
+        # The zone lives in the artwork file — which stays inside the company —
+        # and not in the URL, which goes on a wall.
         assert fields["zone"] == r["slug"], fields
         assert bp.xml_escape(r["nfc_url"]) in desc
         assert bp.xml_escape(r["qr_url"]) in desc
@@ -174,7 +213,7 @@ def test_the_install_sheet_carries_both_urls_verbatim():
 def test_a5_is_a_plate_and_not_a_stretched_a6():
     """Every measurement scales off the A6 baseline, so the large plate has to
     stay in proportion rather than growing white space."""
-    a6, a5 = render(size="a6"), render(size="a5")
+    a6, a5 = printed(size="a6"), printed(size="a5")
     assert decode(a5["img"]) == a5["qr_url"]
     assert a5["module_mm"] > a6["module_mm"], "the A5 code should print larger"
 

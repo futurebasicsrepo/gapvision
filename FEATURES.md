@@ -189,6 +189,15 @@ prints ours and a tenant config field decides: our form, or a handoff into the
 retailer's app with a way to carry on here. Gap ships their route, one field
 changes, every plate already on a wall starts opening the app.
 
+**The plate URL is a token.** `?p=K7QX3MZP2A9F` — nothing about the store is
+legible in it, one token per door so either can be revoked without touching the
+other, and it resolves server-side or not at all. What that does *not* buy is
+unshareability: anything printed can be photographed. The tap door can be made
+genuinely unshareable with a rotating-cryptogram tag (the service verifies the
+counter and refuses a replay); a printed QR cannot rotate, so its mitigations
+are revocation, the presence TTL, and `GET /api/analytics/plates` making an
+over-used token visible.
+
 **Plates.** `packages/brand/build-plates.py` generates the printable artwork:
 print PDF with bleed and crop marks, proof, and an installation sheet, with the
 zone baked into every URL. An acrylic plate is a beacon that costs eleven

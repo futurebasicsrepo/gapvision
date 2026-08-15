@@ -667,6 +667,33 @@ async function forGuest(path, { method = "GET", body } = {}) {
  * and every plate already screwed to a wall starts opening the app. Nothing
  * gets reprinted, which is the only reason a plate is allowed to be dumb.
  */
+/**
+ * A printed token, back into a place.
+ *
+ * The plate no longer carries `?t=gap&z=fitting-room-3&src=nfc-plate`. A
+ * photograph of it now tells you nothing — not the store's zone vocabulary,
+ * not the tenant, and not that there is a `src` field worth editing — and the
+ * token can be killed on its own if it ends up somewhere it should not.
+ *
+ * `counter` and `cmac` come from a rotating-cryptogram tag, if the plate has
+ * one. They are the only thing in this system that can tell a shared link from
+ * a real tap: a copied URL replays a counter we have already seen.
+ */
+app.get("/api/checkin/resolve", async (req, res) => {
+  const token = String(req.query.p || req.query.token || "");
+  if (!token) return res.status(400).json({ error: "No plate code" });
+  const q = new URLSearchParams({ token });
+  // A tag appends these itself; pass them through untouched.
+  for (const k of ["counter", "cmac"]) if (req.query[k]) q.set(k, String(req.query[k]));
+  try {
+    const r = await forGuest(`/api/guest/plate?${q}`);
+    res.status(r.status).json(r.body);
+  } catch (e) {
+    console.error(`[cue] plate resolve failed: ${e.message}`);
+    res.status(502).json({ error: "upstream_unavailable" });
+  }
+});
+
 app.get("/api/checkin/config", async (req, res) => {
   const t = String(req.query.t || req.query.tenant || DEMO_TENANT);
   try {

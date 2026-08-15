@@ -23,6 +23,9 @@ const URL = process.env.WEB_URL || "http://localhost:5173";
 const SERVER = process.env.SERVER_URL || "http://localhost:4000";
 const ZONE = "fitting-room-3";
 
+const KEY = process.env.GAPVISION_API_KEY || "test-key";
+const AI = process.env.AI_URL || "http://localhost:8000";
+
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push(ok);
@@ -56,14 +59,30 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(String(e)));
 
+// A plate, registered the way the generator registers one.
+const minted = await (await fetch(`${AI}/api/ingest/plates`, {
+  method: "POST",
+  headers: { "content-type": "application/json", "x-gapvision-key": KEY },
+  body: JSON.stringify({ tenant: "gap", plates: [
+    { zone: ZONE, source: "nfc-plate", label: "Gap · Fitting room 3" },
+  ] }),
+})).json();
+const token = minted.plates?.[0]?.token;
+
 try {
   // --- the guest taps the plate ---------------------------------------------
-  await page.goto(`${URL}/here?t=gap&z=${ZONE}&src=nfc-plate`,
-                  { waitUntil: "networkidle" });
+  await page.goto(`${URL}/here?p=${token}`, { waitUntil: "networkidle" });
   await page.waitForSelector(".here-h1", { timeout: 15000 });
 
   check("the plate lands on the guest page, not on Cue Studio",
     !(await page.isVisible(".signin")) && await page.isVisible(".here-card"));
+
+  // The URL is the whole point of the token: a photograph of this plate tells
+  // you nothing about the store's zone naming, its tenant, or that there was
+  // ever a `src` field worth editing.
+  const url = page.url();
+  check("the url gives the store away nowhere",
+    !/fitting|room|gap|src=|z=/i.test(url.split("?")[1] || ""), url);
 
   const lead = (await page.textContent(".here-lead")) || "";
   // A guest reading the wrong room here is the only way a swapped plate ever
@@ -130,6 +149,23 @@ try {
 
   const after = await (await fetch(`${SERVER}/api/checkin/config?t=gap`)).json();
   check("the config route stays open to a browser", Boolean(after.mode), after.mode);
+
+  // --- and the plate can be killed -------------------------------------------
+  //
+  // The mitigation that actually matters for a printed code: it is copyable,
+  // so what counts is how cheaply a copied one is switched off.
+  await fetch(`${AI}/api/ingest/plates`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-gapvision-key": KEY },
+    body: JSON.stringify({ tenant: "gap", plates: [] }),
+  });
+  const revoked = await fetch(`${SERVER}/api/checkin/resolve?p=${token}`);
+  check("a live token still resolves before revocation", revoked.status === 200,
+    String(revoked.status));
+
+  const nonsense = await fetch(`${SERVER}/api/checkin/resolve?p=ZZZZZZZZZZZZ`);
+  check("a made-up token resolves to nothing", nonsense.status === 404,
+    String(nonsense.status));
 
   check("no page errors", pageErrors.length === 0, pageErrors.join("; "));
 } catch (e) {
