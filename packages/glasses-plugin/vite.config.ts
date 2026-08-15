@@ -1,4 +1,10 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
+
+// The version an operator can read off the glass. Three uploads tonight could
+// not be told apart from outside the device, which turned "did the fix work"
+// into a guess every time. Now the idle screen says which build is running.
+const APP_VERSION = JSON.parse(readFileSync("./app.json", "utf8")).version;
 
 // Even Hub plugins are plain web apps loaded by the Even App WebView.
 // Build to a single small bundle; no framework needed for the phone page.
@@ -9,6 +15,7 @@ import { defineConfig } from "vite";
 // there is no native bridge, which on a G2 is never. Set CUE_PACK=1 for the
 // build you are going to package, and the asset stays out.
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
   base: "./",
   publicDir: process.env.CUE_PACK === "1" ? false : "public",
   build: { target: "es2020" },

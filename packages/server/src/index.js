@@ -142,7 +142,8 @@ async function ingest(path, body) {
 
 // ---- Socket wiring ----------------------------------------------------------
 io.on("connection", (socket) => {
-  socket.on("register", ({ role, name, zone, email, deviceSerial, deviceModel, tenant }) => {
+  socket.on("register", ({ role, name, zone, email, deviceSerial, deviceModel, tenant,
+                          appVersion }) => {
     socket.data.role = role;
     // Register is where a socket picks its tenant. Older plugin builds don't
     // send one here and instead carry it on `beacon:guest-enter` / `voice:start`
@@ -159,6 +160,10 @@ io.on("connection", (socket) => {
     socket.data.email = email || null;
     socket.data.deviceSerial = deviceSerial || null;
     socket.data.deviceModel = deviceModel || null;
+    // Which build is on the glasses. Absent means a client older than 0.1.4,
+    // which is itself the answer when an upload appears to have changed
+    // nothing.
+    socket.data.appVersion = appVersion || null;
     if (role === "dashboard") {
       // A client switching views re-registers; drop any associate identity.
       socket.leave(associatesRoom(t));
@@ -173,6 +178,9 @@ io.on("connection", (socket) => {
         name: name || "Associate",
         zone: zone || "Floor",
         status: "available",
+        appVersion: socket.data.appVersion,
+        deviceModel: socket.data.deviceModel,
+        gestures: [],
       });
       broadcastDashboard(t);
     }
@@ -341,6 +349,24 @@ io.on("connection", (socket) => {
     // One store's floor only. This line is the whole reason for the partition.
     io.to(associatesRoom(t)).emit("radio:message", entry);
     broadcastDashboard(t);
+  });
+
+  /**
+   * Gesture telemetry.
+   *
+   * Diagnostic only — nothing branches on it. Whether a temple double tap
+   * reaches the plugin as one DOUBLE_CLICK or as two CLICKs is not knowable
+   * from outside the device, and that question blocked an evening.
+   */
+  socket.on("client:gesture", (g = {}) => {
+    const state = stateFor(socket.data.tenant);
+    const who = state.associates.get(socket.id);
+    if (!who) return;
+    who.gestures = [
+      ...(who.gestures || []),
+      { ...g, at: new Date().toISOString() },
+    ].slice(-12);
+    broadcastDashboard(socket.data.tenant);
   });
 
   socket.on("sale:record", ({ name, amount }) => {

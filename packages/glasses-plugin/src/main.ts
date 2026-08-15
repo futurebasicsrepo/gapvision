@@ -172,7 +172,14 @@ async function showIdle() {
   focusSku = null;
   lastDisplay = null;
   railFacts = [];
-  await renderCue({ ...IDLE_CUE, lines: ["CUESEA READY", TENANT_LABEL, "AWAITING GUEST SIGNAL"] });
+  await renderCue({
+    ...IDLE_CUE,
+    lines: ["CUESEA READY", TENANT_LABEL, "AWAITING GUEST SIGNAL"],
+    // The build, on the glass. An install that silently did not roll over is
+    // indistinguishable from a fix that did not work, and we burned two
+    // uploads on exactly that ambiguity.
+    meta: [`V${__APP_VERSION__}`, "PRESS TO ASK", "DOUBLE PRESS EXITS"],
+  });
   ui.sessionInfo.textContent = "No active session";
 }
 
@@ -269,6 +276,13 @@ function onRootPage(): boolean {
 function onGesture(g: DecodedGesture) {
   log(`gesture: ${describeGesture(g)}`);
   pushInspector(g);
+  // Mirrored to the server so a gesture problem can be diagnosed without
+  // reading a phone screen over someone's shoulder. Whether a temple double
+  // tap arrives as one DOUBLE_CLICK or two CLICKs is not answerable from here.
+  socket?.emit("client:gesture", {
+    action: g.action, source: g.source, kind: g.kind,
+    voice: voice?.current, engaged, recIndex,
+  });
   if (g.source === "ring" && ui.ringStatus) {
     ui.ringStatus.textContent = "ring active";
     ui.ringStatus.className = "pill live";
@@ -395,6 +409,7 @@ async function main() {
     ui.serverStatus.className = "pill ok";
     socket.emit("register", {
       role: "associate",
+      appVersion: __APP_VERSION__,
       // The tenant decides which floor's radio and roster this pair of glasses
       // joins, so it is sent at register rather than waiting for the first
       // guest. An associate who never engages anyone still belongs to a store.
