@@ -231,8 +231,14 @@ io.on("connection", (socket) => {
         script: context.script,
         recommendations: context.recommendations,
         guest: {
+          guest_id: context.guest.guest_id,
           name: context.guest.name,
           tier: context.guest.loyalty_tier,
+          // For the lens fact rail. Sizes and points are what an associate
+          // glances at mid-sentence, and the payload carried neither — the
+          // rail would have rendered a tier and three blanks.
+          points: context.guest.loyalty_points,
+          sizes: context.guest.sizes,
         },
       });
       // ...and the full context to the manager view.

@@ -87,10 +87,31 @@ let lastDisplay: DisplayPayload | null = null;
 let recommendations: Recommendation[] = [];
 let recIndex = -1;
 
+/**
+ * The fact rail — persistent detail down the left, unchanged while scrolling
+ * moves the module on the right. Kyle's shape, from Even's own dashboard.
+ *
+ * Set once when a guest is identified and left alone after that: the whole
+ * value of a rail is that it does not move underneath someone reading it
+ * mid-sentence. Cleared on idle, because facts about nobody are noise.
+ */
+let railFacts: string[] = [];
+
 /** Render a cue. `status` is gone: the glass shows nothing it doesn't have to,
  *  and a hint row is chrome. */
 async function renderCue(cue: Cue, latencyMs?: number) {
-  const page = buildCue(cue, latencyMs);
+  // Every surface — guest card, recommendation, voice answer — gets the rail
+  // and the module position from here, rather than each call site remembering.
+  const page = buildCue(
+    {
+      ...cue,
+      facts: cue.facts ?? railFacts,
+      moduleIndex: cue.moduleIndex ?? modulePosition(),
+      moduleCount: cue.moduleCount ?? moduleTotal(),
+      moduleName: cue.moduleName ?? moduleLabel(),
+    },
+    latencyMs,
+  );
   const lines = cue.lines || [];
   const sameShape =
     pageBuilt && lines.slice(0, CUE_LINES).length === currentLines.slice(0, CUE_LINES).length;
@@ -113,11 +134,36 @@ async function renderCue(cue: Cue, latencyMs?: number) {
   currentLines = lines;
 }
 
+/** Where scrolling has got to: 0 is the cue, 1..n the recommendations. */
+function modulePosition() { return recIndex < 0 ? 0 : recIndex + 1; }
+function moduleTotal() { return engaged ? recommendations.length + 1 : 0; }
+function moduleLabel() { return recIndex < 0 ? "CUE" : "PICK"; }
+
+/**
+ * The rail: what an associate glances at while already talking.
+ *
+ * Chosen from what Kyle actually asked the glasses on the floor tonight —
+ * six questions, and three of them were about a size or a colour. So sizes
+ * lead, and tier and points follow because they change how you open.
+ */
+function railFor(payload: DisplayPayload): string[] {
+  const g = payload.guest as any;
+  if (!g) return [];
+  const sizes = g.sizes || {};
+  return [
+    g.tier || "",
+    typeof g.points === "number" ? `${g.points} PTS` : "",
+    sizes.tops ? `TOPS ${sizes.tops}` : "",
+    sizes.bottoms ? `BOTTOMS ${sizes.bottoms}` : "",
+  ].filter(Boolean);
+}
+
 async function showIdle() {
   engaged = false;
   engagedGuestId = null;
   focusSku = null;
   lastDisplay = null;
+  railFacts = [];
   await renderCue({ ...IDLE_CUE, lines: ["CUESEA READY", TENANT_LABEL, "AWAITING GUEST SIGNAL"] });
   ui.sessionInfo.textContent = "No active session";
 }
@@ -128,6 +174,7 @@ async function onDisplay(payload: DisplayPayload) {
   engagedGuestId = payload.guest?.guest_id ?? engagedGuestId;
   recommendations = payload.recommendations ?? [];
   recIndex = -1;
+  railFacts = railFor(payload);
   focusSku = recommendations[0]?.sku ?? focusSku;
   await renderCue(cueOf(payload));
   ui.sessionInfo.textContent = payload.guest
@@ -167,10 +214,11 @@ async function showRecommendation(index: number) {
   focusSku = item.sku;
   await renderCue({
     lines: [item.name, item.location || "", ""],
+    // The position moved to the module indicator, so the meta strip stops
+    // spending one of its three facts saying where you are.
     meta: [
       money(item.price),
       typeof item.stock === "number" ? `${item.stock} ON HAND` : "",
-      `${index + 1} OF ${recommendations.length}`,
     ].filter(Boolean),
   });
   log(`showing rec ${index + 1}/${recommendations.length}: ${item.name}`);

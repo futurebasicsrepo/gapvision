@@ -99,7 +99,11 @@ def guest_cue(guest: dict, top: dict | None, cart: list[dict] | None) -> dict:
 
     if cart:
         item = cart[0]
-        evidence = f"LEFT THE {item['name']} IN THEIR CART"
+        # Front-loaded and short. The fact rail takes a third of the frame, so
+        # the sentence has ~42 characters rather than 60, and "LEFT THE … IN
+        # THEIR CART" spent eighteen of them on grammar before reaching the
+        # thing the associate needs to say out loud.
+        evidence = f"IN CART {item['name']}"
         reason = f"OFFER IT IN SIZE {sizes.get('tops', '')}".strip()
     elif top:
         evidence = f"SHOW THE {top['name']}"

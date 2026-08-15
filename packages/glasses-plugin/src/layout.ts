@@ -102,7 +102,19 @@ export function toDisplayText(line: string): string {
  * diagnostic: the associate can see the cue is live.
  */
 export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
-  const lines = (cue.lines || []).map(toDisplayText).filter(Boolean).slice(0, CUE_LINES);
+  const railed = (cue.facts || []).length > 0;
+  // With a rail beside it the sentence has a third less room, so it is cut to
+  // that budget here. A clipped word at this size reads as a fault in the
+  // hardware; an ellipsis reads as "there was more".
+  const lines = (cue.lines || [])
+    .map((l) => {
+      const s = toDisplayText(l);
+      return railed && s.length > RAIL_LINE_CHARS
+        ? s.slice(0, RAIL_LINE_CHARS - 1).trimEnd() + "+"
+        : s;
+    })
+    .filter(Boolean)
+    .slice(0, CUE_LINES);
   const meta = (cue.meta || []).map(toDisplayText).filter(Boolean).slice(0, 3);
   const facts = (cue.facts || [])
     .map((f) => toDisplayText(f).slice(0, FACT_CHARS))
