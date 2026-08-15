@@ -78,6 +78,10 @@ export const api = {
   leaderboard: (days = 7, t) => request(`/api/analytics/leaderboard?days=${days}${tq(t)}`),
   engagements: (limit = 15, t) => request(`/api/analytics/engagements?limit=${limit}${tq(t)}`),
   voice: (limit = 15, t) => request(`/api/analytics/voice?limit=${limit}${tq(t)}`),
+  // Declared on a second APIRouter in routes_guest.py that also mounts at
+  // /api/analytics, so the source never contains the literal path. Returns
+  // both what is waiting right now and the demand history.
+  requests: (days = 7, t) => request(`/api/analytics/requests?days=${days}${tq(t)}`),
   tenants: () => request("/api/admin/tenants"),
   users: (t) => request(`/api/admin/users${tq(t, true)}`),
   devices: (t) => request(`/api/admin/devices${tq(t, true)}`),
