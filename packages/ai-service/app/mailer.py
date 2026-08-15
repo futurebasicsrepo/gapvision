@@ -1,12 +1,16 @@
 """Sending mail, and being honest when we can't.
 
-    CUE_SMTP_HOST      smtp.resend.com
+Two transports, tried in that order:
+
+    RESEND_API_KEY     HTTPS to api.resend.com. Preferred.
+    CUE_MAIL_FROM      "Cue <kr@cuesea.ai>"
+
+    CUE_SMTP_HOST      fallback, only if no API key is set
     CUE_SMTP_PORT      587
     CUE_SMTP_USER      resend
     CUE_SMTP_PASSWORD  the provider's API key
-    CUE_MAIL_FROM      "Cue <kr@cuesea.ai>"
 
-Unset any of those and the provider is `console`: the message is printed to
+Unset all of those and the provider is `console`: the message is printed to
 the service log and *nothing is sent*. That is the right default for a service
 whose first email is a password-reset link — silently pretending to send is
 how somebody ends up locked out while the logs say everything is fine.
@@ -34,26 +38,45 @@ OAuth 2.0 instead. Reaching Gmail properly now means a service account with
 domain-wide delegation, which is a credential, a GCP project and a code path,
 all to send three-line transactional messages.
 
-So: an SMTP provider. It is one variable, it does not tie the product's ability
+So: an email provider. It is one variable, it does not tie the product's ability
 to invite people to one person's mailbox, and transactional mail from a
 dedicated sender has better deliverability than from a human inbox anyway.
 
-Any of them work — the seam is `CUE_SMTP_*` and nothing above this line knows
-which one is behind it.
+Why HTTPS and not SMTP
+----------------------
+And then SMTP timed out too. **Railway disables outbound SMTP on Free, Trial
+and Hobby plans** — every port, not a particular one, so the alternate-port
+trick that gets you past a corporate firewall does nothing here. The connection
+never opens, which is why this surfaces as `TimeoutError` and not as a refusal:
+there is nothing on the other end to refuse.
+
+Port 443 is not blocked anywhere, by anyone. So the primary transport is the
+provider's HTTPS API, which is also what Railway's own docs recommend over SMTP
+on every plan. It costs one stdlib POST — no dependency — and returns a message
+id, which SMTP does not.
+
+SMTP stays as a fallback rather than being deleted. It is the portable thing: a
+deployment somewhere without this provider, or an on-premise retailer who has
+to relay through their own server, needs it, and it is thirty lines.
 """
 from __future__ import annotations
 
+import json
 import os
 import smtplib
 import ssl
+import urllib.error
+import urllib.request
 from email.message import EmailMessage
 from typing import Any
 
 _TIMEOUT = 12
+_API = "https://api.resend.com/emails"
 
 
 def _cfg() -> dict[str, str | None]:
     return {
+        "api_key": os.getenv("RESEND_API_KEY"),
         "host": os.getenv("CUE_SMTP_HOST"),
         "port": os.getenv("CUE_SMTP_PORT", "587"),
         "user": os.getenv("CUE_SMTP_USER"),
@@ -64,19 +87,24 @@ def _cfg() -> dict[str, str | None]:
 
 def provider() -> str:
     c = _cfg()
-    return "smtp" if (c["host"] and c["user"] and c["password"]) else "console"
+    if c["api_key"]:
+        return "resend"
+    if c["host"] and c["user"] and c["password"]:
+        return "smtp"
+    return "console"
 
 
 def status() -> dict[str, Any]:
-    """For /health and the platform checks. Never reports the password, and
-    never reports the *from* address as proof of anything — a configured
-    sender with a wrong password looks identical until something is sent."""
+    """For /health and the platform checks. Never reports the key, and never
+    reports the *from* address as proof of anything — a configured sender with
+    a rejected credential looks identical until something is sent."""
     c = _cfg()
+    p = provider()
     return {
-        "provider": provider(),
-        "host": c["host"],
+        "provider": p,
+        "host": _API if p == "resend" else c["host"],
         "from": c["from"],
-        "configured": provider() == "smtp",
+        "configured": p in ("resend", "smtp"),
     }
 
 
@@ -88,9 +116,14 @@ def send(to: str, subject: str, body: str) -> dict[str, Any]:
     spam-score liability and a second copy of every string, for nothing.
     """
     c = _cfg()
-    if provider() == "console":
+    p = provider()
+
+    if p == "console":
         print(f"[cue][mail:console] to={to} subject={subject}\n{body}\n", flush=True)
         return {"ok": True, "provider": "console", "delivered": False}
+
+    if p == "resend":
+        return _send_https(c, to, subject, body)
 
     msg = EmailMessage()
     msg["From"] = c["from"]
@@ -154,6 +187,54 @@ def send_invite(*, to: str, name: str | None, role: str, token: str,
     )
 
 
+def _send_https(c: dict[str, str | None], to: str, subject: str,
+                body: str) -> dict[str, Any]:
+    """POST one message to the provider's API.
+
+    stdlib on purpose. This is a single JSON POST with a bearer token, and
+    adding an HTTP client dependency to a service that already ships `requests`
+    nowhere would be trading a real supply-chain surface for four saved lines.
+
+    The status code is carried into the failure so `hint()` can be specific.
+    A 422 here is almost always an unverified sending domain, and telling
+    somebody "the request failed" would send them to look at the key.
+    """
+    payload = json.dumps({
+        "from": c["from"], "to": [to], "subject": subject, "text": body,
+    }).encode()
+    req = urllib.request.Request(_API, data=payload, method="POST", headers={
+        "Authorization": f"Bearer {c['api_key']}",
+        "Content-Type": "application/json",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=_TIMEOUT) as res:
+            data = json.loads(res.read() or b"{}")
+        return {"ok": True, "provider": "resend", "delivered": True,
+                "id": data.get("id")}
+    except urllib.error.HTTPError as e:
+        # Not always JSON. A rejected key comes back through the provider's
+        # edge as plain text ("error code: 1010"), so parsing optimistically
+        # and giving up produces an empty reason for the single most likely
+        # failure. Fall back to the raw body.
+        raw = b""
+        try:
+            raw = e.read() or b""
+            detail = json.loads(raw).get("message") or ""
+        except Exception:
+            detail = ""
+        if not detail:
+            detail = raw.decode("utf-8", "replace").strip()[:200]
+        print(f"[cue][mail] FAILED to={to} subject={subject}: "
+              f"HTTP {e.code} {detail}", flush=True)
+        return {"ok": False, "provider": "resend", "delivered": False,
+                "error": f"HTTP{e.code}", "message": detail}
+    except Exception as e:
+        print(f"[cue][mail] FAILED to={to} subject={subject}: "
+              f"{type(e).__name__}: {e}", flush=True)
+        return {"ok": False, "provider": "resend", "delivered": False,
+                "error": type(e).__name__}
+
+
 def send_test(*, to: str, name: str | None) -> dict[str, Any]:
     who = (name or "").split(" ")[0] or "there"
     return send(
@@ -174,6 +255,36 @@ def send_test(*, to: str, name: str | None) -> dict[str, Any]:
 # because "authentication failed" sends somebody to re-type a password that was
 # never the problem.
 _HINTS = {
+    # Verified against the live API: an invalid key comes back 403, not 401,
+    # and the body is plain text from the edge rather than JSON. So these two
+    # say the same thing — sending somebody to look at domain scoping when the
+    # key is simply wrong would be worse than saying both out loud.
+    "HTTP401":
+        "The provider rejected the API key. Check RESEND_API_KEY for a "
+        "truncated paste — the key begins `re_` — and that it has not been "
+        "revoked.",
+    "HTTP403":
+        "The provider rejected the API key, or the key is not allowed to send "
+        "from this address. Check RESEND_API_KEY first; then, if the key was "
+        "scoped to one domain, that CUE_MAIL_FROM is on that domain.",
+    "HTTP422":
+        "The provider refused the message. Nearly always the sending domain: "
+        "the domain in CUE_MAIL_FROM has to be verified with the provider, and "
+        "its DNS records have to have propagated.",
+    "HTTP429":
+        "Rate limited. Wait and try again.",
+    "URLError":
+        "Could not reach the provider at all — the connection was refused or "
+        "reset before a reply. Check outbound network from this deployment.",
+    "TimeoutError":
+        "The connection timed out. On Railway this is usually SMTP being "
+        "disabled on Free, Trial and Hobby plans — every port, so changing the "
+        "port will not help. Set RESEND_API_KEY and the HTTPS transport takes "
+        "over, or move the service to Pro.",
+    "timeout":
+        "The connection timed out. On Railway this is usually SMTP being "
+        "disabled below the Pro plan — every port, so changing the port will "
+        "not help. Set RESEND_API_KEY to send over HTTPS instead.",
     "SMTPAuthenticationError":
         "The server rejected the username or password. With an SMTP provider "
         "the username is usually a fixed literal and the password is the API "
@@ -196,12 +307,6 @@ _HINTS = {
         "implicit TLS and this client speaks STARTTLS, which is 587.",
     "gaierror":
         "The hostname did not resolve. Check CUE_SMTP_HOST for a typo.",
-    "timeout":
-        "The connection timed out. The host may be unreachable from this "
-        "deployment, or blocked outbound.",
-    "TimeoutError":
-        "The connection timed out. The host may be unreachable from this "
-        "deployment, or blocked outbound.",
     "SSLError":
         "TLS negotiation failed.",
 }
