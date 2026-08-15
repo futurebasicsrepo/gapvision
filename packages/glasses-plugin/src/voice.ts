@@ -34,7 +34,37 @@ const MIN_UTTERANCE_MS = 700;
 /** Hard cap; the server enforces its own at 15 s. */
 const MAX_UTTERANCE_MS = 12_000;
 /** Mean amplitude (0-1) below which a frame counts as silence. */
+/**
+ * Absolute floor. Below this nothing counts as speech however loud the room
+ * seems — it stops a silent mic's own hiss from reading as a voice.
+ *
+ * It is NOT the silence threshold. It used to be: the mic closed when the
+ * level fell under this constant. Measured on a real G2 in a real room, the
+ * quietest frame across 12.2 s of audio was 0.014 — above it. Not one frame in
+ * 122 ever counted as silence, so the mic never closed and every question ran
+ * to the 12 s cap. A constant cannot work here: this room's noise floor sits
+ * at ~0.02 and a shop floor is louder still.
+ */
 const SILENCE_FLOOR = 0.012;
+
+/**
+ * Speech is judged against how loud *this* utterance is, not against a number
+ * chosen in a quiet office. Measured levels from that same session: ambient
+ * ~0.02, speech peaks 0.38 — a 15:1 ratio that survives being scaled by the
+ * room. Two thresholds with hysteresis, so a natural pause mid-sentence does
+ * not end the question but a real stop does.
+ */
+const SPEECH_ON = 0.35;   // of peak — must be clearly talking to start
+const SPEECH_OFF = 0.20;  // of peak — quieter than this counts as stopped
+
+/** Exported for the unit test, which replays real captured envelopes. */
+export function speechThreshold(peak: number, started: boolean): number {
+  return Math.max(SILENCE_FLOOR, peak * (started ? SPEECH_OFF : SPEECH_ON));
+}
+
+export function isSpeaking(level: number, peak: number, started: boolean): boolean {
+  return level >= speechThreshold(peak, started);
+}
 /** How long an answer stays on the lens before we restore the prior view. */
 export const ANSWER_DWELL_MS = 12_000;
 
@@ -128,6 +158,8 @@ export class VoiceController {
   private lastVoiceAt = 0;
   private heardSpeech = false;
   private level = 0;
+  /** Loudest frame so far this utterance — the reference for both thresholds. */
+  private peak = 0;
   private meterTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private deps: VoiceDeps) {}
@@ -181,6 +213,7 @@ export class VoiceController {
     this.lastVoiceAt = Date.now();
     this.heardSpeech = false;
     this.level = 0;
+    this.peak = 0;
     this.setState("listening");
     this.deps.log("voice: mic open");
 
@@ -197,7 +230,8 @@ export class VoiceController {
     if (bytes.length === 0) return;
 
     this.level = frameLevel(bytes);
-    if (this.level >= SILENCE_FLOOR) {
+    this.peak = Math.max(this.peak, this.level);
+    if (isSpeaking(this.level, this.peak, this.heardSpeech)) {
       this.heardSpeech = true;
       this.lastVoiceAt = Date.now();
     }
