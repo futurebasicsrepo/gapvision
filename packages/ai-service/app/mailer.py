@@ -1,0 +1,161 @@
+"""Sending mail, and being honest when we can't.
+
+    CUE_SMTP_HOST      smtp.gmail.com
+    CUE_SMTP_PORT      587
+    CUE_SMTP_USER      kr@cuesea.ai
+    CUE_SMTP_PASSWORD  a Google app password, not the account password
+    CUE_MAIL_FROM      "Cue <kr@cuesea.ai>"
+
+Unset any of those and the provider is `console`: the message is printed to
+the service log and *nothing is sent*. That is the right default for a service
+whose first email is a password-reset link — silently pretending to send is
+how somebody ends up locked out while the logs say everything is fine.
+
+The failure mode this is built around
+-------------------------------------
+Password reset has an unusual property: **the request must succeed whether or
+not the email goes out.** Telling a caller "we could not find that address" is
+account enumeration, so `/auth/forgot` returns the same 202 either way — which
+means an SMTP outage is invisible from the outside by design.
+
+So delivery failures are loud on the inside instead. Every send returns a
+result, failures are logged with the reason, and `status()` feeds a Health
+check. A reset flow that quietly stopped working would otherwise look exactly
+like a reset flow nobody used.
+
+On Gmail specifically: `smtp.gmail.com:587` with an app password works today
+and is fine at pilot volume. Two things to know before it matters — Workspace
+caps daily recipients, and transactional mail from a personal mailbox has
+worse deliverability than a dedicated sender. Neither is a reason to build
+something bigger now; both are reasons this file has exactly one seam.
+"""
+from __future__ import annotations
+
+import os
+import smtplib
+import ssl
+from email.message import EmailMessage
+from typing import Any
+
+_TIMEOUT = 12
+
+
+def _cfg() -> dict[str, str | None]:
+    return {
+        "host": os.getenv("CUE_SMTP_HOST"),
+        "port": os.getenv("CUE_SMTP_PORT", "587"),
+        "user": os.getenv("CUE_SMTP_USER"),
+        "password": os.getenv("CUE_SMTP_PASSWORD"),
+        "from": os.getenv("CUE_MAIL_FROM") or os.getenv("CUE_SMTP_USER"),
+    }
+
+
+def provider() -> str:
+    c = _cfg()
+    return "smtp" if (c["host"] and c["user"] and c["password"]) else "console"
+
+
+def status() -> dict[str, Any]:
+    """For /health and the platform checks. Never reports the password, and
+    never reports the *from* address as proof of anything — a configured
+    sender with a wrong password looks identical until something is sent."""
+    c = _cfg()
+    return {
+        "provider": provider(),
+        "host": c["host"],
+        "from": c["from"],
+        "configured": provider() == "smtp",
+    }
+
+
+def send(to: str, subject: str, body: str) -> dict[str, Any]:
+    """Send one plain-text message. Returns a result rather than raising.
+
+    Plain text on purpose. These are three-line transactional messages whose
+    entire job is to carry one link; HTML would add a rendering surface, a
+    spam-score liability and a second copy of every string, for nothing.
+    """
+    c = _cfg()
+    if provider() == "console":
+        print(f"[cue][mail:console] to={to} subject={subject}\n{body}\n", flush=True)
+        return {"ok": True, "provider": "console", "delivered": False}
+
+    msg = EmailMessage()
+    msg["From"] = c["from"]
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    try:
+        with smtplib.SMTP(c["host"], int(c["port"] or 587), timeout=_TIMEOUT) as s:
+            s.ehlo()
+            s.starttls(context=ssl.create_default_context())
+            s.login(c["user"], c["password"])
+            s.send_message(msg)
+        return {"ok": True, "provider": "smtp", "delivered": True}
+    except Exception as e:
+        # Loud in the log, quiet to the caller — see the module docstring.
+        print(f"[cue][mail] FAILED to={to} subject={subject}: "
+              f"{type(e).__name__}: {e}", flush=True)
+        return {"ok": False, "provider": "smtp", "delivered": False,
+                "error": f"{type(e).__name__}"}
+
+
+# --- copy --------------------------------------------------------------------
+#
+# Kept here rather than in the route so the two paths cannot drift into saying
+# different things about the same link, and so someone changing the wording
+# does not have to read the token logic to do it.
+
+def _app_url(role: str) -> str:
+    """Where this person signs in.
+
+    A cue_admin lives in the Console and everyone else in Studio. Sending a
+    retailer's manager a link to internal.cuesea.ai would show them a
+    dead-end page and make Cue look broken at the exact moment they are
+    already having trouble getting in.
+    """
+    if role == "cue_admin":
+        return os.getenv("CUE_CONSOLE_URL", "https://internal.cuesea.ai")
+    return os.getenv("CUE_STUDIO_URL", "https://app.cuesea.ai")
+
+
+def link_for(role: str, token: str) -> str:
+    return f"{_app_url(role)}/set-password?token={token}"
+
+
+def send_invite(*, to: str, name: str | None, role: str, token: str,
+                tenant_name: str | None, hours: int) -> dict[str, Any]:
+    url = link_for(role, token)
+    who = (name or "").split(" ")[0] or "there"
+    where = f" at {tenant_name}" if tenant_name else ""
+    return send(
+        to,
+        "Set up your Cue account",
+        f"Hi {who},\n\n"
+        f"You've been given a Cue account{where}. Set your password here:\n\n"
+        f"{url}\n\n"
+        f"The link works once and expires in {hours // 24} days.\n\n"
+        f"If you weren't expecting this, you can ignore it — the account "
+        f"can't be used until a password is set.\n\n"
+        f"— Cue\n",
+    )
+
+
+def send_reset(*, to: str, name: str | None, role: str, token: str,
+               hours: int) -> dict[str, Any]:
+    url = link_for(role, token)
+    who = (name or "").split(" ")[0] or "there"
+    return send(
+        to,
+        "Reset your Cue password",
+        f"Hi {who},\n\n"
+        f"Someone asked to reset the password for this Cue account. If it was "
+        f"you, set a new one here:\n\n"
+        f"{url}\n\n"
+        f"The link works once and expires in {hours} hour"
+        f"{'s' if hours != 1 else ''}.\n\n"
+        f"If it wasn't you, nothing has changed and you can ignore this. "
+        f"Your current password still works.\n\n"
+        f"— Cue\n",
+    )

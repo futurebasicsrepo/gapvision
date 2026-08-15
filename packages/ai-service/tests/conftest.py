@@ -13,6 +13,16 @@ os.environ.setdefault("GAPVISION_API_KEY", "test-key-" + "0" * 32)
 # Rate limiting is per-IP and in-memory; the suite fires many requests from
 # one client, so give it room rather than testing the limiter by accident.
 os.environ.setdefault("GAPVISION_RATE_LIMIT", "100000")
+# The auth routes are throttled per-email and per-IP (see auth.throttle). The
+# suite signs in as the same handful of accounts hundreds of times from one
+# client, which is nothing like how a person uses this and everything like what
+# the limiter exists to stop. Raise them here rather than testing the limiter
+# by accident — `test_password_links.py` asserts it works, deliberately, with
+# its own numbers.
+os.environ.setdefault("CUE_LOGIN_EMAIL_LIMIT", "100000")
+os.environ.setdefault("CUE_LOGIN_IP_LIMIT", "100000")
+os.environ.setdefault("CUE_FORGOT_EMAIL_LIMIT", "100000")
+
 # Credential sealing key. A fixed value here so a sealed row written by one
 # test can be opened by another; production generates one per deployment with
 # `openssl rand -hex 32`.

@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import db, retention, secrets_box
+from . import db, mailer, retention, secrets_box
 from .auth import KeyHeader, guard, startup_check
 from .crm_provider import TenantNotConfigured, get_crm_for, tenant_status
 from .llm import get_provider
@@ -190,6 +190,7 @@ def health():
         "credential_encryption": secrets_box.status(),
         "database": db.health(),
         "retention": retention.status(),
+        "mail": mailer.status(),
     }
 
 

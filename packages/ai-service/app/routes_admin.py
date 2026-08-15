@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from . import (analytics, crm_credentials, crm_provider, db, identity,
-               retention, secrets_box)
+               mailer, retention, secrets_box)
 from .identity import BearerHeader, current_user, require, scope_tenant
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -346,7 +346,67 @@ def create_user(req: UserCreate, authorization: str | None = BearerHeader):
         email=req.email, name=req.name, role=req.role,
         tenant_id=tenant_id, password=req.password,
     )
-    return {"user": identity.public_user(row)}
+
+    # No password given means "invite them", not "create an account nobody can
+    # sign in to". That was the old behaviour and it left staff reading
+    # passwords out loud over Slack to get someone in, which is worse than
+    # having no invite flow at all — it teaches people to accept credentials
+    # through channels that should never carry them.
+    invited = None
+    if not req.password:
+        token, hours = identity.issue_password_link(str(row["id"]), "invite")
+        tenant_name = None
+        if tenant_id:
+            t = db.query_one("SELECT name FROM tenants WHERE id = %s", (tenant_id,))
+            tenant_name = t["name"] if t else None
+        sent = mailer.send_invite(
+            to=row["email"], name=row["name"], role=row["role"],
+            token=token, tenant_name=tenant_name, hours=hours,
+        )
+        # Reported so the console can say "invited" rather than implying it.
+        # Unlike /auth/forgot there is no enumeration concern here: the caller
+        # already knows the account exists, having just created it.
+        invited = {"sent": bool(sent.get("delivered")),
+                   "provider": sent.get("provider"),
+                   "expires_hours": hours}
+
+    return {"user": identity.public_user(row), "invite": invited}
+
+
+@router.post("/users/{user_id}/invite")
+def resend_invite(user_id: str, authorization: str | None = BearerHeader):
+    """Send a fresh set-password link to somebody who never used theirs.
+
+    Separate from creation because the common case is not "create again" — it
+    is a link that expired over a long weekend, or an address that was typed
+    wrong and has since been fixed. Minting a new one burns the old.
+    """
+    me = current_user(authorization)
+    require(me, "client_admin")
+    row = db.query_one("SELECT * FROM users WHERE id = %s", (user_id,))
+    if row is None:
+        raise HTTPException(status_code=404, detail="No such user")
+    # 404 rather than 403 for someone else's tenant: a client_admin probing ids
+    # should not be able to learn that an account exists elsewhere.
+    if me.role != "cue_admin":
+        if row["role"] == "cue_admin" or str(row["tenant_id"]) != str(me.tenant_id):
+            raise HTTPException(status_code=404, detail="No such user")
+    if not me.at_least(row["role"]):
+        raise HTTPException(status_code=403, detail="Cannot invite a role above your own")
+
+    kind = "invite" if row["password_hash"] is None else "reset"
+    token, hours = identity.issue_password_link(str(row["id"]), kind)
+    tenant_name = None
+    if row["tenant_id"]:
+        t = db.query_one("SELECT name FROM tenants WHERE id = %s", (row["tenant_id"],))
+        tenant_name = t["name"] if t else None
+    sent = (mailer.send_invite(to=row["email"], name=row["name"], role=row["role"],
+                               token=token, tenant_name=tenant_name, hours=hours)
+            if kind == "invite"
+            else mailer.send_reset(to=row["email"], name=row["name"],
+                                   role=row["role"], token=token, hours=hours))
+    return {"ok": True, "kind": kind, "sent": bool(sent.get("delivered")),
+            "provider": sent.get("provider"), "expires_hours": hours}
 
 
 @router.patch("/users/{user_id}")
@@ -644,6 +704,18 @@ def _platform_checks() -> list[dict]:
         checks.append(_check(
             "retention", "Retention enforcement",
             "warn" if stale or ret.get("backlog") else "ok", detail))
+
+    # Mail. Password resets answer 202 whether or not they sent, by design, so
+    # a broken sender is invisible from outside — this is where it becomes
+    # visible. "console" is not a failure, it is an unconfigured deployment,
+    # and it is reported as such rather than as healthy.
+    m = mailer.status()
+    checks.append(_check(
+        "mail", "Outbound email",
+        "ok" if m["configured"] else "warn",
+        f"{m['provider']} · {m['from']}" if m["configured"]
+        else "not configured — invites and resets are logged, not sent",
+    ))
 
     # --- merchant credentials -------------------------------------------------
     enc = secrets_box.status()

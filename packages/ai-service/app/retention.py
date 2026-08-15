@@ -196,7 +196,11 @@ def status() -> dict[str, Any]:
      LEFT JOIN retention_runs r ON r.tenant_id = t.id
          WHERE t.status <> 'archived'
       GROUP BY t.id, t.slug
-      ORDER BY max(r.ran_at) ASC NULLS FIRST
+      -- Slug breaks the tie. Without it, several never-swept tenants sort
+      -- arbitrarily and the Health panel names a different one on every
+      -- refresh — which reads as flapping rather than as "none of these have
+      -- been swept".
+      ORDER BY max(r.ran_at) ASC NULLS FIRST, t.slug ASC
          LIMIT 1
         """
     )

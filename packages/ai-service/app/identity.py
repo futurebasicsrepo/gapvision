@@ -34,6 +34,9 @@ from fastapi import Header, HTTPException, Request
 from . import db
 
 TOKEN_TTL_HOURS = int(os.environ.get("CUE_SESSION_HOURS", "12"))
+#: One place, so the API, the reset link and hash_password cannot disagree
+#: about what counts as a password.
+MIN_PASSWORD_LENGTH = 8
 
 ROLES = ("associate", "manager", "client_admin", "cue_admin")
 _RANK = {role: i for i, role in enumerate(ROLES)}
@@ -49,8 +52,9 @@ _SCRYPT = {"n": 2**15, "r": 8, "p": 1, "dklen": 32, "maxmem": 96 * 1024 * 1024}
 # --- passwords ---------------------------------------------------------------
 
 def hash_password(password: str) -> str:
-    if not password or len(password) < 8:
-        raise ValueError("Password must be at least 8 characters")
+    if not password or len(password) < MIN_PASSWORD_LENGTH:
+        raise ValueError(
+            f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
     salt = secrets.token_bytes(16)
     dk = hashlib.scrypt(password.encode(), salt=salt, **_SCRYPT)
     return "scrypt$" + base64.b64encode(salt).decode() + "$" + base64.b64encode(dk).decode()
@@ -101,6 +105,87 @@ def revoke_all_for_user(user_id: str) -> None:
         "UPDATE auth_tokens SET revoked_at = now() WHERE user_id = %s AND revoked_at IS NULL",
         (user_id,),
     )
+
+
+# --- password-set links (invites and resets are the same primitive) ----------
+
+#: An invite has to survive a weekend and a new hire's first shift. A reset is
+#: something someone asked for a minute ago and should not linger.
+INVITE_TTL_HOURS = 24 * 7
+RESET_TTL_HOURS = 1
+
+
+def issue_password_link(user_id: str, kind: str = "reset") -> tuple[str, int]:
+    """Mint a single-use password-set token. Returns (token, ttl_hours).
+
+    Any earlier unused link for this account is burned first. Two live reset
+    links is one more than anybody needs, and it means "I clicked the old
+    email" silently works — which is exactly the confusion that makes people
+    request a third.
+    """
+    hours = INVITE_TTL_HOURS if kind == "invite" else RESET_TTL_HOURS
+    db.execute(
+        "UPDATE password_resets SET used_at = now() "
+        "WHERE user_id = %s AND used_at IS NULL",
+        (user_id,),
+    )
+    token = secrets.token_urlsafe(32)
+    db.execute(
+        """
+        INSERT INTO password_resets (user_id, token_hash, kind, expires_at)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (user_id, _token_hash(token), kind,
+         datetime.now(timezone.utc) + timedelta(hours=hours)),
+    )
+    return token, hours
+
+
+def redeem_password_link(token: str, new_password: str) -> dict:
+    """Set a password from a link, or explain precisely why not.
+
+    The distinctions here are worth keeping. "Expired" and "already used" are
+    both dead ends, but they tell someone different things about what to do
+    next, and neither leaks anything — you cannot reach either message without
+    already holding a token that was once valid.
+    """
+    row = db.query_one(
+        """
+        SELECT r.*, u.role, u.email, u.status
+          FROM password_resets r JOIN users u ON u.id = r.user_id
+         WHERE r.token_hash = %s
+        """,
+        (_token_hash(token),),
+    )
+    if row is None:
+        raise HTTPException(status_code=400, detail="That link isn't valid")
+    if row["used_at"] is not None:
+        raise HTTPException(status_code=400, detail="That link has already been used")
+    if row["expires_at"] < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="That link has expired")
+    if row["status"] != "active":
+        # A disabled account must not be reachable through a link that was
+        # minted while it was still enabled.
+        raise HTTPException(status_code=400, detail="That account is not active")
+    if len(new_password or "") < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+
+    db.execute("UPDATE users SET password_hash = %s WHERE id = %s",
+               (hash_password(new_password), row["user_id"]))
+    db.execute("UPDATE password_resets SET used_at = now() WHERE id = %s",
+               (row["id"],))
+    # Setting a password ends every existing session. If the reset was because
+    # somebody else had the old one, leaving their session alive defeats the
+    # entire exercise.
+    revoke_all_for_user(row["user_id"])
+    return {"email": row["email"], "role": row["role"], "kind": row["kind"]}
+
+
+def user_by_email(email: str) -> dict | None:
+    return db.query_one(
+        "SELECT * FROM users WHERE lower(email) = lower(%s)", (email,))
 
 
 def resolve_token(token: str) -> dict | None:

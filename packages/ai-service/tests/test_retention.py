@@ -165,7 +165,8 @@ def test_status_reports_the_oldest_tenant_not_the_newest():
         """SELECT t.slug, max(r.ran_at) AS last_run
              FROM tenants t LEFT JOIN retention_runs r ON r.tenant_id = t.id
             WHERE t.status <> 'archived'
-         GROUP BY t.id, t.slug ORDER BY max(r.ran_at) ASC NULLS FIRST""")
+         GROUP BY t.id, t.slug
+         ORDER BY max(r.ran_at) ASC NULLS FIRST, t.slug ASC""")
     assert st.get("oldest_swept_tenant") == rows[0]["slug"]
 
 

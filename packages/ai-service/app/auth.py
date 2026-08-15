@@ -77,6 +77,49 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def throttle_key(key: str, limit: int, window: int) -> None:
+    """Rate limit an arbitrary key. See `throttle` for why there are two."""
+    now = time.monotonic()
+    hits = _hits[key]
+    while hits and now - hits[0] > window:
+        hits.popleft()
+    if len(hits) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many attempts. Wait a minute and try again.",
+            headers={"Retry-After": str(window)},
+        )
+    hits.append(now)
+
+
+def throttle(request: Request, bucket: str, limit: int, window: int) -> None:
+    """A named, independent rate limit.
+
+    The service-key limiter below is generous by design — the realtime server
+    is one client making a lot of legitimate calls. The auth routes are the
+    opposite: a handful of requests from a human, and the two abuse surfaces
+    the service key does not have.
+
+    Login, because it is the one endpoint where guessing pays. And
+    forgot-password, because it sends mail to an address the caller chooses,
+    which makes it a free email cannon pointed at anybody with an account.
+    Neither had a limit before; the module docstring's promise of rate
+    limiting only ever covered `/api/*`.
+
+    Keyed per bucket *and* per IP, so a burst of logins cannot exhaust
+    somebody else's reset allowance.
+
+    **Per-IP alone is not enough, and getting that wrong would have shipped.**
+    A store is one NAT. Ten associates signing in at the start of a shift come
+    from a single address, and an IP-only limit tight enough to stop somebody
+    guessing one password is also tight enough to lock out the morning. So the
+    auth routes throttle on two keys: the *email* tightly, because that is the
+    one an attacker is grinding, and the *IP* loosely, because that is a
+    building full of people who all work here.
+    """
+    throttle_key(f"{bucket}:{_client_ip(request)}", limit, window)
+
+
 def _rate_limit(request: Request) -> None:
     ip = _client_ip(request)
     now = time.monotonic()
