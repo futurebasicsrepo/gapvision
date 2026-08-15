@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cue — system architecture, for technical review</title>
+<style>
+  :root{
+    --sea-900:#04122E; --sea-800:#06193A; --sea-700:#0A2E63; --sea-600:#0F3F80;
+    --sea-500:#1560B8; --sea-400:#2E7FD0; --sea-300:#3E9BE8; --sea-200:#8FC7F0;
+    --sea-100:#BFE0F7;
+    --flame:#FF6B2C; --flame-400:#FF8C57; --flame-100:#FFE2D2;
+    --hud:#4BFF9A;
+    --paper:#FBF9F5; --ink-100:#E5E2DB;
+    --edge:rgba(143,199,240,.16); --edge-2:rgba(143,199,240,.30);
+    --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,"IBM Plex Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--sea-900); color:var(--paper); font-family:var(--sans);
+    line-height:1.55; -webkit-font-smoothing:antialiased;
+    padding:40px 24px 96px;
+  }
+  .doc{max-width:1180px;margin:0 auto}
+  header{border-bottom:1px solid var(--edge);padding-bottom:28px;margin-bottom:40px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;
+           text-transform:uppercase;color:var(--sea-300)}
+  h1{font-size:34px;line-height:1.15;font-weight:600;letter-spacing:-.02em;margin:10px 0 12px}
+  h2{font-size:21px;font-weight:600;margin:52px 0 6px;letter-spacing:-.01em}
+  h3{font-size:15px;font-weight:600;margin:26px 0 8px;color:var(--sea-100)}
+  p{max-width:78ch;color:var(--sea-100);margin:10px 0}
+  p.lede{font-size:17px;color:var(--paper);max-width:74ch}
+  .rule{color:var(--paper);border-left:2px solid var(--flame);padding:2px 0 2px 16px;
+        margin:18px 0;max-width:74ch;font-size:16px}
+  code,.mono{font-family:var(--mono);font-size:12.5px;color:var(--sea-200)}
+  a{color:var(--sea-300)}
+  figure{margin:22px 0 8px;background:var(--sea-800);border:1px solid var(--edge);
+         border-radius:14px;padding:20px}
+  figcaption{font-size:13px;color:#7FA3C4;margin-top:12px;font-family:var(--mono)}
+  svg{width:100%;height:auto;display:block}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--edge);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+     color:var(--sea-300);font-weight:500;white-space:nowrap}
+  td:first-child{white-space:nowrap;color:var(--paper)}
+  tbody tr:hover{background:rgba(143,199,240,.04)}
+  ul{margin:10px 0 10px 20px;color:var(--sea-100);max-width:78ch}
+  li{margin:6px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:18px 0}
+  .card{background:var(--sea-800);border:1px solid var(--edge);border-radius:12px;padding:16px 18px}
+  .card h3{margin:0 0 8px;color:var(--paper)}
+  .card p{font-size:14px;margin:0}
+  .tag{display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;
+       text-transform:uppercase;padding:3px 8px;border-radius:5px;border:1px solid var(--edge-2);
+       color:var(--sea-200)}
+  .tag.live{border-color:rgba(62,155,232,.5);color:var(--sea-300)}
+  .tag.part{border-color:rgba(255,140,87,.45);color:var(--flame-400)}
+  .tag.no{border-color:rgba(143,199,240,.2);color:#7FA3C4}
+  footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--edge);
+         font-family:var(--mono);font-size:12px;color:#7FA3C4}
+  @media print{
+    body{background:#fff;color:#0E1116;padding:0}
+    figure,.card{background:#fff;border-color:#ddd}
+    p,ul,td{color:#2A2F36}
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<header>
+  <div class="eyebrow">cuesea · architecture review · 15 August 2026</div>
+  <h1>Cue — how the system is put together</h1>
+  <p class="lede">Clienteling for a shop floor: a guest opts in, and the associate helping
+  them sees who they are and what they want on the inside of their glasses. Everything below is
+  read off the code at <code>072b7bb</code>, not off a roadmap — where something is partial or
+  stubbed, it is labelled.</p>
+</header>
+
+<p>Two sentences orient the whole design, and most review questions resolve to one of them.</p>
+
+<div class="rule"><strong>The service key never leaves our services.</strong> Nothing in a
+browser, on a phone, or inside a released glasses package has ever held it.</div>
+
+<div class="rule"><strong>The customer record never enters ours.</strong> Cue stores a pointer
+into the retailer's CRM — never a name, an address or an order. What is on the glass is fetched
+for that moment and not kept.</div>
+
+<h2>1 · The system</h2>
+
+<figure>
+<svg viewBox="0 0 1180 620" role="img" aria-label="Cue system component map">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8FC7F0"/>
+    </marker>
+    <marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#FF6B2C"/>
+    </marker>
+  </defs>
+
+  <!-- band labels -->
+  <text x="20" y="26" font-family="ui-monospace,monospace" font-size="11" letter-spacing="1.6" fill="#3E9BE8">IN THE STORE — PUBLIC</text>
+  <text x="405" y="26" font-family="ui-monospace,monospace" font-size="11" letter-spacing="1.6" fill="#3E9BE8">OUR SERVICES — HOLD THE KEY</text>
+  <text x="905" y="26" font-family="ui-monospace,monospace" font-size="11" letter-spacing="1.6" fill="#3E9BE8">DATA &amp; THIRD PARTIES</text>
+
+  <!-- the trust boundary -->
+  <line x1="388" y1="40" x2="388" y2="600" stroke="#FF6B2C" stroke-width="1.6" stroke-dasharray="7 6"/>
+  <text x="396" y="596" font-family="ui-monospace,monospace" font-size="10.5" fill="#FF6B2C">trust boundary</text>
+
+  <line x1="878" y1="40" x2="878" y2="600" stroke="#8FC7F0" stroke-width="1" stroke-dasharray="4 6" opacity=".5"/>
+
+  <!-- IN STORE -->
+  <g>
+    <rect x="20" y="48" width="350" height="96" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
+    <text x="38" y="76" fill="#FBF9F5" font-size="15" font-weight="600">Cue Lens — Even Realities G2</text>
+    <text x="38" y="98" fill="#BFE0F7" font-size="12.5">Sideloaded .ehpk · 576×288 monochrome · ring + temple</text>
+    <text x="38" y="118" fill="#BFE0F7" font-size="12.5">TypeScript, socket.io client, no keys, no network allow-</text>
+    <text x="38" y="134" fill="#BFE0F7" font-size="12.5">list entry but our own realtime host</text>
+  </g>
+  <g>
+    <rect x="20" y="164" width="350" height="92" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
+    <text x="38" y="192" fill="#FBF9F5" font-size="15" font-weight="600">Guest phone — app.cuesea.ai/here</text>
+    <text x="38" y="214" fill="#BFE0F7" font-size="12.5">Check in, say what you need, stop. Anonymous per-visit</text>
+    <text x="38" y="230" fill="#BFE0F7" font-size="12.5">reference; identity is the retailer's own account.</text>
+    <text x="38" y="248" fill="#BFE0F7" font-size="12.5">Or: hand off into the retailer's app.</text>
+  </g>
+  <g>
+    <rect x="20" y="276" width="350" height="80" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
+    <text x="38" y="304" fill="#FBF9F5" font-size="15" font-weight="600">The plate — NFC tag + printed QR</text>
+    <text x="38" y="326" fill="#BFE0F7" font-size="12.5">Opaque token per door. The zone is a property of the</text>
+    <text x="38" y="342" fill="#BFE0F7" font-size="12.5">object: no power, no calibration, ~$11.</text>
+  </g>
+  <g>
+    <rect x="20" y="376" width="350" height="80" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
+    <text x="38" y="404" fill="#FBF9F5" font-size="15" font-weight="600">Cue Studio — app.cuesea.ai</text>
+    <text x="38" y="426" fill="#BFE0F7" font-size="12.5">Manager floor view. Holds a <tspan font-family="ui-monospace,monospace" font-size="11.5">user</tspan> bearer token,</text>
+    <text x="38" y="442" fill="#BFE0F7" font-size="12.5">never a service key.</text>
+  </g>
+  <g>
+    <rect x="20" y="476" width="350" height="80" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
+    <text x="38" y="504" fill="#FBF9F5" font-size="15" font-weight="600">Cue Console — internal.cuesea.ai</text>
+    <text x="38" y="526" fill="#BFE0F7" font-size="12.5">cuesea staff only. Health, tenants, people, devices,</text>
+    <text x="38" y="542" fill="#BFE0F7" font-size="12.5">credential connect (write-only).</text>
+  </g>
+
+  <!-- EDGE -->
+  <g>
+    <rect x="410" y="48" width="440" height="200" rx="12" fill="#0A2E63" stroke="rgba(143,199,240,.4)"/>
+    <text x="430" y="78" fill="#FBF9F5" font-size="16" font-weight="600">Cue Realtime — the nervous system</text>
+    <text x="430" y="100" fill="#BFE0F7" font-size="12.5">Node · Express · socket.io · Railway</text>
+    <text x="430" y="128" fill="#8FC7F0" font-size="12" font-family="ui-monospace,monospace">socket  register · voice:* · radio:send · request:claim</text>
+    <text x="430" y="146" fill="#8FC7F0" font-size="12" font-family="ui-monospace,monospace">emits   glasses:display · request:new · radio:message</text>
+    <text x="430" y="170" fill="#8FC7F0" font-size="12" font-family="ui-monospace,monospace">public  /api/presence · /api/request · /api/catalogue</text>
+    <text x="430" y="188" fill="#8FC7F0" font-size="12" font-family="ui-monospace,monospace">        /api/checkin/resolve · /api/presence/revoke</text>
+    <text x="430" y="216" fill="#FFE2D2" font-size="12.5">Holds the service key on every client's behalf. State is</text>
+    <text x="430" y="232" fill="#FFE2D2" font-size="12.5">per-tenant; a socket's tenant is pinned at register.</text>
+  </g>
+
+  <g>
+    <rect x="410" y="272" width="440" height="284" rx="12" fill="#0A2E63" stroke="rgba(143,199,240,.4)"/>
+    <text x="430" y="302" fill="#FBF9F5" font-size="16" font-weight="600">Depth — the AI service</text>
+    <text x="430" y="324" fill="#BFE0F7" font-size="12.5">Python · FastAPI · psycopg3 · plain SQL migrations</text>
+    <text x="430" y="352" fill="#8FC7F0" font-size="12" font-family="ui-monospace,monospace">/auth            people, 4 roles, 12h sessions</text>
+    <text x="430" y="370" fill="#8FC7F0" font-size="12" font-family="ui-monospace,monospace">/api/analytics   managers, scoped to their tenant</text>
+    <text x="430" y="388" fill="#8FC7F0" font-size="12" font-family="ui-monospace,monospace">/api/admin       cuesea staff + tenant admin</text>
+    <text x="430" y="406" fill="#8FC7F0" font-size="12" font-family="ui-monospace,monospace">/api/ingest      service key only — the floor writes here</text>
+    <text x="430" y="424" fill="#8FC7F0" font-size="12" font-family="ui-monospace,monospace">/api/guest       service key only — plate, config, floor</text>
+    <text x="430" y="452" fill="#FBF9F5" font-size="13" font-weight="600">What it decides</text>
+    <text x="430" y="472" fill="#BFE0F7" font-size="12.5">The cue grammar (three lines, composed in code, never by</text>
+    <text x="430" y="488" fill="#BFE0F7" font-size="12.5">the model) · six voice intents + grounded fallback ·</text>
+    <text x="430" y="504" fill="#BFE0F7" font-size="12.5">recommendations · presence &amp; consent · requests ·</text>
+    <text x="430" y="520" fill="#BFE0F7" font-size="12.5">retention sweeps · credential sealing · health</text>
+    <text x="430" y="542" fill="#FFE2D2" font-size="12.5">Fails closed: no key, no data.</text>
+  </g>
+
+  <!-- DATA & THIRD PARTIES -->
+  <g>
+    <rect x="900" y="48" width="262" height="150" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
+    <text x="918" y="76" fill="#FBF9F5" font-size="15" font-weight="600">Postgres</text>
+    <text x="918" y="98" fill="#BFE0F7" font-size="12.5">15 tables, 8 migrations.</text>
+    <text x="918" y="120" fill="#BFE0F7" font-size="12.5">Holds pointers, operations and</text>
+    <text x="918" y="136" fill="#BFE0F7" font-size="12.5">sealed credentials.</text>
+    <text x="918" y="162" fill="#FFE2D2" font-size="12.5">Never holds the encryption</text>
+    <text x="918" y="178" fill="#FFE2D2" font-size="12.5">key, and never a customer.</text>
+  </g>
+  <g>
+    <rect x="900" y="218" width="262" height="118" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
+    <text x="918" y="246" fill="#FBF9F5" font-size="15" font-weight="600">Retailer CRM — Currents</text>
+    <text x="918" y="268" fill="#BFE0F7" font-size="12.5">Shopify Admin GraphQL today.</text>
+    <text x="918" y="284" fill="#BFE0F7" font-size="12.5">Adapter contract is 3 methods;</text>
+    <text x="918" y="300" fill="#BFE0F7" font-size="12.5">nothing above knows the backend.</text>
+    <text x="918" y="322" fill="#BFE0F7" font-size="12.5">Gap = enterprise adapter, later.</text>
+  </g>
+  <g>
+    <rect x="900" y="356" width="262" height="90" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
+    <text x="918" y="384" fill="#FBF9F5" font-size="15" font-weight="600">Speech — Deepgram</text>
+    <text x="918" y="406" fill="#BFE0F7" font-size="12.5">nova-2. Audio is transcribed and</text>
+    <text x="918" y="422" fill="#BFE0F7" font-size="12.5">dropped; never stored.</text>
+  </g>
+  <g>
+    <rect x="900" y="466" width="262" height="90" rx="12" fill="#06193A" stroke="rgba(143,199,240,.28)"/>
+    <text x="918" y="494" fill="#FBF9F5" font-size="15" font-weight="600">Model — Grok</text>
+    <text x="918" y="516" fill="#BFE0F7" font-size="12.5">Forbidden from estimating stock,</text>
+    <text x="918" y="532" fill="#BFE0F7" font-size="12.5">size or price. Outage says so.</text>
+  </g>
+
+  <!-- flows -->
+  <path d="M370 96 H 410" stroke="#8FC7F0" stroke-width="1.6" marker-end="url(#a)" fill="none"/>
+  <path d="M370 206 H 410" stroke="#8FC7F0" stroke-width="1.6" marker-end="url(#a)" fill="none"/>
+  <path d="M195 276 V 258" stroke="#FF6B2C" stroke-width="1.8" marker-end="url(#af)" fill="none"/>
+  <path d="M370 416 C 392 416, 396 380, 410 360" stroke="#8FC7F0" stroke-width="1.4" marker-end="url(#a)" fill="none" opacity=".8"/>
+  <path d="M370 516 C 392 516, 396 480, 410 452" stroke="#8FC7F0" stroke-width="1.4" marker-end="url(#a)" fill="none" opacity=".8"/>
+  <path d="M630 248 V 272" stroke="#8FC7F0" stroke-width="1.6" marker-end="url(#a)" fill="none"/>
+  <path d="M850 380 H 900" stroke="#8FC7F0" stroke-width="1.6" marker-end="url(#a)" fill="none"/>
+  <path d="M850 300 C 875 300, 880 160, 900 130" stroke="#8FC7F0" stroke-width="1.6" marker-end="url(#a)" fill="none"/>
+  <path d="M850 420 C 875 420, 880 400, 900 400" stroke="#8FC7F0" stroke-width="1.4" marker-end="url(#a)" fill="none"/>
+  <path d="M850 480 C 875 480, 880 500, 900 505" stroke="#8FC7F0" stroke-width="1.4" marker-end="url(#a)" fill="none"/>
+
+  <text x="376" y="88" fill="#8FC7F0" font-size="10.5" font-family="ui-monospace,monospace">socket</text>
+  <text x="376" y="198" fill="#8FC7F0" font-size="10.5" font-family="ui-monospace,monospace">https</text>
+  <text x="206" y="272" fill="#FF6B2C" font-size="10.5" font-family="ui-monospace,monospace">opens ?p=token</text>
+  <text x="636" y="266" fill="#8FC7F0" font-size="10.5" font-family="ui-monospace,monospace">service key attached here</text>
+  <text x="374" y="396" fill="#8FC7F0" font-size="10" font-family="ui-monospace,monospace">proxy</text>
+  <text x="374" y="496" fill="#8FC7F0" font-size="10" font-family="ui-monospace,monospace">proxy</text>
+</svg>
+<figcaption>Every arrow crossing the dashed line is a call by something that does not hold a key.
+The realtime server is the only component that attaches one — and for Studio and Console it
+deliberately does not: those routes carry the signed-in human's own token, forwarded untouched.</figcaption>
+</figure>
+
+<h2>2 · Trust boundaries, and what holds what</h2>
+
+<table>
+  <thead><tr><th>Component</th><th>Holds</th><th>Cannot reach</th></tr></thead>
+  <tbody>
+    <tr><td>Cue Lens (.ehpk)</td><td>Nothing. Its network allow-list contains only our realtime host.</td><td>The AI service, any third party, any credential. A released package is extractable — so nothing goes in it.</td></tr>
+    <tr><td>Guest phone</td><td>An <code>anon-…</code> reference it minted itself, for one visit, in sessionStorage.</td><td>Everything. Every call it makes is to an open route on the realtime server.</td></tr>
+    <tr><td>Cue Studio / Console</td><td>A <em>user</em> bearer token, 12-hour session, scoped to one tenant (or to staff).</td><td>The service key. Analytics routes authorise on the user's own token; the proxy deliberately does not attach ours.</td></tr>
+    <tr><td>Cue Realtime</td><td><code>GAPVISION_API_KEY</code> — the service key.</td><td>The credential-encryption key. It never sees a merchant token, sealed or otherwise.</td></tr>
+    <tr><td>Depth (AI service)</td><td>Service key, <code>CUE_CRED_KEY</code>, model and speech keys.</td><td>Nothing above it. This is the only place a merchant credential is opened, in memory, per call.</td></tr>
+    <tr><td>Postgres</td><td>Ciphertext and pointers.</td><td>The key that would open the ciphertext. A stolen dump is inert.</td></tr>
+  </tbody>
+</table>
+
+<h3>Credential sealing</h3>
+<p>A merchant's Shopify Admin token can read every customer, order and price in their store. It
+is sealed AES-256-GCM in the application, so the database only ever holds ciphertext, and the AAD
+binds it to the tenant — moving a sealed row between tenants fails to open rather than silently
+pointing Cue at the wrong shop. It is <strong>write-only</strong>: no API surface and no cuesea
+employee can read a token back, only a fingerprint and a key id. Rotation is supported
+(<code>CUE_CRED_KEY_OLD</code>), and every row records which key sealed it.</p>
+
+<h2>3 · Multi-tenancy, as invariants rather than intentions</h2>
+<p>Two of these were disclosures found in one day, in different layers, and they were the same
+mistake: state that is correct with one customer and wrong with two.</p>
+<ul>
+  <li>A socket's tenant is <strong>pinned at register</strong> and never re-read from a later payload. A client that wants to change retailer must reconnect.</li>
+  <li>Socket rooms, rosters, radio logs, leaderboards and stats are keyed by tenant. There is no global room.</li>
+  <li>Every analytics query is scoped by the signed-in user's tenant; only <code>cue_admin</code> may name another, and nobody can grant a role above their own.</li>
+  <li>The CRM adapter is resolved per tenant from a sealed credential — not from a process-wide client.</li>
+  <li>The guest roster endpoint is off for non-demo tenants: a list of every customer in a store is the exact shape tap-to-reveal exists to eliminate.</li>
+</ul>
+<p><code>npm run test:tenants</code> is ten negative assertions — it scores 3/10 against the commit
+before the fix and 10/10 after, which is the only way to know a leak test is worth anything.</p>
+
+<h2>4 · What is actually stored, and for how long</h2>
+
+<table>
+  <thead><tr><th>Table</th><th>What it is</th><th>Retention</th></tr></thead>
+  <tbody>
+    <tr><td>tenants, users, devices</td><td>Retailers, staff accounts, glasses by serial.</td><td>Kept. Not customer data.</td></tr>
+    <tr><td>engagements</td><td>One guest interaction: zone, timings, outcome, sale, plus the CRM pointer and the three lines actually shown.</td><td>Pointer, cue lines and recommendations redacted on the tenant's window. The shift survives.</td></tr>
+    <tr><td>voice_queries</td><td>Intent, latency, success — and transcript/answer only if the tenant opted in.</td><td>Words redacted on the window; the operational skeleton stays.</td></tr>
+    <tr><td>presence_events</td><td>Guest ref, zone, door, consent class, expiry.</td><td>Expires in 45 minutes; redacted on the window.</td></tr>
+    <tr><td>guest_requests</td><td>What a guest asked to be brought: sku, size, need, note.</td><td>The guest's own words and the pointer go; the sku, size and wait stay — that is a question about a shop, not a shopper.</td></tr>
+    <tr><td>plates, plate_hits</td><td>Printed tokens and every resolution attempt.</td><td>Kept. Holds no people — a test asserts the absent columns.</td></tr>
+    <tr><td>tenant_crm_credentials</td><td>Sealed merchant tokens.</td><td>Kept until replaced. Never readable back.</td></tr>
+    <tr><td>retention_runs</td><td>A receipt for every sweep.</td><td>Kept.</td></tr>
+  </tbody>
+</table>
+
+<div class="rule">Retention is redaction, not deletion. Deleting rows would destroy the analytics
+the product exists to produce — and a retailer who turned a 30-day window on and lost their
+quarter would turn it off and never turn it back on. So the sweep nulls what says something
+about a <em>person</em> and keeps what says something about a <em>shift</em>.</div>
+
+<h2>5 · Two paths end to end</h2>
+
+<figure>
+<svg viewBox="0 0 1180 470" role="img" aria-label="Sequence diagrams: a guest request, and a voice question">
+  <text x="20" y="24" font-family="ui-monospace,monospace" font-size="11" letter-spacing="1.6" fill="#3E9BE8">A · TAP TO GLASS — ABOUT 2 SECONDS</text>
+  <g font-size="12.5">
+    <rect x="20" y="44" width="1140" height="1" fill="rgba(143,199,240,.16)"/>
+    <g fill="#BFE0F7" font-family="ui-monospace,monospace" font-size="11.5">
+      <text x="24" y="70">1</text><text x="24" y="106">2</text><text x="24" y="142">3</text>
+      <text x="24" y="178">4</text><text x="24" y="214">5</text>
+    </g>
+    <g fill="#FBF9F5">
+      <text x="52" y="70">Guest taps the plate. The tag opens <tspan font-family="ui-monospace,monospace" font-size="11.5" fill="#8FC7F0">app.cuesea.ai/here?p=…</tspan> — nothing in that URL names the store or the room.</text>
+      <text x="52" y="106">Realtime resolves the token → tenant, zone, door. Records presence with a consent class the caller cannot choose.</text>
+      <text x="52" y="142">Page offers what is on the floor, with that product's real sizes and no unit counts. Guest picks 32×30, adds a note.</text>
+      <text x="52" y="178">Depth refuses any request without a live check-in, then composes one actionable line — size first, because the row truncates.</text>
+      <text x="52" y="214">It takes the frame on the glasses of whoever covers that zone. Press claims it; the claim is settled server-side, so two</text>
+      <text x="52" y="236">associates pressing at once produce one claim and one honest "already taken".</text>
+    </g>
+  </g>
+
+  <text x="20" y="290" font-family="ui-monospace,monospace" font-size="11" letter-spacing="1.6" fill="#3E9BE8">B · A SPOKEN QUESTION — ABOUT 3 SECONDS END TO END</text>
+  <g font-size="12.5">
+    <rect x="20" y="310" width="1140" height="1" fill="rgba(143,199,240,.16)"/>
+    <g fill="#BFE0F7" font-family="ui-monospace,monospace" font-size="11.5">
+      <text x="24" y="336">1</text><text x="24" y="372">2</text><text x="24" y="408">3</text><text x="24" y="466">4</text>
+    </g>
+    <g fill="#FBF9F5">
+      <text x="52" y="336">Double-press. Mic opens; endpointing is peak-relative with hysteresis, so it closes when you stop talking.</text>
+      <text x="52" y="372">Audio streams to realtime, which attaches the key and forwards to Depth. Deepgram transcribes; the audio is dropped.</text>
+      <text x="52" y="408">Intent is detected from the transcript — stock, location, price, history, recommend, or an open fallback. The answer is</text>
+      <text x="52" y="430">grounded in records we hold; the model is forbidden from estimating stock, sizes or prices.</text>
+      <text x="52" y="466">Answer renders in-lens. A model outage says "Model unavailable" rather than guessing.</text>
+    </g>
+  </g>
+</svg>
+<figcaption>Deictic reference works because the server remembers what is on the lens:
+"do you have <em>these</em> in a 32" resolves to the card the associate is looking at.</figcaption>
+</figure>
+
+<h2>6 · What is built, what is partial, what is not</h2>
+
+<div class="grid">
+  <div class="card">
+    <span class="tag live">Live</span>
+    <h3>Works on hardware and in production</h3>
+    <p>The lens and its card stack, voice, floor comms, presence and the front doors, guest
+    requests, the check-in page, per-merchant sealed credentials, people auth with invites and
+    resets, enforced retention, attribution, analytics, Studio and Console.</p>
+  </div>
+  <div class="card">
+    <span class="tag part">Partial</span>
+    <h3>Works, with a caveat worth stating</h3>
+    <p>Per-size stock now reads from Shopify variants but has not met a live store with real
+    variants. Floor location is hardcoded to "Floor" pending a product metafield. Outbound email
+    is unconfigured in production and reports as such. Floor comms has never been used by two
+    people on a real floor, which is the only test of its phrase vocabulary.</p>
+  </div>
+  <div class="card">
+    <span class="tag no">Not built</span>
+    <h3>Named rather than implied</h3>
+    <p>Even Hub store listing. Anthropic, OpenAI and Google model providers are registered and
+    stubbed — they raise rather than pretend. Gap's own <code>/here</code> route and app
+    association. No Console panel for plates or for what is waiting on the floor.</p>
+  </div>
+</div>
+
+<h2>7 · Failure modes and blast radius</h2>
+
+<table>
+  <thead><tr><th>If this fails</th><th>What a guest sees</th><th>What an associate sees</th></tr></thead>
+  <tbody>
+    <tr><td>Model provider</td><td>Nothing — not their path.</td><td>"Model unavailable." Never a guess.</td></tr>
+    <tr><td>Speech provider</td><td>Nothing.</td><td>Voice fails; the card, the cue and floor comms are unaffected.</td></tr>
+    <tr><td>Retailer CRM</td><td>Check-in still succeeds and their request still lands.</td><td>No guest card; the request is still actionable, because it names a place rather than a person.</td></tr>
+    <tr><td>Depth (AI service)</td><td>Check-in fails with a plain sentence and a suggestion to ask an associate.</td><td>No new guests; the glasses stay up.</td></tr>
+    <tr><td>Analytics write</td><td>Nothing.</td><td>Nothing. Ingest is fire-and-forget by design — a reporting outage must never be felt mid-conversation.</td></tr>
+    <tr><td>A leaked plate token</td><td>Nothing until it is revoked.</td><td>One row revoked, one plate reprinted, ~$11. The other door on the same plate keeps working.</td></tr>
+    <tr><td>Postgres</td><td>Check-in fails.</td><td>Live sessions continue; nothing new starts. State is in-memory per tenant (Redis at scale).</td></tr>
+  </tbody>
+</table>
+
+<h2>8 · Deployment and verification</h2>
+
+<table>
+  <thead><tr><th>Surface</th><th>Where</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>Depth (AI service)</td><td>Railway, <code>sfo</code>, one replica</td><td>Auto-deploys from <code>main</code>. Migrations run on boot and are additive.</td></tr>
+    <tr><td>Cue Realtime</td><td>Railway</td><td>Same. In-memory tenant state; Redis is the scale story.</td></tr>
+    <tr><td>Cue Studio + guest page</td><td>Vercel — app.cuesea.ai</td><td>SSO on preview URLs, open on the custom domain. <code>/here</code> is emitted as a file, not a rewrite rule.</td></tr>
+    <tr><td>Cue Console</td><td>Vercel — internal.cuesea.ai</td><td>Separate build. Staff only.</td></tr>
+    <tr><td>Cue Lens</td><td>Vercel, sideloaded via Even Hub</td><td>The realtime URL is injected from the package's own network allow-list at build, and a pack-time test refuses localhost, off-list hosts and anything resembling a key.</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Eleven live health checks</strong> — schema state, orphaned tenants, voice success rate
+and p95, unassigned devices, stranded engagements, credential key state, mail transport, retention
+backlog. Every check asserts something a feature needs, and <em>unknown never renders as a
+pass</em>.</p>
+
+<p><strong>Test inventory at <code>072b7bb</code>:</strong> 232 pytest · 19 tap-to-glass browser
+checks · 14 public-door checks · 11 print-artwork checks · 34 lens page-shape · 27 gesture · 20
+card · 10 tenant-isolation · 9 endpointing.</p>
+
+<h2>9 · What I would put on a review agenda</h2>
+<ul>
+  <li><strong>A printed code is a bearer credential.</strong> Tokens made the URL opaque and
+  revocable; they did not make it unshareable, and nothing printed can be. The tap door can be
+  closed properly with rotating-cryptogram tags (the counter check is built and tested; the CMAC
+  path has never met a physical tag). That is a purchasing decision, not an engineering one.</li>
+  <li><strong>Single region, single replica, in-memory realtime state.</strong> Fine for a pilot;
+  the Redis swap is designed for and not done.</li>
+  <li><strong><code>CUE_CRED_KEY</code> exists in one place</strong> — Railway. There are zero
+  sealed rows today, so the cost of backing it up is nothing and the cost of losing it later is
+  every merchant re-entering a token.</li>
+  <li><strong>Two API keys were once pasted in plaintext</strong> and should be rotated.</li>
+  <li><strong>The enterprise adapter is the real Gap dependency.</strong> The seam exists and is
+  three methods wide; nothing above it knows which backend a tenant is on.</li>
+  <li><strong>Naming debt:</strong> the repo, Railway project and environment variables still say
+  <code>gapvision</code> while the product is Cue.</li>
+</ul>
+
+<footer>
+Read off <code>main</code> at <code>072b7bb</code>, 15 August 2026 · cuesea · Cue Lens 0.1.11 ·
+8 migrations · 15 tables
+</footer>
+
+</div>
+</body>
+</html>
