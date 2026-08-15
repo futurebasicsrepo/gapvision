@@ -1,6 +1,6 @@
 # Cue — features as of 15 August 2026
 
-Plugin `0.1.9`, `main` at `5eddb2d`. Read off the code, not the roadmap:
+Plugin `0.1.10`, `main` at `a34b281`. Read off the code, not the roadmap:
 everything in **Works today** is built, wired and deployed. Everything else is
 in its own section, and the sections are honest about the difference.
 
@@ -110,20 +110,17 @@ customer record never enters them.
 | **Floor location** | The Shopify adapter hardcodes location to "Floor". Per-zone placement needs a product metafield. |
 | **Voice and gestures in the browser** | Fully wired server-side and covered by tests, but Cue Studio has no UI that drives them — they are exercised from the glasses or the test harness. |
 | **The demo harness** | The associate view with its beacon buttons and its leaderboard names is demo-only, and the seeded names appear for the `gap` tenant alone. |
-| **Radio on the glass** | The plugin already subscribes to floor messages — it writes them to a debug log instead of rendering them. Transport done, surface not built. |
+| **Floor comms** | Built. Urgent messages take the frame, everything else queues behind a rail marker; scroll down opens the floor — unread first, then canned phrases, press to send or reply. Costs zero new containers. Not yet exercised by two people on a real floor, which is the only test that matters for the phrase vocabulary. |
 | **Guest roster endpoint** | Deliberately gated off for non-demo tenants. A list of every customer in the store is exactly the shape the tap-to-reveal design exists to eliminate. |
 | **User management** | The API can create, update, disable and delete people. The Console can only create them. Changing a role or resetting a password currently needs a direct API call. |
-| **Retention** | Now settable per tenant in the Console next to the transcript toggle — and still enforced by nothing. The number is recorded and no job deletes on it. Setting it is currently a statement of intent, which the UI says out loud. |
+| **Retention** | Enforced. Aged personal data is redacted on a timer, per tenant, on that tenant's own window — transcripts, answers, the CRM pointer, cue lines, recommendations, assist notes. The operational skeleton (intent, latency, zone, outcome, sale) survives deliberately, so turning the control on does not cost a retailer their quarter. Every sweep leaves a receipt in `retention_runs`. |
 
 ---
 
 ## Not built
 
-- **Retention enforcement.** `privacy.retention_days` is stored and nothing
-  deletes on it. The published privacy policy admits this in writing.
 - **Invites, password reset, any email at all.** An account created without a
   password exists but cannot sign in until staff set one.
-- **Floor comms** — designed in detail, decided (priority tier), not started.
 - **Customer search** — see below.
 - **Even Hub submission** — packs clean; the store listing has not been created.
 - **QR check-in / presence** — the opt-in identification path.
