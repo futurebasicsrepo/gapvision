@@ -74,9 +74,29 @@ _TIMEOUT = 12
 _API = "https://api.resend.com/emails"
 
 
+def _api_key() -> str | None:
+    """The provider credential, wherever it happens to be spelled.
+
+    Resend's SMTP password *is* its API key — the same string, presented over
+    two transports. Demanding it in two environment variables would mean two
+    places to rotate it and one of them getting forgotten, so the SMTP password
+    counts as the key when the host is that provider's.
+
+    An explicit RESEND_API_KEY still wins, and a non-Resend relay is untouched:
+    its password is a password and does not become an API key by accident.
+    """
+    explicit = os.getenv("RESEND_API_KEY")
+    if explicit:
+        return explicit
+    host = (os.getenv("CUE_SMTP_HOST") or "").lower()
+    if "resend.com" in host:
+        return os.getenv("CUE_SMTP_PASSWORD")
+    return None
+
+
 def _cfg() -> dict[str, str | None]:
     return {
-        "api_key": os.getenv("RESEND_API_KEY"),
+        "api_key": _api_key(),
         "host": os.getenv("CUE_SMTP_HOST"),
         "port": os.getenv("CUE_SMTP_PORT", "587"),
         "user": os.getenv("CUE_SMTP_USER"),
