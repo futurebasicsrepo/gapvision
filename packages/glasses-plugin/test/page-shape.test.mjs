@@ -31,11 +31,12 @@ const shapeOf = (cue) => {
   return [
     ...p.textObject.map((c) => `t${c.containerID}`),
     ...(p.listObject || []).map((c) => `l${c.containerID}`),
+    ...(p.imageObject || []).map((c) => `i${c.containerID}`),
   ].join(",");
 };
 
 const IDLE = { lines: ["CUESEA READY", "GAP · DEMO", "AWAITING GUEST SIGNAL"],
-               meta: ["PRESS TO ASK", "DOUBLE PRESS EXITS"] };
+               meta: ["PRESS TO ASK", "2X PRESS EXITS"] };
 const RAIL = ["ICON", "4200 PTS", "TOPS M", "BOTTOMS 28X30"];
 const GUEST = { lines: ["SARAH CHEN", "IN CART CASHSOFT CREW", "OFFER IT IN SIZE M"],
                 facts: RAIL, meta: ["DENIM WALL"],
@@ -101,6 +102,71 @@ check("a two-line cue is the same shape as a three-line cue",
   check("the unused line container is built and blank",
     third !== undefined && third.content === "",
     third ? JSON.stringify(third.content) : "missing");
+}
+
+// --- the mark ----------------------------------------------------------------
+// The logo is an image container, and an image container is a different
+// container from the text one it replaces. If these compared equal, the
+// fallback from mark to wordmark would take the cheap path and upgrade a text
+// container that the page never built — the rail bug again, in the corner
+// where the brand is.
+check("the mark and the wordmark are different shapes",
+  shapeOf({ ...GUEST, logo: true }) !== shapeOf(GUEST),
+  `${shapeOf({ ...GUEST, logo: true })} vs ${shapeOf(GUEST)}`);
+
+{
+  const p = buildCue({ ...GUEST, logo: true });
+  check("the mark replaces the wordmark rather than joining it",
+    p.imageObject?.length === 1 &&
+    !p.textObject.some((c) => c.containerName === "cue-label"),
+    `${p.imageObject?.length} image, label present: ${p.textObject.some((c) => c.containerName === "cue-label")}`);
+
+  // ImageContainerProperty has no isEventCapture field, so a page that swaps
+  // the header for a mark loses its receiver unless the capture moved first.
+  // Without one, a container tap reaches nothing and the HUD goes inert.
+  const captures = p.textObject.filter((c) => c.isEventCapture === 1);
+  check("a page with the mark still has exactly one gesture receiver",
+    captures.length === 1, captures.map((c) => c.containerName).join(",") || "none");
+
+  const total = p.textObject.length + (p.listObject?.length || 0) + p.imageObject.length;
+  check("the marked, railed page is inside the host budget",
+    p.textObject.length <= 8 && p.imageObject.length <= 4 && total <= 12,
+    `${p.textObject.length} text, ${p.imageObject.length} image, ${total} total`);
+}
+
+{
+  // Five image containers is one past Image_Object's max_count of 4 — the
+  // budget nobody has hit yet, asserted before somebody does.
+  let threw = false;
+  try {
+    assertBudget({
+      containerTotalNum: 6,
+      textObject: [{ containerID: 1 }],
+      imageObject: Array.from({ length: 5 }, (_, i) => ({ containerID: 10 + i })),
+    });
+  } catch { threw = true; }
+  check("too many image containers throws", threw);
+}
+
+// --- the rows that were cut off on glass -------------------------------------
+// Kyle read the bottom row as "cut off" and the header as "too large for the
+// container". Both were boxes under 20px: the host will not draw a glyph
+// smaller than its floor, so the text overflowed the box and the box clipped
+// it. Every row on the page has to clear that floor.
+{
+  const p = buildCue({ ...GUEST, logo: true });
+  const rows = [
+    ...p.textObject.map((c) => [c.containerName, c.height]),
+    ...(p.listObject || []).map((c) => [c.containerName,
+      c.height / c.itemContainer.itemCount]),
+  ];
+  const short = rows.filter(([, h]) => h < 20);
+  check("no row is under the host's legible floor of 20px",
+    short.length === 0, short.map(([n, h]) => `${n}=${h}`).join(", ") || "all clear");
+
+  const bottom = Math.max(...p.textObject.map((c) => c.yPosition + c.height));
+  check("nothing is drawn past the bottom of the display",
+    bottom <= 288, `lowest edge ${bottom}`);
 }
 
 const failed = results.filter((r) => !r).length;

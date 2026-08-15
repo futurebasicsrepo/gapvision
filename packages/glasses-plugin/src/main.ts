@@ -22,6 +22,7 @@ import { io, type Socket } from "socket.io-client";
 import { getBridge, type GlassesBridge } from "./bridge";
 import { decodeGesture, describeGesture, type DecodedGesture } from "./gestures";
 import { buildCue, CUE_LINES, IDLE_CUE, toDisplayText, type Cue } from "./layout";
+import { markBytes } from "./mark";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
 
 /** Everything goes through the realtime server. The plugin is a static
@@ -77,6 +78,18 @@ let voice: VoiceController;
  *  Not the line count — see `renderCue`. */
 let currentShape = "";
 let pageBuilt = false;
+/**
+ * Whether to ask for the mark instead of the word CUE.
+ *
+ * Starts true — try it — and latches false the first time the host declines.
+ * It never latches back: a host that cannot take an image is not going to
+ * start mid-shift, and retrying on every render would mean a container that
+ * flickers between a mark and a wordmark on a customer's face.
+ *
+ * The pixels do not survive a page rebuild. The container is re-declared
+ * empty every time, so `pushMark` runs after every build, not just the first.
+ */
+let useMark = true;
 let engaged = false;
 
 /** What the associate is currently looking at — the context a voice question
@@ -145,6 +158,7 @@ async function renderCue(cue: Cue, latencyMs?: number) {
   const page = buildCue(
     {
       ...cue,
+      logo: useMark,
       facts: cue.facts ?? railFacts,
       moduleIndex: cue.moduleIndex ?? modulePosition(),
       moduleCount: cue.moduleCount ?? moduleTotal(),
@@ -171,6 +185,7 @@ async function renderCue(cue: Cue, latencyMs?: number) {
   if (!pageBuilt) {
     await bridge.createStartUpPageContainer(page);
     pageBuilt = true;
+    if (!(await pushMark(page))) return renderCue(cue, latencyMs);
   } else if (sameShape) {
     // Cheap path: text-only updates, no page rebuild.
     for (const c of page.textObject) {
@@ -182,8 +197,37 @@ async function renderCue(cue: Cue, latencyMs?: number) {
     }
   } else {
     await bridge.rebuildPageContainer(page);
+    if (!(await pushMark(page))) return renderCue(cue, latencyMs);
   }
   currentShape = shape;
+}
+
+/**
+ * Send the mark's pixels for whatever image containers this page declared.
+ *
+ * Returns false when the host refused, having already latched `useMark` off —
+ * the caller re-renders, which builds the wordmark page instead. That retry
+ * happens at most once in the life of the app, and it is the difference
+ * between a brand mark and an empty rectangle in the corner of someone's
+ * vision.
+ */
+async function pushMark(page: ReturnType<typeof buildCue>): Promise<boolean> {
+  for (const c of page.imageObject || []) {
+    const result = await bridge.updateImageRawData({
+      containerID: c.containerID,
+      containerName: c.containerName,
+      imageData: markBytes(),
+    });
+    if (result !== "success") {
+      log(`mark rejected by host (${result}) — falling back to the wordmark`);
+      useMark = false;
+      // The shape is about to change, and the page we just built is the one
+      // being replaced. Clear it so the re-render cannot take the cheap path.
+      currentShape = "";
+      return false;
+    }
+  }
+  return true;
 }
 
 /** Where scrolling has got to: 0 is the cue, 1..n the recommendations. */
@@ -202,11 +246,20 @@ function railFor(payload: DisplayPayload): string[] {
   const g = payload.guest as any;
   if (!g) return [];
   const sizes = g.sizes || {};
+  // Name first, then who they are to us, then what fits them. Kyle asked for
+  // the customer's name to stay put on the left: it is the one fact he needs
+  // continuously and the one the sentence stops showing the moment a voice
+  // answer replaces it.
+  // TOP/BTM, not TOPS/BOTTOMS. The rail holds about eleven characters at this
+  // type size, and "BOTTOMS 28X30" is thirteen — it clipped to "BOTTOMS 28X",
+  // losing the inseam, which is the half of that fact worth having. Abbreviate
+  // the label and the value survives.
   return [
+    g.name || "",
     g.tier || "",
     typeof g.points === "number" ? `${g.points} PTS` : "",
-    sizes.tops ? `TOPS ${sizes.tops}` : "",
-    sizes.bottoms ? `BOTTOMS ${sizes.bottoms}` : "",
+    sizes.tops ? `TOP ${sizes.tops}` : "",
+    sizes.bottoms ? `BTM ${sizes.bottoms}` : "",
   ].filter(Boolean);
 }
 
@@ -223,7 +276,10 @@ async function showIdle() {
     // The build, on the glass. An install that silently did not roll over is
     // indistinguishable from a fix that did not work, and we burned two
     // uploads on exactly that ambiguity.
-    meta: [`V${__APP_VERSION__.replace(/\./g, "·")}`, "PRESS TO ASK", "DOUBLE PRESS EXITS"],
+    // "2X PRESS EXITS", not "DOUBLE PRESS EXITS": the strip holds 39
+    // characters and the long form made it 41, so the exit hint — the one
+    // gesture nobody discovers by accident — was the fact that got dropped.
+    meta: [`V${__APP_VERSION__.replace(/\./g, "·")}`, "PRESS TO ASK", "2X PRESS EXITS"],
   });
   ui.sessionInfo.textContent = "No active session";
 }
@@ -388,6 +444,20 @@ function onGesture(g: DecodedGesture) {
     case "foreground-exit":
       // Nothing to do, but do not fall through to the default and log it as
       // unhandled — it is expected, not a surprise.
+      //
+      // An open question, and deliberately left open. A later edit added
+      // `foreground-exit` to the `exit` case below so backgrounding would end
+      // the session — unreachable, because this case catches it first, which
+      // is how it survived two releases without anyone noticing it did
+      // nothing. The compiler finally said so.
+      //
+      // Ending the session here is only right if the host backgrounds the
+      // WebView when the *phone* goes away. If it also backgrounds it during
+      // ordinary glasses use, this would end a session every time an
+      // associate put their phone in their pocket mid-conversation — the
+      // failure that matters, versus a phantom "engaged" row on the manager
+      // dashboard, which is the one we have. The locked-phone test answers
+      // it; until it has been run, the cheaper mistake stays.
       return;
 
     case "scroll-up":
@@ -399,7 +469,6 @@ function onGesture(g: DecodedGesture) {
       return;
 
     case "exit":
-    case "foreground-exit":
       // The OS is taking the page away; drop the session cleanly rather than
       // leaving an associate "engaged" on the manager dashboard forever.
       if (engaged) socket.emit("session:end");

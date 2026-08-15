@@ -55,17 +55,61 @@ export interface ListContainer {
   };
 }
 
+/**
+ * An image container. Note what it does *not* have: no border, no padding, no
+ * `isEventCapture`. The host's `ImageContainerProperty` is position, size, id,
+ * name and z-order and nothing else — so a page whose only gesture receiver
+ * was the header cannot simply swap that header for a mark. The capture has to
+ * move somewhere else first.
+ *
+ * The pixels do not travel with the page. The container is declared here and
+ * then filled by a separate `updateImageRawData` call, so a page can be built
+ * and drawn with an empty box in it.
+ */
+export interface ImageContainer {
+  xPosition: number;
+  yPosition: number;
+  /** Host range 20–288. */
+  width: number;
+  /** Host range 20–144. */
+  height: number;
+  containerID: number;
+  containerName: string;
+  zOrderIndex?: number;
+}
+
 export interface PageSpec {
   containerTotalNum: number;
   textObject: TextContainer[];
   listObject?: ListContainer[];
+  imageObject?: ImageContainer[];
 }
+
+/** What the host reports back from `updateImageRawData`. `success` is the only
+ *  one that means a pixel reached the glass. */
+export type ImageResult =
+  | "success" | "imageException" | "imageSizeInvalid" | "imageToGray4Failed" | string;
 
 export interface GlassesBridge {
   readonly kind: "even-app" | "mock";
   createStartUpPageContainer(page: PageSpec): Promise<unknown>;
   rebuildPageContainer(page: PageSpec): Promise<unknown>;
   textContainerUpgrade(update: { containerID: number; containerName: string; content: string }): Promise<unknown>;
+  /**
+   * Fill a declared image container with encoded image bytes.
+   *
+   * The SDK also exposes `ImageRawDataUpdateFields`, the fragmented form with
+   * session ids and packet indices, and its own source marks it "暂时用不到" —
+   * not used for now. The host does the fragmenting; this call takes the whole
+   * image. Returns the host's verdict, which is the only signal that the mark
+   * actually landed: an image container the host rejected stays an empty box
+   * and reports nothing further.
+   */
+  updateImageRawData(update: {
+    containerID: number;
+    containerName: string;
+    imageData: Uint8Array;
+  }): Promise<ImageResult>;
   /** 1 = system exit-confirmation dialog, required on the root page.
    *  0 = immediate exit, permitted only on internal pages. Defaulting to 1
    *  because the failure mode of getting it wrong is a rejected submission,
@@ -103,6 +147,12 @@ function wrapReal(real: any): GlassesBridge {
     createStartUpPageContainer: (p) => real.createStartUpPageContainer(p),
     rebuildPageContainer: (p) => real.rebuildPageContainer(p),
     textContainerUpgrade: (u) => real.textContainerUpgrade(u),
+    // Optional-chained and never throwing: an Even App build without image
+    // support should cost us the mark, not the HUD. `main.ts` reads the
+    // non-success verdict and rebuilds with the wordmark instead.
+    updateImageRawData: (u) =>
+      real.updateImageRawData?.(u).then((r: any) => String(r ?? "success"))
+        .catch((e: any) => `imageException: ${e}`) ?? Promise.resolve("unsupported"),
     shutDownPageContainer: (m = 1) => real.shutDownPageContainer(m),
     audioControl: (o, s) => real.audioControl(o, s),
     onEvenHubEvent: (cb) => real.onEvenHubEvent(cb),
@@ -119,6 +169,7 @@ class MockBridge implements GlassesBridge {
   readonly kind = "mock" as const;
   private listeners = new Set<(event: any) => void>();
   private containers = new Map<number, TextContainer>();
+  private images = new Map<number, ImageContainer & { src?: string }>();
   private audioTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
@@ -183,11 +234,41 @@ class MockBridge implements GlassesBridge {
         el.textContent = c.content;
         lens.appendChild(el);
       });
+    // Images last: an image container the host never received pixels for is
+    // an empty box on the glass, and the browser should show the same empty
+    // box rather than quietly drawing nothing.
+    this.images.forEach((c) => {
+      const el = document.createElement(c.src ? "img" : "div");
+      el.className = "lens-image";
+      el.style.position = "absolute";
+      el.style.left = `${c.xPosition * sx}px`;
+      el.style.top = `${c.yPosition * sy}px`;
+      el.style.width = `${c.width * sx}px`;
+      el.style.height = `${c.height * sy}px`;
+      if (c.src) (el as HTMLImageElement).src = c.src;
+      else el.style.outline = "1px dashed rgba(255,255,255,.35)";
+      lens.appendChild(el);
+    });
   }
 
   async createStartUpPageContainer(page: PageSpec) {
     this.containers.clear();
+    this.images.clear();
     page.textObject.forEach((c) => this.containers.set(c.containerID, { ...c }));
+    (page.imageObject || []).forEach((c) => this.images.set(c.containerID, { ...c }));
+    this.paint();
+    return "success";
+  }
+
+  async updateImageRawData(u: { containerID: number; containerName: string; imageData: Uint8Array }) {
+    const c = this.images.get(u.containerID);
+    // Same verdict the host gives: a container that was never declared cannot
+    // be filled, and saying so here is how the browser test catches an id that
+    // drifted out of sync with the layout.
+    if (!c) return "imageException";
+    let bin = "";
+    u.imageData.forEach((b) => { bin += String.fromCharCode(b); });
+    c.src = `data:image/png;base64,${btoa(bin)}`;
     this.paint();
     return "success";
   }
@@ -204,6 +285,7 @@ class MockBridge implements GlassesBridge {
     // reviewers check, so the browser test needs to be able to read it back.
     (window as any).__cueExitMode = exitMode;
     this.containers.clear();
+    this.images.clear();
     this.paint();
     const lens = document.getElementById("virtual-lens");
     if (lens) {

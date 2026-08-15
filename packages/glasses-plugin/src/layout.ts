@@ -4,21 +4,26 @@
  * The identity system specifies this surface tighter than anything else in
  * the product, and the constraint is the point:
  *
- *   CUE + latency   hud-300, small, tracked wide. Establishes this is live,
- *                   not cached, and makes latency a visible product claim.
+ *   Mark + clock    hud-300, the header row. The mark is the one piece of
+ *                   brand on the glass; the clock is what an associate
+ *                   mid-shift actually looks up. Latency moved to the footer,
+ *                   where it stays a visible claim without owning a corner.
  *   Three lines     hud-500 at full brightness. The only peak-brightness
  *                   element on the display. Name, evidence, reason to speak.
+ *   Fact rail       hud-300, fixed on the left while the module scrolls on
+ *                   the right — the shape Even's own dashboard uses.
  *   Meta strip      hud-300. Three facts that support the sentence and never
  *                   compete with it.
- *   Absent          no buttons, no chrome, no logo, no icons. Confirmation is
- *                   a temple tap; dismissal is a look away.
+ *   Absent          no buttons, no chrome, no icons. Confirmation is a temple
+ *                   tap; dismissal is a look away.
  *
  * The G2 renders 576 × 288 per eye; the brand doc specs 640 × 200 for the
  * display it anticipates. The grammar is identical either way — only the
  * geometry below changes — so this file is the single place that has to move
  * when the hardware does.
  */
-import type { ListContainer, PageSpec, TextContainer } from "./bridge";
+import type { ImageContainer, ListContainer, PageSpec, TextContainer } from "./bridge";
+import { MARK_H, MARK_W } from "./mark";
 
 /**
  * The host's hard budgets, kept beside the code that has to respect them.
@@ -28,6 +33,7 @@ import type { ListContainer, PageSpec, TextContainer } from "./bridge";
  * error — the page simply never renders, and nothing says why.
  */
 export const MAX_TEXT_CONTAINERS = 8;
+export const MAX_IMAGE_CONTAINERS = 4;
 export const MAX_TOTAL_CONTAINERS = 12;
 
 export const DISPLAY_W = 576;
@@ -35,17 +41,31 @@ export const DISPLAY_H = 288;
 
 /** Three lines is the contract. A fourth is a bug, not an overflow. */
 export const CUE_LINES = 3;
-/**
- * Characters per line. 60 across the full frame; the rail takes about a third,
- * so a cue built with one has to be written shorter. `RAIL_LINE_CHARS` is what
- * `cue.py` should target once the rail is populated.
- */
-export const LINE_CHARS = 60;
-export const RAIL_LINE_CHARS = 42;
 /** Rows in the fact rail, between the header and the meta strip. */
 export const FACT_SLOTS = 6;
-/** The rail is a quarter of the frame — a short label and a value. */
-export const FACT_CHARS = 17;
+
+/**
+ * Glyph advance as a fraction of container height.
+ *
+ * Every character budget in this file used to be a number somebody chose: 60
+ * per line, 42 with a rail, 17 per fact. They were chosen when the containers
+ * were 38 and 44 pixels tall. Once height became the type control those
+ * numbers meant nothing, and the rail quietly shipped rows needing 178px in a
+ * 148px box — which the glass renders by clipping, which is what "font is cut
+ * off" was.
+ *
+ * So the budgets are derived instead, from the one ratio that governs them.
+ * 0.55 is measured off the preview render, not off the G2: the host's own
+ * font is very likely narrower, in which case this is conservative and costs
+ * a few characters. Calibrating it on glass is a one-line change here, and
+ * every budget in the file moves with it.
+ */
+const CHAR_ASPECT = 0.55;
+
+/** How many characters fit a box, given the host scales glyphs to its height. */
+export function fitChars(width: number, height: number): number {
+  return Math.max(1, Math.floor((width - PAD * 2 - 4) / (height * CHAR_ASPECT)));
+}
 
 const X = 20;
 const W = DISPLAY_W - X * 2;
@@ -54,11 +74,15 @@ const W = DISPLAY_W - X * 2;
  * Two regions, after the Even dashboard: a fact rail on the left that stays
  * put, and a module on the right that scrolling moves between.
  *
- * The rail costs the sentence about a third of its width — 60 characters
- * becomes 42. That is the real price of this layout and the thing to judge on
- * the glass; `cue.py` shortens the evidence line to suit.
+ * The rail costs the sentence about a third of its width. That is the real
+ * price of this layout and the thing to judge on the glass; `cue.py` shortens
+ * the evidence line to `RAIL_LINE_CHARS` to suit.
+ *
+ * 168 rather than 148 because at 148 the rail could not hold "BOTTOMS 28X30"
+ * — the sizes are the reason the rail exists, and a rail that clips the sizes
+ * is a rail that costs the sentence a third of its width for nothing.
  */
-const RAIL_W = 148;
+const RAIL_W = 168;
 const GUTTER = 14;
 const MODULE_X = X + RAIL_W + GUTTER;
 const MODULE_W = DISPLAY_W - MODULE_X - X;
@@ -73,16 +97,39 @@ const MODULE_W = DISPLAY_W - MODULE_X - X;
  * control, and everything below is one block because tuning it is going to
  * take a pass or two on real glass.
  *
- * Was 38/44 and unreadably large on a G2. These are the numbers to move.
+ * Was 38/44 and unreadably large on a G2. Then two complaints off the glass
+ * turned out to be one fault: the header read as "too large for its
+ * container" at 16 and the meta strip read as "cut off" at 18 — opposite
+ * descriptions of the same thing, which is that the host has a floor under
+ * how small it will draw a glyph. Below roughly 20px the text no longer fits
+ * the box it was given and the box wins. So both went up, and they went up to
+ * the same number: 24 is the smallest row this display renders whole.
  */
-const HEADER_H = 16;
+const HEADER_H = 24;
 const LINE_H = 26;        // ← the sentence's type size
 const LINE_STEP = 32;     // baseline-to-baseline
-const RAIL_ROW = 22;      // ← the rail's type size
-const META_H = 18;
+const RAIL_ROW = 24;      // ← the rail's type size, and the floor
+const META_H = 24;        // ← the floor, again
 const PAD = 4;            // breathing room inside every box
 
+const HEADER_Y = 12;
 const BODY_TOP = 52;
+/** The bottom row, split on the same two-column grid as the body: meta under
+ *  the rail, the module indicator under the module. They used to share the
+ *  full width and sat on top of each other whenever a cue had no rail. */
+const FOOT_Y = DISPLAY_H - 34;
+
+/**
+ * What each region can actually hold, derived rather than chosen.
+ *
+ * `cue.py` writes to these: `LINE_CHARS` across the full frame, and
+ * `RAIL_LINE_CHARS` — the one that matters, because a guest cue always has a
+ * rail beside it.
+ */
+export const LINE_CHARS = fitChars(W, LINE_H);
+export const RAIL_LINE_CHARS = fitChars(MODULE_W, LINE_H);
+/** The rail is a short label and a value, and not much of either. */
+export const FACT_CHARS = fitChars(RAIL_W, RAIL_ROW);
 
 export interface Cue {
   lines: string[];
@@ -105,6 +152,18 @@ export interface Cue {
   moduleIndex?: number;
   moduleCount?: number;
   moduleName?: string;
+  /** Override the clock, for tests and renders. */
+  clock?: string;
+  /**
+   * Draw the Cue mark top-left instead of the word CUE.
+   *
+   * Off by default, and deliberately: the pixels do not travel with the page.
+   * The host has to accept a separate `updateImageRawData` call, and if it
+   * doesn't, this container is an empty box where the brand should be — worse
+   * than the wordmark it replaced. `main.ts` turns this on only after the host
+   * has said `success` once, so the failure mode is a wordmark, not a hole.
+   */
+  logo?: boolean;
 }
 
 /**
@@ -130,6 +189,37 @@ export function toDisplayText(line: string): string {
  * `latency` is rendered because the brand makes it a claim rather than a
  * diagnostic: the associate can see the cue is live.
  */
+/** HH:MM, zero-padded. The glass charset has no colon, so the interpunct
+ *  stands in — it is the one separator the brand allows anyway. */
+function clockLabel(now = new Date()): string {
+  const h = String(now.getHours()).padStart(2, "0");
+  const m = String(now.getMinutes()).padStart(2, "0");
+  return `${h}·${m}`;
+}
+
+/**
+ * Fit an interpunct-separated strip to its box, dropping facts rather than
+ * characters.
+ *
+ * The strip is a list, so it degrades like one: the rightmost fact goes, then
+ * the next, until what's left fits. Slicing mid-word instead — which is what
+ * the glass does on its own — produces "DENIM WALL · 1." and reads as a
+ * hardware fault rather than an omission.
+ *
+ * `keep` is pinned to the end and never dropped. It is the latency, and the
+ * point of showing latency is that it is always there.
+ */
+function fit(text: string, width: number, height: number, keep = ""): string {
+  const budget = fitChars(width, height);
+  const parts = String(text).split(" · ").filter(Boolean);
+  while (parts.length) {
+    const joined = [...parts, keep].filter(Boolean).join(" · ");
+    if (joined.length <= budget) return joined;
+    parts.pop();
+  }
+  return keep.slice(0, budget);
+}
+
 export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
   const railed = (cue.facts || []).length > 0;
   // With a rail beside it the sentence has a third less room, so it is cut to
@@ -151,23 +241,43 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     .slice(0, FACT_SLOTS);
 
   const textObject: TextContainer[] = [];
+  const imageObject: ImageContainer[] = [];
 
-  // Header — the word CUE, and how fresh this is.
+  // Header, left — the mark if the host will draw it, the wordmark if not.
+  //
+  // The wordmark used to be 160 wide for three characters. On a display that
+  // scales glyphs to the box that is not a generous margin, it is an
+  // instruction to draw CUE enormous, which is what the glass did.
+  if (cue.logo) {
+    imageObject.push({
+      // Centred against the 24px text row beside it.
+      xPosition: X, yPosition: HEADER_Y - Math.round((MARK_H - HEADER_H) / 2),
+      width: MARK_W, height: MARK_H,
+      containerID: 10, containerName: "cue-mark", zOrderIndex: 1,
+    });
+  } else {
+    textObject.push({
+      xPosition: X, yPosition: HEADER_Y, width: 64, height: HEADER_H,
+      paddingLength: PAD,
+      containerID: 1, containerName: "cue-label", zOrderIndex: 1,
+      content: "CUE",
+      isEventCapture: 0,
+    });
+  }
   textObject.push({
-    xPosition: X, yPosition: 14, width: 160, height: HEADER_H,
+    xPosition: DISPLAY_W - X - 90, yPosition: HEADER_Y, width: 90, height: HEADER_H,
     paddingLength: PAD,
-    containerID: 1, containerName: "cue-label", zOrderIndex: 1,
-    content: "CUE",
-    // The single gesture receiver for the page. It is the header rather than
-    // a line of the cue so the sentence carries no affordance of its own.
+    containerID: 2, containerName: "cue-clock", zOrderIndex: 2,
+    // The clock, not the latency. An associate mid-shift wants the time far
+    // more often than a round-trip figure; latency moved to the meta strip
+    // where it stays a visible claim without owning the corner.
+    content: cue.clock ?? clockLabel(),
+    // The page's single gesture receiver. It used to be the header, but an
+    // image container has no `isEventCapture` field at all — swapping the
+    // wordmark for the mark would have taken the page's only receiver with it.
+    // The clock is the right home anyway: it is the one element that is never
+    // part of the cue, so the sentence still carries no affordance of its own.
     isEventCapture: 1,
-  });
-  textObject.push({
-    xPosition: DISPLAY_W - X - 110, yPosition: 14, width: 110, height: HEADER_H,
-    paddingLength: PAD,
-    containerID: 2, containerName: "cue-latency", zOrderIndex: 2,
-    content: latencyMs ? `${(latencyMs / 1000).toFixed(1)}S` : "",
-    isEventCapture: 0,
   });
 
   // The module — the three lines, still the only peak-brightness element on
@@ -197,21 +307,36 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     });
   });
 
+  // The bottom row, on the same two columns as the body: the meta strip under
+  // the rail, the module indicator under the module. They used to be given the
+  // full width each, which is invisible while every cue has a rail and an
+  // exact overlap the moment one doesn't.
   // Which module the region is showing. Only when there is more than one — a
   // position indicator for a single page is chrome, and chrome is the thing
   // this surface spends its budget not having.
-  if (cue.moduleCount && cue.moduleCount > 1) {
+  const showModules = Boolean(cue.moduleCount && cue.moduleCount > 1);
+  // The meta strip takes the whole bottom row when nothing is sharing it.
+  // Idle is that case, and idle is the one screen whose meta strip is load
+  // bearing: it carries the two gestures, one of which quits the app. Held to
+  // a rail's width it fitted the build number and dropped both of them.
+  const metaW = hasRail ? RAIL_W : showModules ? MODULE_X - X - GUTTER : W;
+  const footRight = latencyMs ? `${(latencyMs / 1000).toFixed(1)}S` : "";
+  if (showModules) {
     // "2/3", not dots. The glass charset is [A-Z0-9 ·%$£€/+-] — a filled dot
     // is stripped on the way out, which rendered the *active* module as a gap.
     // And at this size on a monochrome display, counting dots is work; a
     // fraction is read, not counted.
     const position = `${(cue.moduleIndex || 0) + 1}/${cue.moduleCount}`;
     textObject.push({
-      xPosition: lineX, yPosition: DISPLAY_H - 34,
+      xPosition: lineX, yPosition: FOOT_Y,
       width: lineW, height: META_H,
       paddingLength: PAD,
       containerID: 8, containerName: "cue-modules", zOrderIndex: 8,
-      content: toDisplayText(`${cue.moduleName || ""} ${position}`),
+      // Latency rides here rather than in the meta strip. It is a claim the
+      // brand wants visible, and this is the only row on a railed page with
+      // room for it — the meta strip is a rail's width and cannot hold
+      // "DENIM WALL · 1.2S" without clipping the S off the end of it.
+      content: fit(`${cue.moduleName || ""} ${position}`, lineW, META_H, footRight),
       isEventCapture: 0,
     });
   }
@@ -246,20 +371,24 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     });
   }
 
-  // Meta strip, bottom left. Interpunct-separated, never four facts.
+  // Meta strip, bottom left. Interpunct-separated, never four facts, and
+  // dropped from the right rather than clipped: a strip that ends mid-word
+  // reads as broken hardware, and the last fact is the least important one.
   textObject.push({
-    xPosition: X, yPosition: DISPLAY_H - 34,
-    width: hasRail ? RAIL_W : W, height: META_H,
+    xPosition: X, yPosition: FOOT_Y,
+    width: metaW, height: META_H,
     paddingLength: PAD,
     containerID: 7, containerName: "cue-meta", zOrderIndex: 7,
-    content: meta.join(" · "),
+    // When there is no module row, latency has nowhere else to go.
+    content: fit(meta.join(" · "), metaW, META_H, showModules ? "" : footRight),
     isEventCapture: 0,
   });
 
   return assertBudget({
-    containerTotalNum: textObject.length + listObject.length,
+    containerTotalNum: textObject.length + listObject.length + imageObject.length,
     textObject,
     ...(listObject.length ? { listObject } : {}),
+    ...(imageObject.length ? { imageObject } : {}),
   });
 }
 
@@ -273,11 +402,14 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
  */
 export function assertBudget(page: PageSpec): PageSpec {
   const texts = page.textObject.length;
-  const total = texts + (page.listObject?.length ?? 0);
-  if (texts > MAX_TEXT_CONTAINERS || total > MAX_TOTAL_CONTAINERS) {
+  const images = page.imageObject?.length ?? 0;
+  const total = texts + images + (page.listObject?.length ?? 0);
+  if (texts > MAX_TEXT_CONTAINERS || images > MAX_IMAGE_CONTAINERS ||
+      total > MAX_TOTAL_CONTAINERS) {
     throw new Error(
       `Page over the host's container budget: ${texts} text (max ` +
-      `${MAX_TEXT_CONTAINERS}), ${total} total (max ${MAX_TOTAL_CONTAINERS}). ` +
+      `${MAX_TEXT_CONTAINERS}), ${images} image (max ${MAX_IMAGE_CONTAINERS}), ` +
+      `${total} total (max ${MAX_TOTAL_CONTAINERS}). ` +
       `The host drops an over-budget page without reporting it.`,
     );
   }
@@ -290,5 +422,5 @@ export const IDLE_CUE: Cue = {
   // The only screen that spends space on controls. Everywhere else the
   // gestures follow from what's on the glass; here they don't, and one of
   // them exits the app.
-  meta: ["PRESS TO ASK", "DOUBLE PRESS EXITS"],
+  meta: ["PRESS TO ASK", "2X PRESS EXITS"],
 };
