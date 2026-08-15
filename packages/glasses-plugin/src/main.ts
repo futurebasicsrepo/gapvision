@@ -21,7 +21,8 @@
 import { io, type Socket } from "socket.io-client";
 import { getBridge, type GlassesBridge } from "./bridge";
 import { decodeGesture, describeGesture, type DecodedGesture } from "./gestures";
-import { buildCue, buildRuler, CUE_LINES, FACT_CHARS, IDLE_CUE, RULER_HEIGHTS, toDisplayText, type Cue } from "./layout";
+import { buildCue, buildMenu, buildRuler, CUE_LINES, FACT_CHARS, IDLE_CUE,
+         RULER_HEIGHTS, toDisplayText, type Cue } from "./layout";
 import { markBytes } from "./mark";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
 
@@ -102,6 +103,52 @@ let useMark = true;
 /** On the type ruler — a diagnostic page that is not a cue and must not be
  *  treated as one. See showRuler(). */
 let onRuler = false;
+
+/**
+ * Floor comms.
+ *
+ * `inbox` holds messages that arrived and have not been acted on. Urgent ones
+ * never land here — they take the frame the moment they arrive and are dealt
+ * with there. Everything else waits, because interrupting an associate
+ * mid-sentence in front of a customer to tell them the till queue is building
+ * is worse than the till queue building.
+ *
+ * Kyle's decision, 2026-08-15: a priority tier. Silently queueing everything
+ * means backup requests get missed; interrupting on everything means the
+ * guest card vanishes at the worst possible moment.
+ */
+type RadioMessage = {
+  id?: string; fromId?: string; from: string; message: string;
+  priority?: "urgent" | "normal"; at?: string;
+};
+let inbox: RadioMessage[] = [];
+/** The urgent message currently holding the frame, if any. Held rather than
+ *  flagged so a press can act on the right one when two arrive together. */
+let onUrgent: RadioMessage | null = null;
+/** Where the floor menu is, when it is open. -1 = closed. */
+let menuIndex = -1;
+let menuItems: { label: string; send?: string; urgent?: boolean; msg?: RadioMessage }[] = [];
+
+/**
+ * What an associate can say back, without a keyboard and without speaking.
+ *
+ * Written to 21 characters, which is what a row holds beside the fact rail —
+ * the tightest place any of these can land. The vocabulary is a real product
+ * decision and should come from watching a floor; this is the starting guess
+ * from `claude/floor-comms.md`.
+ *
+ * Only the first is urgent. If everything is urgent then nothing is, and the
+ * tier stops meaning anything within a shift.
+ */
+const PHRASES: { label: string; urgent?: boolean }[] = [
+  { label: "NEED BACKUP", urgent: true },
+  { label: "ON MY WAY" },
+  { label: "SIZE CHECK" },
+  { label: "COVERING YOUR GUEST" },
+  { label: "FITTING ROOM OPEN" },
+  { label: "TILL QUEUE BUILDING" },
+  { label: "BREAK?" },
+];
 let engaged = false;
 
 /** What the associate is currently looking at — the context a voice question
@@ -291,6 +338,11 @@ function railFor(payload: DisplayPayload): string[] {
   // the label and the value survives.
   return [
     railName(g.name),
+    // Unread floor traffic, as a sixth rail row. The rail is a single list
+    // container with six slots and five in use, so this is free: no new
+    // container, no page-shape change, no rebuild. That is the whole reason
+    // the priority tier fits inside the host's budget at all.
+    inbox.length ? `${inbox.length} MSG` : "",
     g.tier || "",
     typeof g.points === "number" ? `${g.points} PTS` : "",
     sizes.tops ? `TOP ${sizes.tops}` : "",
@@ -306,6 +358,87 @@ function railFor(payload: DisplayPayload): string[] {
  * because its shape shares no container ids with any cue page, and the cheap
  * path cannot create containers.
  */
+/**
+ * An urgent message takes the whole frame.
+ *
+ * Built with no rail on purpose — `renderCue({ facts: [] })` already produces
+ * a full-frame three-line page, so the interrupt costs zero new containers.
+ * The guest card is not lost: `lastDisplay` still holds it and a press
+ * restores it.
+ */
+async function showUrgent(m: RadioMessage) {
+  onUrgent = m;
+  await renderCue({
+    lines: [toDisplayText(m.from), toDisplayText(m.message), "PRESS TO TAKE IT"],
+    facts: [], meta: [], moduleCount: 0,
+  });
+}
+
+/**
+ * The floor menu: what is waiting, then what you can say back.
+ *
+ * One screen for both, because they are the same gesture — someone who has
+ * just read "need backup in fitting rooms" wants to answer without navigating
+ * anywhere. Unread first, newest at the top, then the phrases.
+ */
+function buildMenuItems() {
+  menuItems = [
+    ...[...inbox].reverse().map((m) => ({
+      label: `${m.from} ${m.message}`, send: "ON MY WAY", msg: m,
+    })),
+    ...PHRASES.map((p) => ({ label: p.label, send: p.label, urgent: p.urgent })),
+  ];
+}
+
+async function showFloorMenu(index = 0) {
+  buildMenuItems();
+  menuIndex = Math.max(0, Math.min(index, menuItems.length - 1));
+  onRuler = false;
+  const unread = inbox.length;
+  const page = buildMenu(
+    unread ? `FLOOR · ${unread} WAITING` : "FLOOR",
+    menuItems.map((i) => i.label),
+    menuIndex,
+    { logo: useMark, footer: menuItems[menuIndex]?.msg
+        ? "PRESS TO REPLY ON MY WAY · 2X BACK"
+        : "PRESS TO SEND · 2X BACK" },
+  );
+  await paint(page);
+}
+
+/** Send whatever the menu cursor is on, then leave. */
+async function sendFromMenu() {
+  const item = menuItems[menuIndex];
+  if (!item) return void showIdle();
+  socket?.emit("radio:send", {
+    message: item.send ?? item.label,
+    priority: item.urgent ? "urgent" : "normal",
+    tenant: TENANT,
+  });
+  log(`radio → ${item.send ?? item.label}`);
+  // Replying to a message clears it: it has been dealt with, and an inbox
+  // that keeps what you already answered stops being an inbox.
+  if (item.msg) inbox = inbox.filter((m) => m !== item.msg);
+  menuIndex = -1;
+  if (engaged && lastDisplay) await renderCue(cueOf(lastDisplay));
+  else await showIdle();
+}
+
+/**
+ * Push a prebuilt page, handling the mark and the shape bookkeeping the same
+ * way `renderCue` does. Extracted because the menu and the ruler are pages
+ * that are not cues, and both were otherwise duplicating this.
+ */
+async function paint(page: ReturnType<typeof buildMenu>) {
+  if (!pageBuilt) { await bridge.createStartUpPageContainer(page); pageBuilt = true; }
+  else await bridge.rebuildPageContainer(page);
+  if (!(await pushMark(page))) {
+    // The host refused the image; `useMark` has latched off. Rebuild without.
+    return;
+  }
+  currentShape = "";   // never take the cheap path back out of a non-cue page
+}
+
 async function showRuler() {
   onRuler = true;
   const page = buildRuler();
@@ -317,6 +450,8 @@ async function showRuler() {
 
 async function showIdle() {
   onRuler = false;
+  menuIndex = -1;
+  onUrgent = null;
   engaged = false;
   engagedGuestId = null;
   focusSku = null;
@@ -427,7 +562,11 @@ function onRootPage(): boolean {
   let resumable = false;
   try { resumable = !!JSON.parse(sessionStorage.getItem(RESUME_KEY) || "null")?.guestId; }
   catch { resumable = false; }
-  return !engaged && !resumable && recIndex < 0 && voice.current === "idle";
+  // The floor menu, an urgent message and the ruler are all pages: a double
+  // press on any of them means "back", never "quit the app". Getting this
+  // wrong is how double-tap once closed Cue instead of stopping the mic.
+  return !engaged && !resumable && recIndex < 0 && voice.current === "idle"
+    && menuIndex < 0 && !onUrgent && !onRuler;
 }
 
 /**
@@ -454,6 +593,18 @@ function onGesture(g: DecodedGesture) {
 
   switch (g.action) {
     case "click":
+      // An urgent message owns the frame until it is acknowledged. Taking it
+      // replies and restores whatever was underneath.
+      if (onUrgent) {
+        socket?.emit("radio:send", { message: "ON MY WAY", tenant: TENANT });
+        log(`radio → ON MY WAY (to ${onUrgent.from})`);
+        onUrgent = null;
+        if (engaged && lastDisplay) void renderCue(cueOf(lastDisplay));
+        else void showIdle();
+        return;
+      }
+      // In the floor menu, a press sends what the cursor is on.
+      if (menuIndex >= 0) { void sendFromMenu(); return; }
       // The ruler is a dead end by design: it eats one press to leave, so
       // nobody can start a voice query from a diagnostic screen by accident.
       if (onRuler) { onRuler = false; void showIdle(); return; }
@@ -486,6 +637,15 @@ function onGesture(g: DecodedGesture) {
       //
       // That costs us double-press-to-talk at idle, which is why a plain press
       // means "ask" there instead.
+      // Backing out of the floor menu, not exiting the app. `onRootPage()`
+      // already excludes it, but saying so here keeps the two readings of
+      // "double press" next to each other.
+      if (menuIndex >= 0) {
+        menuIndex = -1;
+        if (engaged && lastDisplay) void renderCue(cueOf(lastDisplay));
+        else void showIdle();
+        return;
+      }
       if (onRootPage()) {
         void bridge.shutDownPageContainer(1);
         return;
@@ -519,15 +679,22 @@ function onGesture(g: DecodedGesture) {
       return;
 
     case "scroll-up":
-      // Scrolling at idle has never done anything — there is no carousel until
-      // a guest arrives. So it is where the type ruler lives: the one screen
-      // that answers, on the hardware, how small this display will actually
-      // draw a row. See buildRuler() in layout.ts.
+      if (menuIndex >= 0) { void showFloorMenu(menuIndex - 1); return; }
+      // Scrolling up at idle has never done anything — there is no carousel
+      // until a guest arrives. So it is where the type ruler lives: the one
+      // screen that answers, on the hardware, how small this display will
+      // actually draw a row. See buildRuler() in layout.ts.
       if (!engaged && voice.current === "idle") { void showRuler(); return; }
       void cycleRecommendations(-1);
       return;
 
     case "scroll-down":
+      if (menuIndex >= 0) { void showFloorMenu(menuIndex + 1); return; }
+      // Down opens the floor: what is waiting, and what you can say back.
+      // Available engaged as well as idle — the whole point of a queue is
+      // that you read it when you choose, and mid-engagement is exactly when
+      // "covering your guest" needs answering.
+      if (voice.current === "idle" && !onRuler) { void showFloorMenu(); return; }
       void cycleRecommendations(1);
       return;
 
@@ -623,14 +790,29 @@ async function main() {
   socket.on("glasses:display", (payload: DisplayPayload) => void onDisplay(payload));
   socket.on("voice:result", (result: VoiceResult) => void voice.onResult(result));
   socket.on("voice:state", (s: { state: string }) => log(`voice state ← ${s.state}`));
-  socket.on("radio:message", (m: { from: string; message: string }) => {
-    log(`radio ← ${m.from}: ${m.message}`);
-    if (!engaged) {
-      void renderCue({
-        lines: ["RADIO", toDisplayText(m.from), toDisplayText(m.message)],
-        meta: [],
-      });
-      setTimeout(() => { if (!engaged) void showIdle(); }, 6000);
+  socket.on("radio:message", (m: RadioMessage) => {
+    // Our own message, echoed back so the dashboard and the web harness get
+    // the full log. Nobody needs to read on their own glass the thing they
+    // just sent.
+    if (m.fromId && m.fromId === socket.id) return;
+    log(`radio ← ${m.from}: ${m.message}${m.priority === "urgent" ? " (urgent)" : ""}`);
+
+    if (m.priority === "urgent") {
+      // Takes the frame, engaged or not. This is the tier's whole purpose:
+      // "need backup in fitting rooms" that waits until someone next looks at
+      // a menu is a message that did not arrive.
+      void showUrgent(m);
+      return;
+    }
+
+    inbox.push(m);
+    if (inbox.length > 20) inbox.shift();
+    if (engaged) {
+      // Do not touch the frame. The rail picks up the unread count on its
+      // next render, and the associate reads it when they choose.
+      if (lastDisplay) { railFacts = railFor(lastDisplay); void renderCue(cueOf(lastDisplay)); }
+    } else {
+      void showFloorMenu();
     }
   });
 

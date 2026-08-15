@@ -17,7 +17,7 @@ const pages = {
   idle: buildCue({
     ...IDLE_CUE,
     lines: ["CUESEA READY", "GAP · DEMO", "AWAITING GUEST SIGNAL"],
-    meta: ["V0·1·9", "PRESS TO ASK", "2X EXIT", "UP FOR RULER"],
+    meta: ["V0·1·10", "PRESS TO ASK", "2X EXIT", "UP FOR RULER"],
     logo: true,
     clock: "14·32",
   }),

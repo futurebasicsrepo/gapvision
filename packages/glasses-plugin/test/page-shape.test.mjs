@@ -16,7 +16,8 @@
  * So the invariant this file defends: any two cues that need different
  * containers must not be considered the same shape.
  */
-import { assertBudget, buildCue, buildRuler, RULER_HEIGHTS } from "../dist-test/layout.mjs";
+import { assertBudget, buildCue, buildMenu, buildRuler, MENU_ROWS,
+         RULER_HEIGHTS } from "../dist-test/layout.mjs";
 
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -200,6 +201,86 @@ check("the mark and the wordmark are different shapes",
 
   check("the ruler has exactly one gesture receiver",
     p.textObject.filter((c) => c.isEventCapture === 1).length === 1);
+}
+
+// --- the floor menu ----------------------------------------------------------
+// Floor comms shares the frame with everything else, and the budget has
+// silently eaten two features already. Assert it before it eats a third.
+{
+  const PHRASES = ["NEED BACKUP", "ON MY WAY", "SIZE CHECK",
+                   "COVERING YOUR GUEST", "FITTING ROOM OPEN",
+                   "TILL QUEUE BUILDING", "BREAK?"];
+  const p = buildMenu("FLOOR · 2 WAITING", PHRASES, 0, { logo: true });
+  const total = p.textObject.length + (p.listObject?.length || 0)
+              + (p.imageObject?.length || 0);
+  check("the floor menu is inside the host budget",
+    p.textObject.length <= 8 && total <= 12,
+    `${p.textObject.length} text, ${total} total`);
+
+  check("the menu is one list container, not a row of text containers",
+    p.listObject?.length === 1);
+
+  check("the menu has exactly one gesture receiver",
+    p.textObject.filter((c) => c.isEventCapture === 1).length === 1);
+
+  const bottom = Math.max(...p.textObject.map((c) => c.yPosition + c.height));
+  const listBottom = p.listObject[0].yPosition + p.listObject[0].height;
+  check("the menu fits on the display",
+    bottom <= 288 && listBottom <= 288, `text ${bottom}, list ${listBottom}`);
+
+  // The list sits between the title and the footer; overlapping either makes
+  // the selected row unreadable exactly when someone is choosing with it.
+  const foot = p.textObject.find((c) => c.containerName === "menu-foot");
+  check("the list does not run into the footer",
+    listBottom <= foot.yPosition, `list ends ${listBottom}, footer at ${foot.yPosition}`);
+}
+
+{
+  // More items than rows: the selection must stay on the glass, or scrolling
+  // past row six moves an invisible cursor.
+  const many = Array.from({ length: 14 }, (_, i) => `ITEM ${i}`);
+  for (const sel of [0, 7, 13]) {
+    const p = buildMenu("FLOOR", many, sel, {});
+    const rows = p.listObject[0].itemContainer.itemName;
+    const cursored = rows.filter((r) => r.startsWith("· "));
+    check(`selection ${sel} of ${many.length} is visible`,
+      rows.length === MENU_ROWS && cursored.length === 1,
+      `${rows.length} rows, ${cursored.length} cursored: ${JSON.stringify(cursored)}`);
+  }
+}
+
+{
+  // A cursor that shifts the text sideways makes the whole list twitch as you
+  // scroll — every unselected row is padded to the cursor's width.
+  const p = buildMenu("FLOOR", ["ALPHA", "BETA"], 0, {});
+  const rows = p.listObject[0].itemContainer.itemName;
+  check("unselected rows are padded to match the cursor",
+    rows.every((r) => r.length >= 2) && rows[1].startsWith("  "),
+    JSON.stringify(rows));
+}
+
+{
+  const p = buildMenu("FLOOR", [], 0, {});
+  check("an empty floor says so rather than rendering a blank list",
+    p.listObject[0].itemContainer.itemName.length === 1,
+    JSON.stringify(p.listObject[0].itemContainer.itemName));
+}
+
+// The rail carries the unread count as a sixth row — the thing that makes the
+// priority tier free. If FACT_SLOTS ever drops below six this silently stops
+// appearing, which is the failure mode worth a test.
+{
+  const railed = buildCue({
+    lines: ["A", "B", "C"],
+    facts: ["SARAH CHEN", "2 MSG", "ICON", "4200 PTS", "TOP M", "BTM 28X30"],
+    meta: ["DENIM WALL"], moduleIndex: 0, moduleCount: 4, logo: true,
+  });
+  const rail = railed.listObject[0];
+  check("a six-row rail still fits above the footer and inside budget",
+    rail.itemContainer.itemName.length === 6
+    && rail.yPosition + rail.height <= 288 - 34
+    && railed.textObject.length <= 8,
+    `rail ends ${rail.yPosition + rail.height}, ${railed.textObject.length} text`);
 }
 
 const failed = results.filter((r) => !r).length;

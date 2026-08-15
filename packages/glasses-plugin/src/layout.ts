@@ -416,6 +416,99 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
 }
 
 /**
+ * The floor menu — unread messages first, then what you can say back.
+ *
+ * One screen for both directions of floor comms, because they are the same
+ * gesture: an associate who has just read "need backup in fitting rooms"
+ * wants to answer it without navigating anywhere. Unread messages sit above
+ * the canned phrases in one list, newest first.
+ *
+ * Selection is rendered in the row text, not with the host's select border.
+ * `ListItemContainerProperty` has `isItemSelectBorderEn` but no settable
+ * index — the host decides what is selected, and our scrolling is decoded
+ * from ring gestures on this side. A border highlighting a different row from
+ * the one a press would act on is worse than no border at all.
+ *
+ * Six rows fit between the title and the footer. Longer lists window around
+ * the selection rather than scrolling the container, so the selected row is
+ * always on the glass.
+ */
+export const MENU_ROWS = 6;
+/** Marks the row a press will act on. The glass charset is
+ *  [A-Z0-9 ·%$£€/+-], so this is one of very few characters available, and
+ *  unselected rows are padded to match so the text does not jump sideways. */
+const MENU_CURSOR = "· ";
+
+export function buildMenu(
+  title: string, items: string[], selected: number,
+  opts: { clock?: string; logo?: boolean; footer?: string } = {},
+): PageSpec {
+  const textObject: TextContainer[] = [];
+  const imageObject: ImageContainer[] = [];
+
+  if (opts.logo) {
+    imageObject.push({
+      xPosition: X, yPosition: HEADER_Y - Math.round((MARK_H - HEADER_H) / 2),
+      width: MARK_W, height: MARK_H,
+      containerID: 10, containerName: "cue-mark", zOrderIndex: 1,
+    });
+  } else {
+    textObject.push({
+      xPosition: X, yPosition: HEADER_Y, width: 64, height: HEADER_H,
+      paddingLength: PAD, containerID: 1, containerName: "cue-label",
+      zOrderIndex: 1, content: "CUE", isEventCapture: 0,
+    });
+  }
+  textObject.push({
+    xPosition: DISPLAY_W - X - 104, yPosition: HEADER_Y, width: 104,
+    height: HEADER_H, paddingLength: PAD,
+    containerID: 2, containerName: "cue-clock", zOrderIndex: 2,
+    content: opts.clock ?? clockLabel(), isEventCapture: 1,
+  });
+  textObject.push({
+    xPosition: X, yPosition: 50, width: W, height: ROW_H, paddingLength: PAD,
+    containerID: 3, containerName: "menu-title", zOrderIndex: 3,
+    content: toDisplayText(title), isEventCapture: 0,
+  });
+
+  // Window the list so the selection is always visible.
+  const n = items.length;
+  const start = n <= MENU_ROWS
+    ? 0
+    : Math.min(Math.max(0, selected - Math.floor(MENU_ROWS / 2)), n - MENU_ROWS);
+  const rows = items.slice(start, start + MENU_ROWS).map((label, i) => {
+    const isSel = start + i === selected;
+    const budget = fitChars(W, ROW_H) - MENU_CURSOR.length;
+    return (isSel ? MENU_CURSOR : "  ") + toDisplayText(label).slice(0, budget);
+  });
+
+  const listObject: ListContainer[] = [{
+    xPosition: X, yPosition: 84, width: W, height: ROW_H * Math.max(1, rows.length),
+    containerID: 9, containerName: "menu-list", zOrderIndex: 9,
+    paddingLength: PAD, isEventCapture: 0,
+    itemContainer: {
+      itemCount: Math.max(1, rows.length),
+      itemWidth: W,
+      itemName: rows.length ? rows : ["NOTHING ON THE FLOOR"],
+      isItemSelectBorderEn: 0,
+    },
+  }];
+
+  textObject.push({
+    xPosition: X, yPosition: FOOT_Y, width: W, height: ROW_H, paddingLength: PAD,
+    containerID: 7, containerName: "menu-foot", zOrderIndex: 7,
+    content: fit(opts.footer ?? "PRESS TO SEND · 2X BACK", W, ROW_H),
+    isEventCapture: 0,
+  });
+
+  return assertBudget({
+    containerTotalNum: textObject.length + listObject.length + imageObject.length,
+    textObject, listObject,
+    ...(imageObject.length ? { imageObject } : {}),
+  });
+}
+
+/**
  * The ruler — the same word at five container heights, labelled.
  *
  * Three builds have now gone out with the type size set by inference from a

@@ -340,13 +340,29 @@ io.on("connection", (socket) => {
   });
 
   /** Digital radio: associate-to-associate comms, mirrored to dashboard. */
-  socket.on("radio:send", ({ from, message, channel }) => {
+  socket.on("radio:send", ({ from, message, channel, priority } = {}) => {
     const t = socket.data.tenant || DEMO_TENANT;
     const state = stateFor(t);
+    const text = String(message ?? "").slice(0, 140).trim();
+    if (!text) return;
     const entry = {
-      from: from || state.associates.get(socket.id)?.name || "Unknown",
-      message,
+      // Message id and sender socket, so a client can recognise its own
+      // message coming back. The glasses must not render what the wearer just
+      // sent — but the dashboard mirror and the web harness both want the
+      // full log, so the echo stays and the plugin filters.
+      id: `${socket.id}-${Date.now()}`,
+      fromId: socket.id,
+      // The roster name wins over anything the client sent. A name is what
+      // appears on someone else's glasses in the middle of a shift, and
+      // "who is asking for backup" is not a field to take on trust from a
+      // browser. `from` survives only for the demo harness, which has no
+      // roster entry of its own.
+      from: state.associates.get(socket.id)?.name || from || "Unknown",
+      message: text,
       channel: channel || "floor",
+      // Two tiers, and only two. Anything unrecognised is normal — an unknown
+      // value must never be able to take over someone's display.
+      priority: priority === "urgent" ? "urgent" : "normal",
       at: new Date().toISOString(),
     };
     state.radioLog.push(entry);
