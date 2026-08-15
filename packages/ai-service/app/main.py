@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import db, secrets_box
+from . import db, retention, secrets_box
 from .auth import KeyHeader, guard, startup_check
 from .crm_provider import TenantNotConfigured, get_crm_for, tenant_status
 from .llm import get_provider
@@ -63,6 +63,59 @@ def _startup() -> None:
         bootstrap()
     except Exception as e:
         print(f"[cue] WARNING: bootstrap failed: {e}", flush=True)
+
+    _start_retention_loop()
+
+
+def _start_retention_loop() -> None:
+    """Sweep aged personal data on a timer, in-process.
+
+    In-process rather than a Railway cron or an external scheduler, for one
+    reason: a retention policy that depends on a second system being
+    configured is a retention policy that silently stops the first time
+    somebody redeploys without it. This starts whenever the service starts,
+    which is the same condition under which data starts being written.
+
+    It sweeps once shortly after boot rather than immediately — a deploy
+    restarts the process, and a redeploy loop should not mean a sweep loop
+    hammering the database while requests are already arriving.
+
+    Failures are logged and swallowed. Retention falling over must never take
+    the lens offline; an associate mid-conversation does not care that last
+    night's sweep failed, and the Health panel will say so.
+    """
+    import asyncio
+
+    interval = int(os.getenv("CUE_RETENTION_INTERVAL_SECONDS", str(6 * 3600)))
+    if interval <= 0:
+        print("[cue] retention sweep disabled by env", flush=True)
+        return
+
+    async def loop() -> None:
+        await asyncio.sleep(60)
+        while True:
+            try:
+                runs = await asyncio.to_thread(retention.sweep_all)
+                touched = sum(
+                    r["voice_redacted"] + r["engagements_redacted"]
+                    + r["assists_redacted"] for r in runs)
+                if touched:
+                    print(f"[cue] retention: redacted {touched} row(s) "
+                          f"across {len(runs)} tenant(s)", flush=True)
+            except Exception as e:
+                print(f"[cue] WARNING: retention sweep failed: {e}", flush=True)
+            await asyncio.sleep(interval)
+
+    try:
+        # get_running_loop, not get_event_loop: the latter is deprecated when
+        # there is no running loop and warns instead of raising cleanly, which
+        # is the exact case this except clause exists to handle.
+        asyncio.get_running_loop().create_task(loop())
+        print(f"[cue] retention sweep every {interval}s", flush=True)
+    except RuntimeError as e:
+        # No running loop (a sync test client, a script importing the app).
+        # Not fatal: the admin route can still run it on demand.
+        print(f"[cue] retention loop not started: {e}", flush=True)
 
 # Browsers should not reach this service directly any more — the realtime
 # server proxies on their behalf. Keep an allowlist for local development
@@ -136,6 +189,7 @@ def health():
         "auth": _AUTH_STATE,
         "credential_encryption": secrets_box.status(),
         "database": db.health(),
+        "retention": retention.status(),
     }
 
 

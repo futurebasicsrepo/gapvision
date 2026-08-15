@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 
-from . import analytics, crm_credentials, crm_provider, db, identity, secrets_box
+from . import (analytics, crm_credentials, crm_provider, db, identity,
+               retention, secrets_box)
 from .identity import BearerHeader, current_user, require, scope_tenant
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -492,6 +493,19 @@ def update_device(device_id: str, req: DeviceUpdate,
 # exist. Every check below therefore asserts on something a feature actually
 # needs, and anything it cannot prove is reported as unknown rather than ok.
 
+def _hours_since(iso: str) -> float:
+    """Hours between an ISO timestamp and now. Returns a large number rather
+    than raising on anything unparseable — a check that throws takes the whole
+    Health panel down, which is worse than one that reads as stale."""
+    try:
+        then = datetime.fromisoformat(iso)
+        if then.tzinfo is None:
+            then = then.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - then).total_seconds() / 3600
+    except Exception:
+        return 1e6
+
+
 def _check(key: str, label: str, status: str, detail: str = "") -> dict:
     return {"key": key, "label": label, "status": status, "detail": detail}
 
@@ -606,10 +620,30 @@ def _platform_checks() -> list[dict]:
         "all closed" if n_stuck == 0 else f"{n_stuck} open for over 6 hours",
     ))
 
-    # Retention is stored but not yet enforced. Say so here rather than let the
-    # console imply a promise the code does not keep.
-    checks.append(_check("retention", "Retention enforcement", "warn",
-                         "privacy.retention_days is stored but nothing deletes yet"))
+    # Retention is enforced now (app/retention.py, swept on a timer). This
+    # check asserts it actually *ran*, per tenant, rather than that the code
+    # exists — a sweep that silently stopped is the same outcome as never
+    # having written it, and looks better.
+    #
+    # `retention.status()` reports the *oldest* last-run across tenants, not
+    # the newest, so one tenant going unswept cannot hide behind the others.
+    ret = retention.status()
+    if not ret.get("enforced"):
+        checks.append(_check("retention", "Retention enforcement", "unknown",
+                             ret.get("reason", "not determinable")))
+    elif ret.get("last_run") is None:
+        checks.append(_check("retention", "Retention enforcement", "warn",
+                             "no sweep has run yet — first one is 60s after boot"))
+    else:
+        stale = _hours_since(ret["last_run"]) > 26
+        detail = f"last swept {ret['last_run']}"
+        if ret.get("oldest_swept_tenant"):
+            detail += f" (oldest: {ret['oldest_swept_tenant']})"
+        if ret.get("backlog"):
+            detail += " · backlog remaining, next sweep continues"
+        checks.append(_check(
+            "retention", "Retention enforcement",
+            "warn" if stale or ret.get("backlog") else "ok", detail))
 
     # --- merchant credentials -------------------------------------------------
     enc = secrets_box.status()
@@ -688,6 +722,29 @@ def _platform_checks() -> list[dict]:
                 "before dropping CUE_CRED_KEY_OLD",
             ))
     return checks
+
+
+@router.post("/retention/run")
+def run_retention(authorization: str | None = BearerHeader):
+    """Sweep now, rather than waiting for the timer.
+
+    cue_admin only, and across every tenant — this is the operations lever for
+    "a retailer has asked us to prove retention works", and for the first run
+    after a window is shortened, where waiting six hours to see the effect is
+    the difference between a control that feels real and one that feels
+    theoretical.
+
+    Safe to hammer: the sweep only matches rows that still have something to
+    redact, so a second call in a row does nothing and says so.
+    """
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    runs = retention.sweep_all()
+    return {
+        "runs": runs,
+        "redacted": sum(r["voice_redacted"] + r["engagements_redacted"]
+                        + r["assists_redacted"] for r in runs),
+    }
 
 
 @router.get("/platform")
