@@ -9,6 +9,11 @@ Two paths, and the difference is one decision made once at the start: **is this
 retailer on Shopify?** Steps 1 and 3 onward are identical either way; only
 step 2 differs.
 
+> **Looking for how to add someone to Cue itself — a colleague, not a
+> retailer's employee?** That is a different screen and it is at the bottom of
+> this page: [Adding a Cue colleague](#adding-a-cue-colleague). Everything
+> between here and there is about onboarding a *retailer*.
+
 ---
 
 ## Before you start
@@ -210,3 +215,54 @@ and no warnings against their name.
   option.
 - **We never read a merchant's token back to them.** If they have lost it, they
   issue a new one.
+
+---
+
+## Adding a Cue colleague
+
+**Console → Cue staff → Invite a colleague.** Not Tenants. This is the one
+screen in the system that creates an account belonging to no retailer.
+
+Name, work email, role. Leave the password blank — that sends them an
+invitation link they redeem once, and it expires in seven days. Filling in a
+password means telling somebody their password out loud, which is the habit the
+invite flow exists to end.
+
+| Role | Gets |
+|---|---|
+| `cue_admin` | The whole Console. Every tenant, billing, plates, retention, and the ability to invite more of us. |
+| Anything else | Nothing useful here — Console refuses to load for a non-staff account, by design. So in practice this screen means `cue_admin`. |
+
+Three things worth knowing before you invite somebody:
+
+- **`cue_admin` is not a small grant.** It reads across every retailer on the
+  platform — the one place in the system where tenant scoping is deliberately
+  absent. There is no read-only tier of Cue staff yet. If you want one, that is
+  a real piece of work, not a checkbox.
+- **Only Cue staff can create Cue staff.** `POST /api/admin/users` with role
+  `cue_admin` requires the caller to already be `cue_admin` and forces the
+  tenant to null. A retailer's `client_admin` cannot reach it by guessing a
+  payload — the check is in the API, not in the interface.
+- **Until `CUE_SMTP_*` is configured, invitations are written to the service
+  log rather than sent.** The Health panel says so rather than showing green.
+  The account exists and the link is valid; somebody has to pull it out of the
+  Railway log and hand it over. Check Health before you tell a new colleague to
+  watch their inbox.
+
+Same panel: change a colleague's role, disable an account, or end their
+sessions. **Disable, don't delete** — disabling is reversible and keeps the
+audit trail attached to a name. Deleting is API-only on purpose.
+
+### If the Console is down and you need somebody in
+
+The API is the fallback, and it is the same call the panel makes:
+
+```
+POST https://<api>/api/admin/users
+Authorization: Bearer <your cue_admin token>
+
+{"email": "them@thefuturebasics.com", "name": "Their Name", "role": "cue_admin"}
+```
+
+Omitting `password` is what makes it an invitation rather than an account
+nobody can sign into.

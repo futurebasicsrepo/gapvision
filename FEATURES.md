@@ -1,6 +1,6 @@
 # Cue — features as of 15 August 2026
 
-Plugin `0.1.11`, `main` at `75eb000`. Read off the code, not the roadmap:
+Plugin `0.1.11`, `main` at `10158d5`. Read off the code, not the roadmap:
 everything in **Works today** is built, wired and deployed. Everything else is
 in its own section, and the sections are honest about the difference.
 
@@ -123,13 +123,31 @@ inline SVG built from the brand tokens, arranged around the thing people get
 wrong about this system: the service key never leaves our services, and the
 customer record never enters them.
 
+The left rail is ten panels in two groups:
+
+| Panel | What it is for |
+|---|---|
+| **Health** | What the platform can prove about itself right now. |
+| **Tenants** | Every retailer, their people, their hardware, what they've used. |
+| **Cue staff** | Accounts with no tenant — us. Invite a colleague, change a role, end a session. |
+| **Plates** | Every printed door, how hard each is being used, and revocation. |
+| **Retention** | Each store's window, and what the last sweep actually deleted. |
+| **Architecture** · **What Cue does** · **Onboarding** · **Employee one-pager** · **Brand** | Reference. |
+
+**Cue staff is the only screen that creates an account with no tenant.** That
+restriction is in the API, not the interface: `POST /api/admin/users` with role
+`cue_admin` requires the caller to already be `cue_admin` and forces
+`tenant_id` to null, so a retailer's own admin cannot mint one of us by
+guessing a payload.
+
 ---
 
 ## Partial — works, with a caveat worth knowing
 
 | Thing | The caveat |
 |---|---|
-| **Size questions** | Fixed. The Shopify adapter now emits per-size counts from the variants the query was already fetching and discarding, taking the size from the option actually named "size" rather than from the variant title — so a two-option product doesn't put a colour in the answer. Untested against a live store with real variants. |
+| **Size questions** | Fixed. The Shopify adapter now emits per-size counts from the variants the query was already fetching and discarding, taking the size from the option actually named "size" rather than from the variant title — so a two-option product doesn't put a colour in the answer. There is now a live store to test it against: `cuesea.ai` carries 300 seeded products / 1,395 variants with deliberately inconsistent sizing (waist, alpha, EU, UK, neck, `W30 L32`, `S/M`) and about a fifth of variants at zero. See `claude/store-seed.md`. |
+| **Completeness of an empty answer** | Not fixed, and the seeded store is what will prove it. `main.py` calls `crm.floor_inventory()` bare, so an empty or partial inventory is indistinguishable from "not carried" — the floor hears *"We don't carry that on this floor"* either way. The adapter needs to be able to say **"I can't see stock right now"** as a distinct outcome. This bug exists at one data source; it gets worse with two. |
 | **Floor location** | The Shopify adapter hardcodes location to "Floor". Per-zone placement needs a product metafield. |
 | **Voice and gestures in the browser** | Fully wired server-side and covered by tests, but Cue Studio has no UI that drives them — they are exercised from the glasses or the test harness. |
 | **The demo harness** | The associate view with its beacon buttons and its leaderboard names is demo-only, and the seeded names appear for the `gap` tenant alone. |
@@ -137,7 +155,7 @@ customer record never enters them.
 | **Customer depth** | Built. Address, contact and order history reach both the cards and the voice answers. Against a live Shopify store the fields come from `defaultAddress` and the customer record, so a store with sparse customer data shows sparse cards — correctly, but a demo on a thin store will look thinner than the mock. |
 | **Outbound email** | The transport is pluggable and unconfigured in production. Until `CUE_SMTP_*` is set, invites and resets are written to the service log rather than sent, and the Health panel says so rather than showing green. |
 | **Guest roster endpoint** | Deliberately gated off for non-demo tenants. A list of every customer in the store is exactly the shape the tap-to-reveal design exists to eliminate. |
-| **User management** | The API can create, update, disable and delete people, and can invite or re-invite them. The Console can create and invite; changing a role or disabling an account still needs a direct API call. |
+| **User management** | Done in the Console. Create, invite, re-invite, change a role, disable — all reachable from Tenants → People for a retailer's staff, and from the Cue staff panel for ours. The role select is capped at the operator's own rank, so the interface cannot offer an escalation the API would refuse. What is still API-only: hard-deleting a person, which is deliberate — disabling is the reversible thing and should be the easy one. |
 | **Retention** | Enforced. Aged personal data is redacted on a timer, per tenant, on that tenant's own window — transcripts, answers, the CRM pointer, cue lines, recommendations, assist notes. The operational skeleton (intent, latency, zone, outcome, sale) survives deliberately, so turning the control on does not cost a retailer their quarter. Every sweep leaves a receipt in `retention_runs`. |
 
 ---
