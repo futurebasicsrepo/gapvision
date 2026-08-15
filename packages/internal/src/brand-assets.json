@@ -1,0 +1,205 @@
+{
+  "generated_from": "packages/brand/build-assets.py",
+  "tokens_version": "3.0",
+  "note": "Generated from tokens.json, not exported by hand. The .ai files are PDF-compatible Illustrator documents \u2014 they open and edit as vectors, and they are not round-tripped Illustrator natives.",
+  "assets": [
+    {
+      "slug": "cue-mark-on-dark",
+      "label": "Mark \u2014 on dark",
+      "note": "Arc in paper, cue in flame. The default.",
+      "svg": "cue-mark-on-dark.svg",
+      "pdf": "cue-mark-on-dark.pdf",
+      "ai": "cue-mark-on-dark.ai",
+      "png": [
+        {
+          "size": 256,
+          "file": "cue-mark-on-dark-256.png"
+        },
+        {
+          "size": 512,
+          "file": "cue-mark-on-dark-512.png"
+        },
+        {
+          "size": 1024,
+          "file": "cue-mark-on-dark-1024.png"
+        }
+      ]
+    },
+    {
+      "slug": "cue-mark-on-light",
+      "label": "Mark \u2014 on light",
+      "note": "Arc takes the ground: ink on paper. The cue never changes.",
+      "svg": "cue-mark-on-light.svg",
+      "pdf": "cue-mark-on-light.pdf",
+      "ai": "cue-mark-on-light.ai",
+      "png": [
+        {
+          "size": 256,
+          "file": "cue-mark-on-light-256.png"
+        },
+        {
+          "size": 512,
+          "file": "cue-mark-on-light-512.png"
+        },
+        {
+          "size": 1024,
+          "file": "cue-mark-on-light-1024.png"
+        }
+      ]
+    },
+    {
+      "slug": "cue-mark-mono-black",
+      "label": "Mark \u2014 one colour, black",
+      "note": "For single-colour print and embroidery, where flame cannot survive.",
+      "svg": "cue-mark-mono-black.svg",
+      "pdf": "cue-mark-mono-black.pdf",
+      "ai": "cue-mark-mono-black.ai",
+      "png": [
+        {
+          "size": 256,
+          "file": "cue-mark-mono-black-256.png"
+        },
+        {
+          "size": 512,
+          "file": "cue-mark-mono-black-512.png"
+        },
+        {
+          "size": 1024,
+          "file": "cue-mark-mono-black-1024.png"
+        }
+      ]
+    },
+    {
+      "slug": "cue-mark-mono-white",
+      "label": "Mark \u2014 one colour, white",
+      "note": "Reversed. Transparent PNGs, so it needs a ground behind it.",
+      "svg": "cue-mark-mono-white.svg",
+      "pdf": "cue-mark-mono-white.pdf",
+      "ai": "cue-mark-mono-white.ai",
+      "png": [
+        {
+          "size": 256,
+          "file": "cue-mark-mono-white-256.png"
+        },
+        {
+          "size": 512,
+          "file": "cue-mark-mono-white-512.png"
+        },
+        {
+          "size": 1024,
+          "file": "cue-mark-mono-white-1024.png"
+        }
+      ]
+    },
+    {
+      "slug": "cuesea-wordmark-on-dark",
+      "label": "Wordmark \u2014 on dark",
+      "note": "cue in paper, sea in sea-300. Outlined; no font needed to open it.",
+      "svg": "cuesea-wordmark-on-dark.svg",
+      "pdf": "cuesea-wordmark-on-dark.pdf",
+      "ai": "cuesea-wordmark-on-dark.ai",
+      "png": [
+        {
+          "size": 256,
+          "file": "cuesea-wordmark-on-dark-256.png"
+        },
+        {
+          "size": 512,
+          "file": "cuesea-wordmark-on-dark-512.png"
+        },
+        {
+          "size": 1024,
+          "file": "cuesea-wordmark-on-dark-1024.png"
+        }
+      ]
+    },
+    {
+      "slug": "cuesea-wordmark-on-light",
+      "label": "Wordmark \u2014 on light",
+      "note": "cue in ink, sea in sea-500 \u2014 the step that holds contrast on paper.",
+      "svg": "cuesea-wordmark-on-light.svg",
+      "pdf": "cuesea-wordmark-on-light.pdf",
+      "ai": "cuesea-wordmark-on-light.ai",
+      "png": [
+        {
+          "size": 256,
+          "file": "cuesea-wordmark-on-light-256.png"
+        },
+        {
+          "size": 512,
+          "file": "cuesea-wordmark-on-light-512.png"
+        },
+        {
+          "size": 1024,
+          "file": "cuesea-wordmark-on-light-1024.png"
+        }
+      ]
+    },
+    {
+      "slug": "cuesea-lockup-on-dark",
+      "label": "Lockup \u2014 on dark",
+      "note": "Mark and wordmark, optically aligned to the x-height.",
+      "svg": "cuesea-lockup-on-dark.svg",
+      "pdf": "cuesea-lockup-on-dark.pdf",
+      "ai": "cuesea-lockup-on-dark.ai",
+      "png": [
+        {
+          "size": 256,
+          "file": "cuesea-lockup-on-dark-256.png"
+        },
+        {
+          "size": 512,
+          "file": "cuesea-lockup-on-dark-512.png"
+        },
+        {
+          "size": 1024,
+          "file": "cuesea-lockup-on-dark-1024.png"
+        }
+      ]
+    },
+    {
+      "slug": "cuesea-lockup-on-light",
+      "label": "Lockup \u2014 on light",
+      "note": "The one to hand a publication that asks for 'your logo'.",
+      "svg": "cuesea-lockup-on-light.svg",
+      "pdf": "cuesea-lockup-on-light.pdf",
+      "ai": "cuesea-lockup-on-light.ai",
+      "png": [
+        {
+          "size": 256,
+          "file": "cuesea-lockup-on-light-256.png"
+        },
+        {
+          "size": 512,
+          "file": "cuesea-lockup-on-light-512.png"
+        },
+        {
+          "size": 1024,
+          "file": "cuesea-lockup-on-light-1024.png"
+        }
+      ]
+    },
+    {
+      "slug": "cue-app-icon",
+      "label": "App icon",
+      "note": "Flat sea-900 ground. Even Hub rejects colour, so the store build uses a greyscale variant \u2014 see store/make-icons.py.",
+      "svg": "cue-app-icon.svg",
+      "pdf": "cue-app-icon.pdf",
+      "ai": "cue-app-icon.ai",
+      "png": [
+        {
+          "size": 180,
+          "file": "cue-app-icon-180.png"
+        },
+        {
+          "size": 512,
+          "file": "cue-app-icon-512.png"
+        },
+        {
+          "size": 1024,
+          "file": "cue-app-icon-1024.png"
+        }
+      ]
+    }
+  ]
+}

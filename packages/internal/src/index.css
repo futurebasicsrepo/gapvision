@@ -402,3 +402,50 @@ body {
   width: 14px; height: 10px; border-radius: 3px;
   border: 1px dashed rgba(143, 199, 240, 0.45);
 }
+
+
+/* ---------- Brand asset downloads ----------
+   A grid of cards, each one asset in every format it ships in. The preview
+   sits on a neutral mid-grey rather than the card ground, because half these
+   files are transparent and half are reversed — on the product's own dark
+   surface the white-on-dark ones would look correct and the dark-on-light
+   ones would vanish, which is precisely the mistake the panel exists to
+   prevent. */
+.dl-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.dl {
+  display: flex; gap: 12px; align-items: center;
+  background: rgba(4, 18, 46, 0.55);
+  border: 1px solid rgba(143, 199, 240, 0.10);
+  border-radius: 10px; padding: 12px;
+}
+.dl-preview {
+  flex: 0 0 76px; height: 76px; border-radius: 8px;
+  background: #6E747C;
+  display: flex; align-items: center; justify-content: center;
+}
+.dl-preview.on-light { background: var(--paper); }
+.dl-preview img { max-width: 84%; max-height: 84%; display: block; }
+.dl-body { min-width: 0; }
+.dl-label { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+.dl-note { line-height: 1.45; margin-bottom: 7px; }
+.dl-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.dl-links a {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
+  color: var(--sea-100); text-decoration: none;
+  border: 1px solid rgba(143, 199, 240, 0.22);
+  border-radius: 5px; padding: 2px 7px;
+}
+.dl-links a:hover { border-color: var(--sea-300); color: var(--paper); }
+.dl-sep {
+  width: 1px; height: 14px; background: rgba(143, 199, 240, 0.18); margin: 0 2px;
+}
+.dl-all {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+  color: var(--sea-100); text-decoration: none;
+  border: 1px solid rgba(143, 199, 240, 0.28);
+  border-radius: 6px; padding: 4px 10px;
+}
+.dl-all:hover { border-color: var(--sea-300); color: var(--paper); }

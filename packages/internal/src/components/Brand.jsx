@@ -1,5 +1,6 @@
 import { useState } from "react";
 import tokens from "../brand-tokens.json";
+import assets from "../brand-assets.json";
 import { CueBracket, Wordmark } from "./Mark.jsx";
 
 /**
@@ -51,6 +52,54 @@ export default function Brand() {
           that produces every app's stylesheet. Change a value there and run{" "}
           <code>npm run brand:sync</code> — this page and the products move
           together.
+        </p>
+      </div>
+
+      {/* --- downloads ---
+          The panel that stops people rebuilding the logo from a screenshot.
+          Every file here is generated from tokens.json by
+          packages/brand/build-assets.py, so it cannot drift from the spec on
+          the rest of this page. */}
+      <div className="card span-12">
+        <div className="card-head">
+          <h3>Download</h3>
+          <a className="dl-all" href="/brand/cuesea-brand-assets.zip" download>
+            Everything, one zip
+          </a>
+        </div>
+        <p className="card-note">
+          Transparent PNG, vector PDF and <code>.ai</code> for each. Generated
+          from the tokens, not exported by hand — so nothing here can drift
+          from the construction above. The wordmark is{" "}
+          <strong>converted to outlines</strong>: the files open correctly on a
+          machine that doesn't have Instrument Sans.
+        </p>
+        <div className="dl-grid">
+          {assets.assets.map((a) => (
+            <div className="dl" key={a.slug}>
+              <div className={`dl-preview ${a.slug.includes("on-light") ? "on-light" : ""}`}>
+                <img src={`/brand/${a.png[a.png.length - 1].file}`} alt={a.label} />
+              </div>
+              <div className="dl-body">
+                <div className="dl-label">{a.label}</div>
+                <div className="meta dl-note">{a.note}</div>
+                <div className="dl-links">
+                  <a href={`/brand/${a.svg}`} download>SVG</a>
+                  <a href={`/brand/${a.pdf}`} download>PDF</a>
+                  <a href={`/brand/${a.ai}`} download>AI</a>
+                  <span className="dl-sep" />
+                  {a.png.map((p) => (
+                    <a key={p.size} href={`/brand/${p.file}`} download>
+                      PNG {p.size}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="meta" style={{ marginTop: 14, lineHeight: 1.5 }}>
+          {assets.note}
         </p>
       </div>
 
