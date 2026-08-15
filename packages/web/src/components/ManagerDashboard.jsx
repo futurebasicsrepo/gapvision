@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { socket, currentTenant } from "../socket.js";
 import { api, clock, compact, duration, money } from "../api.js";
+import Waiting from "./Waiting.jsx";
 import { Empty, Legend, ScoreBar, SERIES, StatTile } from "./Charts.jsx";
 
 /** Outcome → pill tone. Green is reserved for a genuinely good end state;
@@ -28,7 +29,7 @@ const RANGES = [
  */
 export default function ManagerDashboard({ user }) {
   const [days, setDays] = useState(1);
-  const [data, setData] = useState({ summary: null, board: null, engagements: [], voice: null });
+  const [data, setData] = useState({ summary: null, board: null, engagements: [], voice: null, requests: null });
   const [roster, setRoster] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -62,11 +63,11 @@ export default function ManagerDashboard({ user }) {
   const load = useCallback(async () => {
     if (isCueStaff && !tenant) return;   // nothing to ask for yet
     try {
-      const [summary, board, engagements, voice] = await Promise.all([
+      const [summary, board, engagements, voice, requests] = await Promise.all([
         api.summary(days, tenant), api.leaderboard(days, tenant),
-        api.engagements(15, tenant), api.voice(15, tenant),
+        api.engagements(15, tenant), api.voice(15, tenant), api.requests(days, tenant),
       ]);
-      setData({ summary, board, engagements: engagements.engagements, voice });
+      setData({ summary, board, engagements: engagements.engagements, voice, requests });
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -199,6 +200,11 @@ export default function ManagerDashboard({ user }) {
                 sub={s.voice.total
                   ? `${Math.round((s.voice.ok / s.voice.total) * 100)}% answered · ${s.voice.avg_latency_ms}ms`
                   : "no voice queries yet"} />
+
+      {/* --- what is waiting, before anything measured ---------------------
+           Above the roster on purpose: who is on the floor is context, what a
+           guest is standing in a fitting room waiting for is the job. */}
+      <Waiting rows={data.requests?.waiting || []} demand={data.requests?.demand || []} />
 
       {/* --- floor roster: socket, live ---------------------------------- */}
       <div className="card span-4">
