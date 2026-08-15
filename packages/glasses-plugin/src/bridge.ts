@@ -16,7 +16,13 @@ export interface TextContainer {
   xPosition: number;
   yPosition: number;
   width: number;
+  /** Also the type size: the host scales glyphs to the box. There is no font
+   *  field anywhere in the SDK — this is the only control there is. */
   height: number;
+  borderWidth?: number;
+  borderColor?: number;
+  borderRadius?: number;
+  paddingLength?: number;
   containerID: number;
   containerName: string;
   zOrderIndex?: number;
@@ -30,7 +36,13 @@ export interface ListContainer {
   xPosition: number;
   yPosition: number;
   width: number;
+  /** Also the type size: the host scales glyphs to the box. There is no font
+   *  field anywhere in the SDK — this is the only control there is. */
   height: number;
+  borderWidth?: number;
+  borderColor?: number;
+  borderRadius?: number;
+  paddingLength?: number;
   containerID: number;
   containerName: string;
   zOrderIndex?: number;

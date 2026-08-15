@@ -43,7 +43,7 @@ export const CUE_LINES = 3;
 export const LINE_CHARS = 60;
 export const RAIL_LINE_CHARS = 42;
 /** Rows in the fact rail, between the header and the meta strip. */
-export const FACT_SLOTS = 5;
+export const FACT_SLOTS = 6;
 /** The rail is a quarter of the frame — a short label and a value. */
 export const FACT_CHARS = 17;
 
@@ -59,11 +59,30 @@ const W = DISPLAY_W - X * 2;
  * the glass; `cue.py` shortens the evidence line to suit.
  */
 const RAIL_W = 148;
-const GUTTER = 16;
+const GUTTER = 14;
 const MODULE_X = X + RAIL_W + GUTTER;
 const MODULE_W = DISPLAY_W - MODULE_X - X;
-const BODY_TOP = 70;
-const RAIL_ROW = 26;
+
+/**
+ * Type size, such as it is.
+ *
+ * There is no font field. The complete container vocabulary the SDK
+ * serialises is position, size, border, padding and content — nothing else.
+ * Apps that appear to use different type sizes are using different container
+ * heights: the host scales glyphs to the box. So `height` *is* the font
+ * control, and everything below is one block because tuning it is going to
+ * take a pass or two on real glass.
+ *
+ * Was 38/44 and unreadably large on a G2. These are the numbers to move.
+ */
+const HEADER_H = 16;
+const LINE_H = 26;        // ← the sentence's type size
+const LINE_STEP = 32;     // baseline-to-baseline
+const RAIL_ROW = 22;      // ← the rail's type size
+const META_H = 18;
+const PAD = 4;            // breathing room inside every box
+
+const BODY_TOP = 52;
 
 export interface Cue {
   lines: string[];
@@ -135,7 +154,8 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
 
   // Header — the word CUE, and how fresh this is.
   textObject.push({
-    xPosition: X, yPosition: 16, width: 200, height: 20,
+    xPosition: X, yPosition: 14, width: 160, height: HEADER_H,
+    paddingLength: PAD,
     containerID: 1, containerName: "cue-label", zOrderIndex: 1,
     content: "CUE",
     // The single gesture receiver for the page. It is the header rather than
@@ -143,7 +163,8 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     isEventCapture: 1,
   });
   textObject.push({
-    xPosition: DISPLAY_W - X - 120, yPosition: 16, width: 120, height: 20,
+    xPosition: DISPLAY_W - X - 110, yPosition: 14, width: 110, height: HEADER_H,
+    paddingLength: PAD,
     containerID: 2, containerName: "cue-latency", zOrderIndex: 2,
     content: latencyMs ? `${(latencyMs / 1000).toFixed(1)}S` : "",
     isEventCapture: 0,
@@ -167,8 +188,9 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
   // every scroll costs a redraw of the whole glass.
   Array.from({ length: CUE_LINES }, (_, i) => lines[i] || "").forEach((content, i) => {
     textObject.push({
-      xPosition: lineX, yPosition: BODY_TOP + i * 44,
-      width: lineW, height: 38,
+      xPosition: lineX, yPosition: BODY_TOP + i * LINE_STEP,
+      width: lineW, height: LINE_H,
+      paddingLength: PAD,
       containerID: 3 + i, containerName: `cue-line-${i + 1}`, zOrderIndex: 3 + i,
       content,
       isEventCapture: 0,
@@ -185,8 +207,9 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     // fraction is read, not counted.
     const position = `${(cue.moduleIndex || 0) + 1}/${cue.moduleCount}`;
     textObject.push({
-      xPosition: lineX, yPosition: DISPLAY_H - 42,
-      width: lineW, height: 20,
+      xPosition: lineX, yPosition: DISPLAY_H - 34,
+      width: lineW, height: META_H,
+      paddingLength: PAD,
       containerID: 8, containerName: "cue-modules", zOrderIndex: 8,
       content: toDisplayText(`${cue.moduleName || ""} ${position}`),
       isEventCapture: 0,
@@ -206,6 +229,12 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
       xPosition: X, yPosition: BODY_TOP,
       width: RAIL_W, height: RAIL_ROW * facts.length,
       containerID: 9, containerName: "cue-rail", zOrderIndex: 9,
+      // A hairline down the rail's edge. The brand bans chrome, and this is
+      // structure rather than decoration: it says where the fixed column ends
+      // and the module begins, which is the whole point of the layout.
+      borderWidth: 1,
+      borderRadius: 2,
+      paddingLength: PAD + 2,
       isEventCapture: 0,
       itemContainer: {
         itemCount: facts.length,
@@ -219,8 +248,9 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
 
   // Meta strip, bottom left. Interpunct-separated, never four facts.
   textObject.push({
-    xPosition: X, yPosition: DISPLAY_H - 42,
-    width: hasRail ? RAIL_W : W, height: 22,
+    xPosition: X, yPosition: DISPLAY_H - 34,
+    width: hasRail ? RAIL_W : W, height: META_H,
+    paddingLength: PAD,
     containerID: 7, containerName: "cue-meta", zOrderIndex: 7,
     content: meta.join(" · "),
     isEventCapture: 0,
