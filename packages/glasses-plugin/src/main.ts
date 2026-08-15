@@ -23,6 +23,8 @@ import { getBridge, type GlassesBridge } from "./bridge";
 import { decodeGesture, describeGesture, type DecodedGesture } from "./gestures";
 import { buildCue, buildMenu, buildRuler, CUE_LINES, FACT_CHARS, IDLE_CUE,
          RULER_HEIGHTS, toDisplayText, type Cue } from "./layout";
+import { cardsFor, cueOf, money, type Card, type DisplayPayload,
+         type Recommendation } from "./cards";
 import { markBytes } from "./mark";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
 
@@ -47,22 +49,6 @@ const TENANT =
   new URLSearchParams(window.location.search).get("tenant")?.toLowerCase() || "gap";
 const TENANT_LABEL = TENANT === "shopify" ? "FUTURE BASICS · LIVE" : "GAP · DEMO";
 const ZONE = TENANT === "shopify" ? "Front Table" : "Denim Wall";
-
-type Recommendation = {
-  sku: string;
-  name: string;
-  price?: number;
-  location?: string;
-  stock?: number;
-};
-
-type DisplayPayload = {
-  lines: string[];
-  cue?: Cue;
-  script?: { opener: string; upsell: string; closer: string };
-  guest?: { name: string; tier: string; guest_id?: string };
-  recommendations?: Recommendation[];
-};
 
 const ui = {
   bridgeStatus: document.getElementById("bridge-status")!,
@@ -157,9 +143,23 @@ let engagedGuestId: string | null = null;
 let focusSku: string | null = null;
 let lastDisplay: DisplayPayload | null = null;
 
-/** Recommendation carousel. -1 = showing the guest card, not a product. */
 let recommendations: Recommendation[] = [];
-let recIndex = -1;
+
+/**
+ * The card stack, and where in it we are. The stack itself is built by
+ * `cardsFor` in cards.ts — pure, and tested there. What lives here is the
+ * *state*: which stack is on the glass and which card of it, because that is
+ * session state and not a function of the payload.
+ *
+ * 0 is always the cue. This was `recIndex`, which stopped being true the
+ * moment the stack held anything but recommendations.
+ */
+let cards: Card[] = [];
+let cardIndex = 0;
+
+function modulePosition() { return cardIndex; }
+function moduleTotal() { return engaged ? cards.length : 0; }
+function moduleLabel() { return cards[cardIndex]?.kind || "CUE"; }
 
 /**
  * The fact rail — persistent detail down the left, unchanged while scrolling
@@ -178,7 +178,7 @@ let railFacts: string[] = [];
  * pairs with `engaged=false` on every gesture afterwards, while the server
  * still had a live engagement. The WebView is being torn down and reloaded,
  * and module state goes with it — so scrolling silently did nothing
- * (`cycleRecommendations` returns early on `!engaged`) and the rail had no
+ * (`cycleCards` returns early on `!engaged`) and the rail had no
  * guest to draw.
  *
  * sessionStorage, not localStorage: this should survive a reload, not a shift.
@@ -290,10 +290,6 @@ async function pushMark(page: ReturnType<typeof buildCue>): Promise<boolean> {
 }
 
 /** Where scrolling has got to: 0 is the cue, 1..n the recommendations. */
-function modulePosition() { return recIndex < 0 ? 0 : recIndex + 1; }
-function moduleTotal() { return engaged ? recommendations.length + 1 : 0; }
-function moduleLabel() { return recIndex < 0 ? "CUE" : "PICK"; }
-
 /**
  * The rail: what an associate glances at while already talking.
  *
@@ -452,6 +448,8 @@ async function showIdle() {
   onRuler = false;
   menuIndex = -1;
   onUrgent = null;
+  cards = [];
+  cardIndex = 0;
   engaged = false;
   engagedGuestId = null;
   focusSku = null;
@@ -479,11 +477,15 @@ async function onDisplay(payload: DisplayPayload) {
   lastDisplay = payload;
   engagedGuestId = payload.guest?.guest_id ?? engagedGuestId;
   recommendations = payload.recommendations ?? [];
-  recIndex = -1;
+  // Build the stack once per guest, not per render. The whole value of a card
+  // stack is that it does not reorder underneath somebody who is scrolling
+  // through it looking for the address.
+  cards = cardsFor(payload);
+  cardIndex = 0;
   railFacts = railFor(payload);
   focusSku = recommendations[0]?.sku ?? focusSku;
   rememberSession();
-  await renderCue(cueOf(payload));
+  await showCard(0);
   ui.sessionInfo.textContent = payload.guest
     ? `Engaged: ${payload.guest.name} (${payload.guest.tier})`
     : "Engaged";
@@ -493,67 +495,40 @@ async function onDisplay(payload: DisplayPayload) {
 /** Restore whatever was on the lens before a voice interaction took it over. */
 async function restoreView() {
   if (!engaged || !lastDisplay) return showIdle();
-  if (recIndex >= 0 && recommendations[recIndex]) return showRecommendation(recIndex);
+  if (cardIndex > 0 && cards[cardIndex]) return showCard(cardIndex);
   await renderCue(cueOf(lastDisplay));
 }
 
 /** The service writes in glass grammar. `lines` is the flat form kept for the
  *  manager view and older payloads; fall back to it only if `cue` is absent. */
-function cueOf(payload: DisplayPayload): Cue {
-  if (payload.cue?.lines?.length) return payload.cue;
-  return { lines: (payload.lines || []).slice(0, CUE_LINES).map(toDisplayText) };
-}
-
-/** Whole units on the glass — decimals are punctuation. */
-function money(v?: number) {
-  return typeof v === "number" ? `$${Math.round(v).toLocaleString()}` : "";
-}
-
 /**
- * Scrolling the ring walks the recommendation list. Whatever is showing also
- * becomes `focusSku`, so the associate can scroll to an item and immediately
- * ask "do we have these in a 32" without naming it.
+ * Put card `index` on the glass.
+ *
+ * Scrolling to a PICK also makes it `focusSku`, so an associate can scroll to
+ * an item and immediately ask "do we have these in a 32" without naming it.
+ * Scrolling to anything else clears it back to the guest's first pick, because
+ * "these" pointing at a shipping address is worse than "these" pointing at
+ * nothing.
  */
-async function showRecommendation(index: number) {
-  const item = recommendations[index];
-  if (!item) return;
-  recIndex = index;
-  focusSku = item.sku;
-  await renderCue({
-    lines: [item.name, item.location || "", ""],
-    // The position moved to the module indicator, so the meta strip stops
-    // spending one of its three facts saying where you are.
-    meta: [
-      money(item.price),
-      typeof item.stock === "number" ? `${item.stock} ON HAND` : "",
-    ].filter(Boolean),
-  });
-  log(`showing rec ${index + 1}/${recommendations.length}: ${item.name}`);
+async function showCard(index: number) {
+  const card = cards[index];
+  if (!card) return;
+  cardIndex = index;
+  focusSku = card.sku ?? cards.find((c) => c.sku)?.sku ?? null;
+  await renderCue({ lines: card.lines, meta: card.meta || [] });
+  log(`card ${index + 1}/${cards.length}: ${card.kind}`);
 }
 
-async function cycleRecommendations(step: 1 | -1) {
-  if (!engaged || recommendations.length === 0) return;
-  // From the guest card, scrolling either way enters the list at the ends.
-  const next =
-    recIndex < 0
-      ? step === 1
-        ? 0
-        : recommendations.length - 1
-      : recIndex + step;
-
-  if (next < 0 || next >= recommendations.length) {
-    // Walked off either end — back to the guest card.
-    recIndex = -1;
-    focusSku = recommendations[0]?.sku ?? null;
-    if (lastDisplay) await renderCue(cueOf(lastDisplay));
-    return;
-  }
-  await showRecommendation(next);
+async function cycleCards(step: 1 | -1) {
+  if (!engaged || cards.length <= 1) return;
+  // Wrap. With a stack this long, walking off the end and stopping means an
+  // associate scrolling for the address discovers the list has an end rather
+  // than a shape — and the cue is one step backwards from the last card,
+  // which is where you most often want it.
+  const next = (cardIndex + step + cards.length) % cards.length;
+  await showCard(next);
 }
 
-/** The idle screen is our root page: nothing engaged, no carousel, and
- *  nothing voice put on the lens. Everything else is an internal page, where
- *  double-press is ours to use and mode-0 exits would be permitted. */
 function onRootPage(): boolean {
   // Root means genuinely nothing on the glass. A saved session counts as not
   // root even before the card comes back: after a foreground transition the
@@ -565,7 +540,7 @@ function onRootPage(): boolean {
   // The floor menu, an urgent message and the ruler are all pages: a double
   // press on any of them means "back", never "quit the app". Getting this
   // wrong is how double-tap once closed Cue instead of stopping the mic.
-  return !engaged && !resumable && recIndex < 0 && voice.current === "idle"
+  return !engaged && !resumable && cardIndex === 0 && voice.current === "idle"
     && menuIndex < 0 && !onUrgent && !onRuler;
 }
 
@@ -584,7 +559,7 @@ function onGesture(g: DecodedGesture) {
   // tap arrives as one DOUBLE_CLICK or two CLICKs is not answerable from here.
   socket?.emit("client:gesture", {
     action: g.action, source: g.source, kind: g.kind,
-    voice: voice?.current, engaged, recIndex,
+    voice: voice?.current, engaged, cardIndex,
   });
   if (g.source === "ring" && ui.ringStatus) {
     ui.ringStatus.textContent = "ring active";
@@ -611,12 +586,11 @@ function onGesture(g: DecodedGesture) {
       // A click first dismisses whatever voice put on the lens; only then does
       // it mean "I'm done with this guest".
       if (voice.dismiss()) return;
-      if (recIndex >= 0) {
-        // Back out of the carousel before ending the engagement.
-        recIndex = -1;
-        if (lastDisplay) void renderCue(cueOf(lastDisplay));
-        return;
-      }
+      // Kyle's rule: press takes you home from anywhere, and only ends the
+      // engagement once you are already home. Learnable in a shift, and it
+      // means you can never end a live session by accident from card seven —
+      // which is the mistake that happens in front of a customer.
+      if (cardIndex > 0) { void showCard(0); return; }
       if (engaged) {
         socket.emit("session:end");
         void showIdle();
@@ -685,7 +659,7 @@ function onGesture(g: DecodedGesture) {
       // screen that answers, on the hardware, how small this display will
       // actually draw a row. See buildRuler() in layout.ts.
       if (!engaged && voice.current === "idle") { void showRuler(); return; }
-      void cycleRecommendations(-1);
+      void cycleCards(-1);
       return;
 
     case "scroll-down":
@@ -695,7 +669,7 @@ function onGesture(g: DecodedGesture) {
       // that you read it when you choose, and mid-engagement is exactly when
       // "covering your guest" needs answering.
       if (voice.current === "idle" && !onRuler) { void showFloorMenu(); return; }
-      void cycleRecommendations(1);
+      void cycleCards(1);
       return;
 
     case "exit":

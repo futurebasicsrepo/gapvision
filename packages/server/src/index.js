@@ -253,6 +253,15 @@ io.on("connection", (socket) => {
           // rail would have rendered a tier and three blanks.
           points: context.guest.loyalty_points,
           sizes: context.guest.sizes,
+          // Customer depth — the cards behind the cue. Passed straight
+          // through: the lens decides what fits on a 21-character row, and
+          // the server deciding for it is how the rail ended up with facts
+          // that did not fit.
+          contact: context.guest.contact || null,
+          address: context.guest.address || null,
+          orders: context.guest.orders || null,
+          purchase_history: context.guest.purchase_history || [],
+          open_cart_online: context.guest.open_cart_online || [],
         },
       });
       // ...and the full context to the manager view.

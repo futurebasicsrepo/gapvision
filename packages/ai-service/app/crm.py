@@ -22,6 +22,13 @@ GUESTS = {
         "open_cart_online": [
             {"sku": "GAP-SWT-3310", "name": "CashSoft Crew Sweater", "price": 69.95}
         ],
+        # Customer depth. The mock is what every test runs against, so it
+        # carries exactly the fields the Shopify adapter emits — a mock that
+        # is missing a field lets a card ship that only ever renders blank
+        # against a real store.
+        "contact": {"email": "sarah.chen@example.com", "phone": "+1 415 555 0142"},
+        "address": {"line1": "412 Valencia St", "line2": "Apt 3", "line3": "San Francisco CA 94103", "country": "US"},
+        "orders": {"count": 11, "last_at": "2026-05-18", "last_ref": "#1042"},
     },
     "guest-002": {
         "guest_id": "guest-002",
@@ -35,6 +42,13 @@ GUESTS = {
             {"sku": "GAP-JOG-5620", "name": "Vintage Soft Joggers", "price": 49.95},
         ],
         "open_cart_online": [],
+        # Customer depth. The mock is what every test runs against, so it
+        # carries exactly the fields the Shopify adapter emits — a mock that
+        # is missing a field lets a card ship that only ever renders blank
+        # against a real store.
+        "contact": {"email": "m.webb@example.com", "phone": "+1 415 555 0177"},
+        "address": {"line1": "88 Folsom St", "line2": "", "line3": "San Francisco CA 94105", "country": "US"},
+        "orders": {"count": 4, "last_at": "2026-07-02", "last_ref": "#1188"},
     },
     "guest-003": {
         "guest_id": "guest-003",
@@ -50,6 +64,13 @@ GUESTS = {
             {"sku": "GAP-BLZ-7810", "name": "Relaxed Linen Blazer", "price": 128.00},
             {"sku": "GAP-SHT-7844", "name": "Poplin Shirt", "price": 54.95},
         ],
+        # Customer depth. The mock is what every test runs against, so it
+        # carries exactly the fields the Shopify adapter emits — a mock that
+        # is missing a field lets a card ship that only ever renders blank
+        # against a real store.
+        "contact": {"email": "priya.nair@example.com", "phone": ""},
+        "address": {"line1": "9 Bryant St", "line2": "Unit 210", "line3": "San Francisco CA 94107", "country": "US"},
+        "orders": {"count": 2, "last_at": "2026-08-01", "last_ref": "#1231"},
     },
 }
 

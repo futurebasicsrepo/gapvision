@@ -194,6 +194,26 @@ def _keyword_tags(title: str) -> list[str]:
     return out
 
 
+def _address(a: dict | None) -> dict:
+    """Shopify's address, flattened to what a 21-character line can hold.
+
+    `line1` / `line2` / `line3` rather than the source's field names, because
+    the lens renders three rows and the caller should not have to decide how to
+    fold a country into them. Empty strings rather than nulls: the card renders
+    what it is given, and a missing floor is a shorter card, not a broken one.
+    """
+    if not a:
+        return {"line1": "", "line2": "", "line3": "", "country": ""}
+    city_bits = " ".join(x for x in (a.get("city"), a.get("provinceCode"),
+                                     a.get("zip")) if x)
+    return {
+        "line1": (a.get("address1") or "").strip(),
+        "line2": (a.get("address2") or "").strip(),
+        "line3": city_bits.strip(),
+        "country": (a.get("countryCodeV2") or "").strip(),
+    }
+
+
 def _tier(total_spent: float) -> str:
     if total_spent >= 1500:
         return "Icon"
@@ -275,6 +295,12 @@ class ShopifyCRM:
             return None
 
         spent = float(c["amountSpent"]["amount"] or 0)
+        # The query has always fetched these and always thrown them away.
+        # "When did she last order" is one of the questions a floor actually
+        # asks, and the answer was already on the wire.
+        oedges = c["orders"]["edges"]
+        last_at = (oedges[0]["node"].get("createdAt") or "")[:10] if oedges else ""
+        last_ref = oedges[0]["node"].get("name") or "" if oedges else ""
         purchases, size_votes, persona = [], {"tops": Counter(), "bottoms": Counter()}, Counter()
 
         for oedge in c["orders"]["edges"]:
@@ -321,6 +347,23 @@ class ShopifyCRM:
             "persona_tags": persona_tags or ["first-visit"],
             "purchase_history": purchases[:8],
             "open_cart_online": self._open_cart(c),
+            # --- customer depth ---------------------------------------------
+            # Kyle's ask: an associate already talking to someone should be
+            # able to reach the rest of that person's record without leaving
+            # the lens. Everything here is post-identification — it is depth on
+            # somebody you are already serving, not enumeration of people you
+            # are not, which is the line that keeps the roster endpoint closed
+            # while these stay open.
+            "contact": {
+                "email": c.get("email") or "",
+                "phone": c.get("phone") or "",
+            },
+            "address": _address(c.get("defaultAddress")),
+            "orders": {
+                "count": int(c.get("numberOfOrders") or 0),
+                "last_at": last_at,
+                "last_ref": last_ref,
+            },
         }
 
     def _open_cart(self, customer: dict) -> list[dict]:

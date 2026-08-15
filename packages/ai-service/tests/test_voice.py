@@ -493,3 +493,49 @@ def test_a_plural_still_names_the_product(transcript, expected):
         f"{transcript!r} -> {r['product']['name']}, expected {expected}"
     )
     assert r["resolved_by"] == "named"
+
+
+# --- customer depth -----------------------------------------------------------
+# Kyle, 2026-08-15: "more searchable per customer… not just inventory". The
+# pathway already existed — the `history` intent has always read the guest
+# record — so these assert the *fields*, which is what was actually missing.
+
+def _ask(q):
+    from app import voice
+    from app.crm import GUESTS
+    return voice.answer_query(q, inventory=[], guest=GUESTS["guest-001"])
+
+
+def test_voice_can_answer_where_we_ship_her():
+    r = _ask("what's her shipping address")
+    assert r["intent"] == "history"
+    assert "412 Valencia" in r["answer"]
+    # And it reaches the glass — including the postcode, which is the line a
+    # header used to push off the end. A truncated postcode read back to a
+    # customer is worse than no answer.
+    glass = " ".join(r["glasses_lines"]).lower()
+    assert "412 valencia" in glass
+    assert "94103" in glass, r["glasses_lines"]
+
+
+def test_voice_can_answer_when_she_last_ordered():
+    r = _ask("when did she last order")
+    assert r["intent"] == "history"
+    assert "2026-05-18" in r["answer"]
+
+
+def test_asking_for_a_phone_does_not_answer_with_an_email():
+    """Nearly-right is what makes an associate stop trusting the answer."""
+    r = _ask("what's her phone number")
+    assert "415 555 0142" in r["answer"]
+    assert "@" not in r["answer"]
+
+    e = _ask("what's her email")
+    assert "sarah.chen@example.com" in e["answer"]
+
+
+def test_a_guest_with_no_address_says_so_rather_than_guessing():
+    from app import voice
+    r = voice.answer_query("what's her address", inventory=[],
+                           guest={"name": "Nobody Here", "sizes": {}})
+    assert "no address" in r["answer"].lower()

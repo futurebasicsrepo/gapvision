@@ -103,7 +103,13 @@ _INTENT_PATTERNS: list[tuple[str, re.Pattern]] = [
 #: Guest-record questions that would otherwise be captured by a stock phrasing
 #: — "how many points does she have" is history, not inventory.
 _GUEST_RECORD = re.compile(
-    r"\b(points|loyalty|tier|cart|bought|purchase[ds]?|last (time|visit)|previously)\b"
+    r"\b(points|loyalty|tier|cart|bought|purchase[ds]?|last (time|visit)|previously"
+    # Customer depth. These are the questions a floor asks about somebody it is
+    # already serving — and the ones that used to fall through to the model,
+    # which had no access to the record and could only guess politely.
+    r"|address|ship(ping|s)?|deliver(y|ed)?|post ?code|zip"
+    r"|e-?mail|phone|number|contact|reach (her|him|them)"
+    r"|last order|order(ed|s)?|when did)\b"
 )
 
 
@@ -534,6 +540,58 @@ def _answer_history(transcript, guest, inventory) -> dict:
             None,
             [f"[ICON:STAR] {guest['loyalty_tier']} · {guest['loyalty_points']} pts",
              f"[ICON:USER] {guest['name']}"],
+        )
+
+    # --- customer depth -----------------------------------------------------
+    if re.search(r"\b(address|ship|deliver|post ?code|zip)\b", t):
+        a = guest.get("address") or {}
+        if not a.get("line1"):
+            return _package(transcript, "history",
+                            f"No address on file for {first}.", None,
+                            [f"[ICON:WARN] {first} — no address"])
+        parts = [a.get("line1"), a.get("line2"), a.get("line3")]
+        pretty = ", ".join(x for x in parts if x)
+        # Three lines, and the *last* one has to be the state and postcode.
+        # A header line ("Sarah ships to") is what pushed the postcode off the
+        # glass the first time — and a truncated postcode read back to a
+        # customer is confidently wrong, which is worse than absent. The name
+        # is on the fact rail already; the lens does not need it twice.
+        glass = [x for x in parts if x]
+        if len(glass) > 3:
+            glass = [glass[0], glass[1], glass[-1]]
+        return _package(
+            transcript, "history", f"{first} ships to {pretty}.", None,
+            [f"[ICON:PIN] {glass[0]}"] + list(glass[1:]),
+        )
+
+    if re.search(r"\b(e-?mail|phone|number|contact|reach)\b", t):
+        c = guest.get("contact") or {}
+        if not (c.get("email") or c.get("phone")):
+            return _package(transcript, "history",
+                            f"No contact details on file for {first}.", None,
+                            [f"[ICON:WARN] {first} — no contact"])
+        # Answer the half that was asked. Reading out a phone number to
+        # somebody who asked for an email is the kind of nearly-right that
+        # makes an associate stop trusting the answer.
+        wants_phone = re.search(r"\b(phone|number|call)\b", t) is not None
+        detail = (c.get("phone") if wants_phone and c.get("phone")
+                  else c.get("email") or c.get("phone"))
+        return _package(
+            transcript, "history", f"{first} is at {detail}.", None,
+            [f"[ICON:USER] {first}",
+             f"        {c.get('email','')}".rstrip(),
+             f"        {c.get('phone','')}".rstrip()],
+        )
+
+    orders = guest.get("orders") or {}
+    if re.search(r"\b(last order|when did|order(ed|s)?)\b", t) and orders.get("last_at"):
+        ref = f" ({orders['last_ref']})" if orders.get("last_ref") else ""
+        return _package(
+            transcript, "history",
+            f"{first} last ordered on {orders['last_at']}{ref}, "
+            f"{orders.get('count', 0)} orders in total.", None,
+            [f"[ICON:USER] {first} · {orders.get('count', 0)} orders",
+             f"[ICON:CLOCK] Last {orders['last_at']}{ref}"],
         )
 
     hist = guest.get("purchase_history") or []

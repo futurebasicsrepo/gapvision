@@ -36,6 +36,7 @@
     "test:attribution": "node packages/internal/test/attribution-e2e.mjs",
     "render:lens": "npx esbuild packages/glasses-plugin/src/layout.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/layout.mjs && python3 packages/glasses-plugin/test/render-lens.py",
     "test:bundle": "node packages/glasses-plugin/test/packaged-bundle.test.mjs",
-    "brand:assets": "python3 packages/brand/build-assets.py"
+    "brand:assets": "python3 packages/brand/build-assets.py",
+    "test:cards": "npx esbuild packages/glasses-plugin/src/cards.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/cards.js && npx esbuild packages/glasses-plugin/src/layout.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/layout.js && node packages/glasses-plugin/test/cards.test.mjs"
   }
 }
