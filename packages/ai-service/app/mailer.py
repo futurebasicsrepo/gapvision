@@ -142,6 +142,62 @@ def send_invite(*, to: str, name: str | None, role: str, token: str,
     )
 
 
+def send_test(*, to: str, name: str | None) -> dict[str, Any]:
+    who = (name or "").split(" ")[0] or "there"
+    return send(
+        to,
+        "Cue can send email",
+        f"Hi {who},\n\n"
+        f"Somebody pressed Send a test in Cue Console and this arrived, which "
+        f"means outbound email works. Invitations and password resets will now "
+        f"reach people instead of being written to the service log.\n\n"
+        f"Nothing about your account changed.\n\n"
+        f"— Cue\n",
+    )
+
+
+# Named failures. The lesson from `probe_connection`: when a credential does
+# not work, the operator needs to know *which* of the plausible things is
+# wrong. SMTP has about six ways to fail and they need six different sentences,
+# because "authentication failed" sends somebody to re-type a password that was
+# never the problem.
+_HINTS = {
+    "SMTPAuthenticationError":
+        "The server rejected the username or password. On Gmail this is almost "
+        "always an ordinary account password where a 16-character app password "
+        "is required — or 2-Step Verification not being switched on, without "
+        "which app passwords cannot be created at all.",
+    "SMTPSenderRefused":
+        "The server accepted the login but refused the From address. It must be "
+        "the mailbox you authenticated as, or an alias verified under Gmail's "
+        "\"Send mail as\".",
+    "SMTPRecipientsRefused":
+        "The server refused the recipient address.",
+    "SMTPNotSupportedError":
+        "The server does not offer STARTTLS on this port. Gmail wants 587.",
+    "SMTPConnectError":
+        "Could not open a connection. Check the host and port.",
+    "SMTPServerDisconnected":
+        "The server hung up mid-conversation. Usually a wrong port — 465 is "
+        "implicit TLS and this client speaks STARTTLS, which is 587.",
+    "gaierror":
+        "The hostname did not resolve. Check CUE_SMTP_HOST for a typo.",
+    "timeout":
+        "The connection timed out. The host may be unreachable from this "
+        "deployment, or blocked outbound.",
+    "TimeoutError":
+        "The connection timed out. The host may be unreachable from this "
+        "deployment, or blocked outbound.",
+    "SSLError":
+        "TLS negotiation failed.",
+}
+
+
+def hint(error: str | None) -> str:
+    return _HINTS.get(error or "", "The send failed. The service log carries "
+                                   "the exact exception.")
+
+
 def send_reset(*, to: str, name: str | None, role: str, token: str,
                hours: int) -> dict[str, Any]:
     url = link_for(role, token)

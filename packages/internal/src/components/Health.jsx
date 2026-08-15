@@ -40,6 +40,22 @@ export default function Health() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(true);
 
+  // The mail row can only ever say whether three variables are set. Proving a
+  // password is right takes sending something, so that lives behind a button
+  // rather than in the poll — a health check that mails somebody every sixty
+  // seconds is not a health check.
+  const [mail, setMail] = useState(null);
+  const [mailBusy, setMailBusy] = useState(false);
+
+  const testMail = useCallback(() => {
+    setMailBusy(true);
+    setMail(null);
+    api.mailTest()
+      .then(setMail)
+      .catch((e) => setMail({ ok: false, detail: e.message }))
+      .finally(() => setMailBusy(false));
+  }, []);
+
   const load = useCallback(() => {
     setBusy(true);
     setError(null);
@@ -114,6 +130,26 @@ export default function Health() {
           ))}
           {!checks.length && !busy && <div className="empty">No checks returned.</div>}
         </div>
+
+        {checks.some((c) => c.key === "mail") && (
+          <div className="notice" style={{ marginTop: 14 }}>
+            <div className="btn-row" style={{ justifyContent: "space-between" }}>
+              <span className="meta">
+                The mail row above reports configuration, not delivery — a wrong
+                password looks exactly like a right one until something is sent.
+              </span>
+              <button className="btn small" onClick={testMail} disabled={mailBusy}>
+                {mailBusy ? "Sending…" : "Send a test"}
+              </button>
+            </div>
+            {mail && (
+              <p className={`card-note ${mail.ok ? "" : "error"}`} style={{ marginTop: 10 }}>
+                {mail.ok ? "Sent. " : "Didn't send. "}{mail.detail}
+                {mail.error ? ` (${mail.error})` : ""}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* --- reachability from this browser --- */}
