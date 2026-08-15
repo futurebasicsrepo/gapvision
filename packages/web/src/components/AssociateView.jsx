@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { socket } from "../socket.js";
+import { socket, currentTenant } from "../socket.js";
 import GlassesDisplay from "./GlassesDisplay.jsx";
 
 // Through the realtime server's proxy — the dashboard is a static bundle and
@@ -15,7 +15,7 @@ export default function AssociateView() {
 
   useEffect(() => {
     if (!registered.current) {
-      socket.emit("register", { role: "associate", name: "You (Demo)", zone: "Denim Wall" });
+      socket.emit("register", { role: "associate", name: "You (Demo)", zone: "Denim Wall", tenant: currentTenant() });
       registered.current = true;
     }
     const onDisplay = (payload) => setDisplay(payload);

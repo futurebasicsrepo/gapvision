@@ -339,6 +339,10 @@ async function main() {
     ui.serverStatus.className = "pill ok";
     socket.emit("register", {
       role: "associate",
+      // The tenant decides which floor's radio and roster this pair of glasses
+      // joins, so it is sent at register rather than waiting for the first
+      // guest. An associate who never engages anyone still belongs to a store.
+      tenant: TENANT,
       name: `${(user as any).name || "G2 Associate"} [${TENANT}]`,
       zone: ZONE,
       deviceSerial: (device as any).sn || null,

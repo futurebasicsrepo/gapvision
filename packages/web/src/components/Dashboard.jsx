@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { socket } from "../socket.js";
+import { socket, currentTenant } from "../socket.js";
 
 const EMPTY = {
   associates: [],
@@ -15,7 +15,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!registered.current) {
-      socket.emit("register", { role: "dashboard" });
+      socket.emit("register", { role: "dashboard", tenant: currentTenant() });
       registered.current = true;
     }
     const onUpdate = (payload) => setSnap(payload);

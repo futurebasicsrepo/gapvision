@@ -30,22 +30,77 @@ app.use(createAiProxy({
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-// ---- Live session state (Redis in production) -------------------------------
-const state = {
-  associates: new Map(), // socketId -> { name, zone, status }
-  activeSessions: [],    // guest engagements in progress
-  radioLog: [],
-  voiceLog: [],        // recent voice queries, for the manager view
-  leaderboard: [
-    { name: "Alex R.", sales: 1240, assists: 9 },
-    { name: "Jordan M.", sales: 980, assists: 12 },
-    { name: "Sam T.", sales: 715, assists: 6 },
-  ],
-  stats: { guestsToday: 0, scriptsServed: 0, radioMessages: 0, voiceQueries: 0 },
-};
+// ---- Live session state, partitioned by tenant (Redis in production) --------
+//
+// Every field below used to be a single global. That was correct when there was
+// one store and a disclosure the moment there were two: floor radio went to one
+// `associates` room so a merchant's staff would hear another merchant's traffic,
+// and one `dashboard` room meant every manager saw every retailer's roster.
+//
+// Same shape of mistake as the process-wide Shopify client — state that is fine
+// with one customer and wrong with two — so it gets the same treatment: keyed by
+// tenant, with the tenant pinned to the socket at register and never taken from
+// a later event.
 
-function dashboardSnapshot() {
+const DEMO_TENANT = "gap";
+
+const associatesRoom = (tenant) => `associates:${tenant}`;
+const dashboardRoom = (tenant) => `dashboard:${tenant}`;
+
+function freshState(tenant) {
   return {
+    associates: new Map(), // socketId -> { name, zone, status }
+    activeSessions: [],    // guest engagements in progress
+    radioLog: [],
+    voiceLog: [],          // recent voice queries, for the manager view
+    // The simulator's three names are demo furniture, so they stay in the demo
+    // world. A real retailer opening their dashboard to "Alex R. — $1,240"
+    // would reasonably conclude the product is showing them another company's
+    // numbers, and would be right to stop the pilot over it.
+    leaderboard: tenant === DEMO_TENANT
+      ? [
+          { name: "Alex R.", sales: 1240, assists: 9 },
+          { name: "Jordan M.", sales: 980, assists: 12 },
+          { name: "Sam T.", sales: 715, assists: 6 },
+        ]
+      : [],
+    stats: { guestsToday: 0, scriptsServed: 0, radioMessages: 0, voiceQueries: 0 },
+  };
+}
+
+/** tenant slug -> live state. Created on first sight of a tenant. */
+const tenantStates = new Map();
+
+function stateFor(tenant) {
+  const key = (tenant || DEMO_TENANT).toLowerCase();
+  if (!tenantStates.has(key)) tenantStates.set(key, freshState(key));
+  return tenantStates.get(key);
+}
+
+/**
+ * Pin a socket to one tenant, first value wins.
+ *
+ * The events carry a `tenant` field because the plugin has always sent one, but
+ * a socket that registered as retailer A must not be able to write into
+ * retailer B by putting a different slug in a later payload. So the first value
+ * seen sticks and every later disagreement is ignored and logged.
+ */
+function bindTenant(socket, tenant) {
+  const next = String(tenant || "").toLowerCase() || null;
+  if (!socket.data.tenant) {
+    socket.data.tenant = next || DEMO_TENANT;
+  } else if (next && next !== socket.data.tenant) {
+    console.warn(
+      `[cue] ignored tenant '${next}' on a socket already bound to '${socket.data.tenant}'`
+    );
+  }
+  return socket.data.tenant;
+}
+
+function dashboardSnapshot(tenant) {
+  const state = stateFor(tenant);
+  return {
+    tenant,
     associates: [...state.associates.values()],
     activeSessions: state.activeSessions.slice(-10),
     radioLog: state.radioLog.slice(-20),
@@ -55,8 +110,9 @@ function dashboardSnapshot() {
   };
 }
 
-function broadcastDashboard() {
-  io.to("dashboard").emit("dashboard:update", dashboardSnapshot());
+function broadcastDashboard(tenant) {
+  const t = (tenant || DEMO_TENANT).toLowerCase();
+  io.to(dashboardRoom(t)).emit("dashboard:update", dashboardSnapshot(t));
 }
 
 /**
@@ -86,8 +142,14 @@ async function ingest(path, body) {
 
 // ---- Socket wiring ----------------------------------------------------------
 io.on("connection", (socket) => {
-  socket.on("register", ({ role, name, zone, email, deviceSerial, deviceModel }) => {
+  socket.on("register", ({ role, name, zone, email, deviceSerial, deviceModel, tenant }) => {
     socket.data.role = role;
+    // Register is where a socket picks its tenant. Older plugin builds don't
+    // send one here and instead carry it on `beacon:guest-enter` / `voice:start`
+    // — `bindTenant` accepts that and pins whichever arrives first, so a client
+    // that predates this change still lands in exactly one tenant's rooms.
+    const t = bindTenant(socket, tenant);
+    const state = stateFor(t);
     // Attribution for the control plane. The glasses identify themselves by
     // serial — the Even SDK exposes no email — and the AI service resolves
     // that to whoever the device is assigned to in Cue Console. Email is the
@@ -99,20 +161,20 @@ io.on("connection", (socket) => {
     socket.data.deviceModel = deviceModel || null;
     if (role === "dashboard") {
       // A client switching views re-registers; drop any associate identity.
-      socket.leave("associates");
+      socket.leave(associatesRoom(t));
       state.associates.delete(socket.id);
-      socket.join("dashboard");
-      socket.emit("dashboard:update", dashboardSnapshot());
-      broadcastDashboard();
+      socket.join(dashboardRoom(t));
+      socket.emit("dashboard:update", dashboardSnapshot(t));
+      broadcastDashboard(t);
     } else if (role === "associate") {
-      socket.join("associates");
+      socket.join(associatesRoom(t));
       state.associates.set(socket.id, {
         id: socket.id,
         name: name || "Associate",
         zone: zone || "Floor",
         status: "available",
       });
-      broadcastDashboard();
+      broadcastDashboard(t);
     }
   });
 
@@ -121,11 +183,13 @@ io.on("connection", (socket) => {
    * Flow: signal -> AI service -> script -> glasses overlay + dashboard.
    */
   socket.on("beacon:guest-enter", async ({ guestId, zone, tenant }) => {
+    const t = bindTenant(socket, tenant);
+    const state = stateFor(t);
     try {
       const res = await fetch(`${AI_SERVICE_URL}/api/guest-context`, {
         method: "POST",
         headers: aiHeaders(AI_API_KEY),
-        body: JSON.stringify({ guest_id: guestId, zone, tenant: tenant || "gap" }),
+        body: JSON.stringify({ guest_id: guestId, zone, tenant: t }),
       });
       if (!res.ok) throw new Error(`AI service ${res.status}`);
       const context = await res.json();
@@ -145,12 +209,11 @@ io.on("connection", (socket) => {
       // Remember what this associate is looking at. A voice question like
       // "do we have these in a 32" is only answerable because we kept the
       // engaged guest and the product currently on their lens.
-      socket.data.tenant = tenant || "gap";
       socket.data.guestId = guestId;
       socket.data.focusSku = context.recommendations?.[0]?.sku || null;
 
       const opened = await ingest("engagement/start", {
-        tenant: socket.data.tenant,
+        tenant: t,
         guest_ref: guestId,
         zone: zone || "Floor",
         associate_email: socket.data.email,
@@ -173,7 +236,7 @@ io.on("connection", (socket) => {
         },
       });
       // ...and the full context to the manager view.
-      broadcastDashboard();
+      broadcastDashboard(t);
     } catch (err) {
       socket.emit("glasses:display", {
         lines: ["[ICON:WARN] AI service unavailable", String(err.message)],
@@ -182,6 +245,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("session:end", ({ outcome, saleCents } = {}) => {
+    const state = stateFor(socket.data.tenant);
     const associate = state.associates.get(socket.id);
     if (associate) associate.status = "available";
     if (socket.data.engagementId) {
@@ -194,7 +258,7 @@ io.on("connection", (socket) => {
     socket.data.engagementId = null;
     socket.data.guestId = null;
     socket.data.focusSku = null;
-    broadcastDashboard();
+    broadcastDashboard(socket.data.tenant);
   });
 
   /** An associate helping someone else's guest. Recorded so the leaderboard
@@ -204,7 +268,7 @@ io.on("connection", (socket) => {
     // record. Either identity will do; neither means there is nothing to file.
     if (!socket.data.email && !socket.data.deviceSerial) return;
     void ingest("assist", {
-      tenant: socket.data.tenant || "gap",
+      tenant: socket.data.tenant || DEMO_TENANT,
       helper_email: socket.data.email,
       device_serial: socket.data.deviceSerial,
       device_model: socket.data.deviceModel,
@@ -225,7 +289,7 @@ io.on("connection", (socket) => {
       chunks: [],
       bytes: 0,
       sampleRate: Number(sampleRate) || 16000,
-      tenant: tenant || socket.data.tenant || "gap",
+      tenant: bindTenant(socket, tenant),
       guestId: guestId ?? socket.data.guestId ?? null,
       focusSku: focusSku ?? socket.data.focusSku ?? null,
       startedAt: Date.now(),
@@ -257,6 +321,8 @@ io.on("connection", (socket) => {
 
   /** Digital radio: associate-to-associate comms, mirrored to dashboard. */
   socket.on("radio:send", ({ from, message, channel }) => {
+    const t = socket.data.tenant || DEMO_TENANT;
+    const state = stateFor(t);
     const entry = {
       from: from || state.associates.get(socket.id)?.name || "Unknown",
       message,
@@ -264,16 +330,19 @@ io.on("connection", (socket) => {
       at: new Date().toISOString(),
     };
     state.radioLog.push(entry);
+    if (state.radioLog.length > 200) state.radioLog.shift();
     state.stats.radioMessages += 1;
-    io.to("associates").emit("radio:message", entry);
-    broadcastDashboard();
+    // One store's floor only. This line is the whole reason for the partition.
+    io.to(associatesRoom(t)).emit("radio:message", entry);
+    broadcastDashboard(t);
   });
 
   socket.on("sale:record", ({ name, amount }) => {
+    const state = stateFor(socket.data.tenant);
     const row = state.leaderboard.find((r) => r.name === name);
     if (row) row.sales += amount;
     else state.leaderboard.push({ name, sales: amount, assists: 0 });
-    broadcastDashboard();
+    broadcastDashboard(socket.data.tenant);
   });
 
   socket.on("disconnect", () => {
@@ -287,8 +356,8 @@ io.on("connection", (socket) => {
       });
       socket.data.engagementId = null;
     }
-    state.associates.delete(socket.id);
-    broadcastDashboard();
+    stateFor(socket.data.tenant).associates.delete(socket.id);
+    broadcastDashboard(socket.data.tenant);
   });
 });
 
@@ -341,6 +410,7 @@ async function finalizeVoice(socket, reason) {
     };
   }
 
+  const state = stateFor(session.tenant);
   state.stats.voiceQueries += 1;
   state.voiceLog.push({
     associate: state.associates.get(socket.id)?.name || "Associate",
@@ -370,17 +440,27 @@ async function finalizeVoice(socket, reason) {
 
   socket.emit("voice:result", result);
   socket.emit("voice:state", { state: "idle" });
-  broadcastDashboard();
+  broadcastDashboard(session.tenant);
 }
 
-app.get("/health", (_req, res) =>
+app.get("/health", (_req, res) => {
+  // Totals across tenants, never a list of slugs — this route is open so the
+  // scheduled check can poll it, and the set of tenants is the set of
+  // customers. Same rule the AI service's /health follows.
+  let associates = 0;
+  let voiceQueries = 0;
+  for (const state of tenantStates.values()) {
+    associates += state.associates.size;
+    voiceQueries += state.stats.voiceQueries;
+  }
   res.json({
     status: "ok",
-    associates: state.associates.size,
+    tenants_live: tenantStates.size,
+    associates,
     voiceSessions: voiceSessions.size,
-    voiceQueries: state.stats.voiceQueries,
-  })
-);
+    voiceQueries,
+  });
+});
 
 /**
  * The AI service's own health, relayed.

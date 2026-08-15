@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { socket } from "../socket.js";
+import { socket, currentTenant } from "../socket.js";
 import { api, clock, compact, duration, money } from "../api.js";
 import { Empty, Legend, ScoreBar, SERIES, StatTile } from "./Charts.jsx";
 
@@ -81,7 +81,7 @@ export default function ManagerDashboard({ user }) {
   // a quiet store shouldn't generate traffic, and a busy one updates at once.
   useEffect(() => {
     if (!registered.current) {
-      socket.emit("register", { role: "dashboard" });
+      socket.emit("register", { role: "dashboard", tenant: currentTenant() });
       registered.current = true;
     }
     const onUpdate = (snap) => {
