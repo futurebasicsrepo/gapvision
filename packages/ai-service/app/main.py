@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import db
+from . import db, secrets_box
 from .auth import KeyHeader, guard, startup_check
 from .crm_provider import TenantNotConfigured, get_crm_for, tenant_status
 from .llm import get_provider
@@ -73,8 +73,13 @@ _ORIGINS = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ORIGINS,
-    allow_methods=["GET", "POST"],
-    allow_headers=["content-type", "x-gapvision-key"],
+    # The admin surfaces use PATCH, PUT and DELETE, and every authenticated call
+    # carries an `authorization` header — which makes even a GET a preflighted
+    # request. Both were missing, so a browser on a listed dev origin failed
+    # every admin call at the preflight. Production never noticed because the
+    # console reaches this service through the realtime server, same-origin.
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
+    allow_headers=["content-type", "authorization", "x-gapvision-key"],
 )
 
 
@@ -118,8 +123,11 @@ def health():
         "status": "ok",
         "llm_provider": get_provider().name,
         "stt_provider": get_stt().name,
+        # Counts, not slugs — the list of tenants is the list of customers, and
+        # this route is deliberately open so the scheduled check can poll it.
         "tenants": tenant_status(),
         "auth": _AUTH_STATE,
+        "credential_encryption": secrets_box.status(),
         "database": db.health(),
     }
 

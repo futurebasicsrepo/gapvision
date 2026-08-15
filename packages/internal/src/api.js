@@ -96,6 +96,18 @@ export const api = {
   updateTenant: (slug, body) =>
     request(`/api/admin/tenants/${encodeURIComponent(slug)}`, { method: "PATCH", body }),
 
+  // --- CRM credentials ------------------------------------------------------
+  // The token goes up and never comes back: every response here carries a
+  // fingerprint and a scope list, never the secret. Nothing in this client
+  // stores it either — the input is cleared the moment the request resolves.
+  crm: (slug) => request(`/api/admin/tenants/${encodeURIComponent(slug)}/crm`),
+  connectCrm: (slug, body) =>
+    request(`/api/admin/tenants/${encodeURIComponent(slug)}/crm`, { method: "PUT", body }),
+  testCrm: (slug) =>
+    request(`/api/admin/tenants/${encodeURIComponent(slug)}/crm/test`, { method: "POST" }),
+  disconnectCrm: (slug) =>
+    request(`/api/admin/tenants/${encodeURIComponent(slug)}/crm`, { method: "DELETE" }),
+
   // --- people and hardware --------------------------------------------------
   users: (tenant) => request(`/api/admin/users?tenant=${encodeURIComponent(tenant)}`),
   createUser: (body) => request("/api/admin/users", { method: "POST", body }),

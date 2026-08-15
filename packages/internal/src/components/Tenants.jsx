@@ -146,6 +146,291 @@ function AddUser({ tenant, onDone, onCancel }) {
   );
 }
 
+/**
+ * Connect Shopify.
+ *
+ * A merchant creates their own custom app in Shopify admin and pastes the token
+ * here. No Shopify review, no OAuth callback, no per-store deployment — which is
+ * the whole go-to-market for Shopify POS retailers.
+ *
+ * Three things this screen is careful about:
+ *
+ *  · The token is write-only. It goes up once and the API never sends it back,
+ *    so what's rendered below is a fingerprint — enough to check against what
+ *    Shopify shows you, useless to anyone reading over your shoulder.
+ *  · Saving runs a live test immediately. A credential that is stored but never
+ *    exercised is how you find out it's wrong from an associate on the floor.
+ *  · Scopes are reported individually. "Connected" and "can actually read
+ *    customers" are different claims and the panel makes both.
+ */
+function ConnectShopify({ tenant }) {
+  const [state, setState] = useState(null);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [mode, setMode] = useState("admin_token");
+  const [form, setForm] = useState({
+    store_domain: "", admin_token: "", client_id: "", client_secret: "",
+  });
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  const load = useCallback(() => {
+    setError(null);
+    api.crm(tenant.slug).then(setState).catch((e) => setError(e.message));
+  }, [tenant.slug]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function run(fn) {
+    setBusy(true); setError(null);
+    try {
+      setState(await fn());
+      return true;
+    } catch (e) {
+      setError(e.message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function save(e) {
+    e.preventDefault();
+    const body = mode === "admin_token"
+      ? { store_domain: form.store_domain, admin_token: form.admin_token }
+      : {
+          store_domain: form.store_domain,
+          client_id: form.client_id, client_secret: form.client_secret,
+        };
+    const ok = await run(() => api.connectCrm(tenant.slug, body));
+    if (ok) {
+      // Don't leave a live token sitting in a React state tree on a machine
+      // that's probably shared and definitely unlocked.
+      setForm({ store_domain: "", admin_token: "", client_id: "", client_secret: "" });
+      setEditing(false);
+    }
+  }
+
+  async function disconnect() {
+    if (!window.confirm(
+      `Disconnect ${tenant.name} from Shopify? The token is deleted and this ` +
+      `tenant goes back to the demo dataset.`
+    )) return;
+    await run(() => api.disconnectCrm(tenant.slug));
+  }
+
+  const cred = state?.credential;
+  const enc = state?.encryption;
+  const test = state?.test;
+  const missing = cred?.missing_required_scopes || [];
+  const showForm = editing || (state && !cred?.connected);
+
+  return (
+    <div className="card span-12">
+      <div className="card-head">
+        <h3>{tenant.name} · Shopify</h3>
+        {cred?.connected && !editing && (
+          <div className="btn-row">
+            <button className="btn small" disabled={busy}
+                    onClick={() => run(() => api.testCrm(tenant.slug))}>
+              {busy ? "Testing…" : "Test connection"}
+            </button>
+            <button className="btn small ghost" onClick={() => setEditing(true)}>
+              Replace credentials
+            </button>
+            <button className="btn small ghost" onClick={disconnect} disabled={busy}>
+              Disconnect
+            </button>
+          </div>
+        )}
+      </div>
+
+      {error && <div className="notice error" style={{ marginBottom: 12 }}>{error}</div>}
+
+      {state === null && !error && <div className="empty">Loading…</div>}
+
+      {enc && !enc.configured && (
+        <div className="notice error" style={{ marginBottom: 12 }}>
+          This service has no credential encryption key, so it will not accept a
+          store token. Set <code>CUE_CRED_KEY</code> on the AI service
+          (<code>openssl rand -hex 32</code>) and redeploy. {enc.error}
+        </div>
+      )}
+
+      {state?.legacy_env && (
+        <div className="notice" style={{ marginBottom: 12 }}>
+          This tenant is being served from the old <code>SHOPIFY_*</code>{" "}
+          environment variables on the AI service — one store per deployment.
+          Connect it here and the environment stops being consulted; then remove
+          those variables from Railway.
+        </div>
+      )}
+
+      {cred?.connected && (
+        <>
+          <div className="checks" style={{ marginBottom: 14 }}>
+            <Check
+              status={cred.last_test_ok === false ? "fail"
+                : cred.last_test_ok == null ? "unknown"
+                : missing.length ? "warn" : "ok"}
+              label={cred.store_domain}
+              detail={
+                cred.last_test_ok == null
+                  ? "connected but never tested"
+                  : `${cred.last_test_detail || ""} · tested ${when(cred.last_tested_at)}`
+              }
+            />
+            {CRM_SCOPES.map((s) => (
+              <Check
+                key={s.handle}
+                status={
+                  (cred.scopes || []).includes(s.handle) ? "ok"
+                    : s.required ? "fail" : "warn"
+                }
+                label={s.handle}
+                detail={(cred.scopes || []).includes(s.handle)
+                  ? "granted"
+                  : s.required ? `required — ${s.why}` : `absent — ${s.why} won't work`}
+              />
+            ))}
+          </div>
+
+          <p className="meta" style={{ lineHeight: 1.6 }}>
+            Token {cred.fingerprint} · sealed with key{" "}
+            <span className="mono">{cred.key_id}</span> ·{" "}
+            {cred.auth_kind === "admin_token"
+              ? "static Admin API token"
+              : "client credentials (re-minted every 24h)"}
+            {" · "}updated {when(cred.updated_at)}.
+            {" "}The token itself is encrypted at rest and is never sent back to
+            this browser — to change it, replace it.
+          </p>
+
+          {missing.length > 0 && (
+            <div className="notice" style={{ marginTop: 12 }}>
+              The connection works but {missing.join(" and ")}{" "}
+              {missing.length > 1 ? "are" : "is"} missing, so guest cards will be
+              incomplete. Add the scope in Shopify admin → Apps → your custom app
+              → Configuration, then <strong>reinstall the app</strong> — a scope
+              change doesn't reach an existing token — and paste the new one here.
+            </div>
+          )}
+        </>
+      )}
+
+      {showForm && (
+        <form onSubmit={save} style={{ marginTop: cred?.connected ? 16 : 0 }}>
+          <p className="card-note">
+            In Shopify admin: Settings → Apps and sales channels → Develop apps →
+            Create an app → Configure Admin API scopes
+            (<span className="mono">{(state?.required_scopes || []).join(", ")}</span>,
+            plus <span className="mono">read_inventory</span> for live stock) →
+            Install app → reveal the Admin API access token.
+          </p>
+
+          <div className="btn-row" style={{ marginBottom: 12 }}>
+            {[["admin_token", "Admin API token"], ["client_credentials", "Client ID + secret"]]
+              .map(([k, label]) => (
+                <button key={k} type="button"
+                        className={`btn small ${mode === k ? "primary" : "ghost"}`}
+                        onClick={() => setMode(k)}>
+                  {label}
+                </button>
+              ))}
+          </div>
+
+          <div className="form-grid">
+            <label className="field">
+              <span>Store domain</span>
+              <input value={form.store_domain} onChange={set("store_domain")}
+                     required placeholder="future-basics.myshopify.com"
+                     autoComplete="off" />
+            </label>
+            {mode === "admin_token" ? (
+              <label className="field">
+                <span>Admin API access token</span>
+                <input type="password" value={form.admin_token} onChange={set("admin_token")}
+                       required placeholder="shpat_…" autoComplete="off" />
+              </label>
+            ) : (
+              <>
+                <label className="field">
+                  <span>Client ID</span>
+                  <input value={form.client_id} onChange={set("client_id")}
+                         required autoComplete="off" />
+                </label>
+                <label className="field">
+                  <span>Client secret</span>
+                  <input type="password" value={form.client_secret}
+                         onChange={set("client_secret")} required autoComplete="off" />
+                </label>
+              </>
+            )}
+          </div>
+
+          <p className="meta" style={{ marginTop: 8, lineHeight: 1.5 }}>
+            Use the permanent <span className="mono">.myshopify.com</span>{" "}
+            address, not a custom domain. Saving tests the connection straight
+            away and reports which scopes the token actually carries.
+          </p>
+
+          <div className="btn-row" style={{ marginTop: 12 }}>
+            <button className="btn primary" type="submit"
+                    disabled={busy || !enc?.configured}>
+              {busy ? "Connecting…" : cred?.connected ? "Replace and test" : "Connect and test"}
+            </button>
+            {cred?.connected && (
+              <button className="btn ghost" type="button" onClick={() => setEditing(false)}>
+                Cancel
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+
+      {test && !test.ok && (
+        <div className="notice error" style={{ marginTop: 12 }}>
+          <strong>{TEST_HEADLINE[test.reason] || "Couldn't reach the store"}</strong>
+          <div style={{ marginTop: 4 }}>{test.detail}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Named individually because "connected" and "can read customers" are
+ *  different claims, and a merchant who granted three of four scopes needs to
+ *  be told which one they missed rather than that something is wrong. */
+const CRM_SCOPES = [
+  { handle: "read_customers", required: true, why: "guest identity and tier" },
+  { handle: "read_orders", required: true, why: "purchase history and sizes" },
+  { handle: "read_products", required: true, why: "recommendations" },
+  { handle: "read_inventory", required: false, why: "live floor stock counts" },
+];
+
+/** A failed test gets a headline naming which of the plausible things is wrong.
+ *  GitHub's undifferentiated "Invalid username or token" cost this project an
+ *  afternoon; a merchant onboarding themselves gets the specific sentence. */
+const TEST_HEADLINE = {
+  token_rejected: "The store rejected this token",
+  store_not_found: "No Shopify store at that address",
+  unreachable: "Couldn't reach that domain",
+  rate_limited: "Shopify is rate-limiting this store",
+  api_error: "Shopify refused the query",
+  unreadable_credential: "Stored credential could not be opened",
+  http_error: "Shopify returned an error",
+};
+
+function Check({ status, label, detail }) {
+  return (
+    <div className={`check ${status}`}>
+      <span className="check-dot" />
+      <span className="check-label">{label}</span>
+      <span className="check-detail">{detail}</span>
+    </div>
+  );
+}
+
 function TenantDetail({ tenant, onChanged }) {
   const [users, setUsers] = useState(null);
   const [devices, setDevices] = useState(null);
@@ -321,6 +606,11 @@ function TenantDetail({ tenant, onChanged }) {
           </>
         )}
       </div>
+
+      {/* Full width and below, because connecting a store is the step that
+          takes a tenant off demo data — it deserves more room than a corner of
+          the hardware card, and it reads after the people who'll use it. */}
+      <ConnectShopify tenant={tenant} />
     </>
   );
 }

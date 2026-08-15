@@ -5,15 +5,17 @@ store via the Admin GraphQL API. This is what makes GapVision sellable to any
 Shopify POS retailer: guest identity, order history, derived sizes, style
 personas, and live floor inventory — all from the merchant's existing data.
 
-Config (env):
-    GAPVISION_CRM=shopify
-    SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
-    SHOPIFY_ADMIN_TOKEN=shpat_...   (custom app token; scopes: read_customers,
-                                     read_orders, read_products, read_inventory)
+Credentials are per tenant, not per deployment: the store domain and token live
+in `tenant_crm_credentials`, sealed (see `crm_credentials.py`), and are passed
+into `ShopifyCRM` explicitly. One Cue deployment therefore serves any number of
+merchants' stores. The `SHOPIFY_*` environment variables are a deprecated
+fallback for the original single-store pilot — `ShopifyCRM.from_env()`.
 
-Create the token in Shopify Admin → Settings → Apps and sales channels →
-Develop apps → Create app → Admin API scopes above → Install → reveal token.
-The token lives ONLY in the server environment, never in client code.
+Each merchant creates their own custom app in Shopify Admin → Settings → Apps
+and sales channels → Develop apps → Create app → Admin API scopes
+(read_customers, read_orders, read_products, read_inventory) → Install → reveal
+token. No Shopify app review is involved. The token lives ONLY server-side,
+encrypted at rest, and is never returned by any API.
 
 Derivations (documented so merchants understand what associates see):
     tier         total spent: >= $1500 Icon, >= $500 Enthusiast, else Core
@@ -27,7 +29,9 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import time
+import urllib.error
 import urllib.request
 from collections import Counter
 
@@ -141,6 +145,16 @@ query floorProducts($first: Int!) {
   }
 }"""
 
+# What the Connect Shopify panel reads. `currentAppInstallation` is readable by
+# any valid Admin token with no scope of its own, which is what makes it usable
+# as a connection test: a bad token fails here, and a token that is merely
+# missing a scope still answers and says which ones it has.
+Q_SCOPES = """
+query appScopes {
+  currentAppInstallation { accessScopes { handle } }
+  shop { name myshopifyDomain }
+}"""
+
 Q_ABANDONED = """
 query abandoned($query: String!) {
   abandonedCheckouts(first: 1, query: $query, sortKey: CREATED_AT, reverse: true) {
@@ -194,21 +208,40 @@ class ShopifyCRM:
 
     CACHE_TTL = 60  # seconds
 
-    def __init__(self, transport=None):
+    def __init__(self, transport=None, *, domain: str | None = None,
+                 admin_token: str | None = None, client_id: str | None = None,
+                 client_secret: str | None = None):
+        """Credentials in, adapter out — nothing read from the environment.
+
+        Instances are per tenant, so the response cache below is too. That is
+        not incidental: a process-wide cache keyed only by 'roster' would serve
+        one merchant's customers to another, which is the failure this whole
+        change exists to make impossible.
+        """
         if transport is not None:
             self.t = transport
-        elif os.environ.get("GAPVISION_SHOPIFY_FIXTURES"):
-            # Snapshot mode: replay a captured store (dev/demo without a token)
-            self.t = FixtureTransport(os.environ["GAPVISION_SHOPIFY_FIXTURES"])
-        else:
-            domain = os.environ["SHOPIFY_STORE_DOMAIN"]
+        elif domain:
             self.t = ShopifyTransport(
-                domain,
-                token=os.environ.get("SHOPIFY_ADMIN_TOKEN"),
-                client_id=os.environ.get("SHOPIFY_CLIENT_ID"),
-                client_secret=os.environ.get("SHOPIFY_CLIENT_SECRET"),
+                domain, token=admin_token,
+                client_id=client_id, client_secret=client_secret,
             )
+        else:
+            raise ValueError("ShopifyCRM needs a store domain or a transport")
         self._cache: dict[str, tuple[float, object]] = {}
+
+    @classmethod
+    def from_env(cls) -> "ShopifyCRM":
+        """Deprecated single-store path, kept so the original pilot deployment
+        keeps working until its credentials are moved into the database."""
+        if os.environ.get("GAPVISION_SHOPIFY_FIXTURES"):
+            # Snapshot mode: replay a captured store (dev/demo without a token)
+            return cls(transport=FixtureTransport(os.environ["GAPVISION_SHOPIFY_FIXTURES"]))
+        return cls(
+            domain=os.environ["SHOPIFY_STORE_DOMAIN"],
+            admin_token=os.environ.get("SHOPIFY_ADMIN_TOKEN"),
+            client_id=os.environ.get("SHOPIFY_CLIENT_ID"),
+            client_secret=os.environ.get("SHOPIFY_CLIENT_SECRET"),
+        )
 
     def _cached(self, key: str, fn):
         hit = self._cache.get(key)
@@ -331,3 +364,68 @@ class ShopifyCRM:
                 })
             return items
         return self._cached("inventory", fetch)
+
+
+# ---------------------------------------------------------------- connection test
+#
+# The lesson from `/tmp/ghpush.sh` and from GitHub's undifferentiated "Invalid
+# username or token": when a credential doesn't work, the operator needs to know
+# *which* of the plausible things is wrong. A merchant onboarding themselves has
+# four ways to get this wrong and they need four different sentences.
+
+def probe_connection(crm: "ShopifyCRM") -> dict:
+    """Ask the store who we are. Never raises — a failure is a result.
+
+    Returns {ok, reason, detail, scopes, shop_name}. `reason` is a stable key
+    the UI can branch on; `detail` is the sentence a human reads.
+    """
+    try:
+        data = crm.t.query(Q_SCOPES)
+    except urllib.error.HTTPError as e:
+        body = ""
+        try:
+            body = e.read().decode()[:200]
+        except Exception:
+            pass
+        if e.code in (401, 403):
+            return _fail("token_rejected",
+                         "The store answered, but rejected this token. Check you "
+                         "pasted the Admin API access token (it starts with "
+                         "shpat_) and that the custom app is still installed.")
+        if e.code == 404:
+            return _fail("store_not_found",
+                         "No Shopify store at that domain. Use the permanent "
+                         "<store>.myshopify.com address, not a custom domain.")
+        if e.code == 429:
+            return _fail("rate_limited",
+                         "Shopify is rate-limiting this store right now. "
+                         "Wait a minute and test again.")
+        return _fail("http_error", f"Shopify returned HTTP {e.code}. {body}".strip())
+    except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
+        return _fail("unreachable",
+                     f"Couldn't reach that domain ({getattr(e, 'reason', e)}). "
+                     "Check the spelling of the store address.")
+    except RuntimeError as e:
+        # GraphQL-level error — a valid HTTP call the API refused to answer.
+        return _fail("api_error", str(e)[:300])
+    except Exception as e:  # never let the panel 500 on a vendor surprise
+        return _fail("unknown", f"{type(e).__name__}: {e}"[:300])
+
+    installation = (data or {}).get("currentAppInstallation") or {}
+    scopes = sorted(
+        s["handle"] for s in (installation.get("accessScopes") or []) if s.get("handle")
+    )
+    shop = (data or {}).get("shop") or {}
+    return {
+        "ok": True,
+        "reason": "connected",
+        "detail": f"Connected to {shop.get('name') or shop.get('myshopifyDomain') or 'the store'}.",
+        "scopes": scopes,
+        "shop_name": shop.get("name"),
+        "shop_domain": shop.get("myshopifyDomain"),
+    }
+
+
+def _fail(reason: str, detail: str) -> dict:
+    return {"ok": False, "reason": reason, "detail": detail,
+            "scopes": [], "shop_name": None, "shop_domain": None}

@@ -14,10 +14,26 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 
-from . import analytics, db, identity
+from . import analytics, crm_credentials, crm_provider, db, identity, secrets_box
 from .identity import BearerHeader, current_user, require, scope_tenant
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+def _own_tenant(me, id_or_slug: str) -> dict:
+    """Resolve a tenant this principal is allowed to administer, or raise.
+
+    Cue staff reach any tenant; a client_admin reaches exactly their own. Same
+    check as the tenant routes below, factored out because every credential
+    route needs it and one of them getting it wrong hands a merchant's store to
+    another merchant.
+    """
+    tenant = identity.resolve_tenant(id_or_slug)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Unknown tenant")
+    if me.role != "cue_admin" and str(tenant["id"]) != str(me.tenant_id):
+        raise HTTPException(status_code=403, detail="Not your tenant")
+    return tenant
 
 
 # --- tenants (Cue staff) -----------------------------------------------------
@@ -113,6 +129,168 @@ def update_tenant(id_or_slug: str, req: TenantUpdate,
         tuple(params),
     )
     return {"tenant": row}
+
+
+# --- CRM credentials ---------------------------------------------------------
+#
+# A merchant's Shopify Admin token can read every customer, order, and price in
+# their store. Three rules hold across all four routes below:
+#
+#   1. The plaintext token is accepted, sealed, and forgotten. No route returns
+#      it, and `crm_credentials.describe()` is the only shape that goes out.
+#   2. A tenant goes live when its stored credential *passes a test* — not when
+#      one is merely saved. `crm_provider` is derived from that rather than
+#      being a second switch someone has to remember, so a typo leaves the
+#      retailer on demo data instead of taking their floor down, and a fixed
+#      token flips them over on the next passing test.
+#   3. Every write invalidates the adapter cache for that tenant, so a rotated
+#      token takes effect on the next request rather than in a minute.
+
+class CrmCredentialIn(BaseModel):
+    store_domain: str
+    admin_token: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
+
+
+def _test_and_record(tenant: dict, cred: dict) -> dict:
+    """Ask the store who we are, store the answer, refresh the adapter."""
+    from .crm_shopify import ShopifyCRM, probe_connection
+
+    try:
+        secret = crm_credentials.load_secret(cred)
+    except Exception as e:
+        return {"ok": False, "reason": "unreadable_credential",
+                "detail": f"Stored credential could not be opened: {e}", "scopes": []}
+
+    result = probe_connection(ShopifyCRM(
+        domain=cred["store_domain"],
+        admin_token=secret.get("admin_token"),
+        client_id=secret.get("client_id"),
+        client_secret=secret.get("client_secret"),
+    ))
+    crm_credentials.record_test(
+        tenant["id"], ok=result["ok"], scopes=result["scopes"], detail=result["detail"]
+    )
+    crm_provider.invalidate(tenant["slug"])
+    return result
+
+
+def _sync_provider(tenant: dict, live: bool) -> dict:
+    """Keep `tenants.crm_provider` in step with whether the store answers."""
+    want = "shopify" if live else "mock"
+    if tenant["crm_provider"] == want:
+        return tenant
+    tenant = db.query_one(
+        "UPDATE tenants SET crm_provider = %s, updated_at = now() "
+        " WHERE id = %s RETURNING *", (want, tenant["id"]),
+    )
+    crm_provider.invalidate(tenant["slug"])
+    print(f"[cue] tenant {tenant['slug']}: crm_provider → {want}", flush=True)
+    return tenant
+
+
+def _crm_payload(tenant: dict, probe: dict | None = None) -> dict:
+    row = crm_credentials.get_row(tenant["id"])
+    out = {
+        "tenant": tenant["slug"],
+        "crm_provider": tenant["crm_provider"],
+        "credential": crm_credentials.describe(row),
+        "required_scopes": list(crm_credentials.REQUIRED_SCOPES),
+        "optional_scopes": crm_credentials.OPTIONAL_SCOPES,
+        "encryption": secrets_box.status(),
+    }
+    if probe is not None:
+        out["test"] = probe
+    return out
+
+
+@router.get("/tenants/{id_or_slug}/crm")
+def get_tenant_crm(id_or_slug: str, authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "client_admin")
+    tenant = _own_tenant(me, id_or_slug)
+
+    payload = _crm_payload(tenant)
+    # Be explicit that the legacy single-store path is what's serving this
+    # tenant, so nobody spends an afternoon wondering where the data comes from.
+    if (not payload["credential"]["connected"]
+            and tenant["slug"] == "shopify"
+            and crm_provider.env_shopify_configured()):
+        payload["legacy_env"] = True
+    return payload
+
+
+@router.put("/tenants/{id_or_slug}/crm")
+def connect_tenant_crm(id_or_slug: str, req: CrmCredentialIn,
+                       authorization: str | None = BearerHeader):
+    """Store a merchant's credentials, then immediately prove they work."""
+    me = current_user(authorization)
+    require(me, "client_admin")
+    tenant = _own_tenant(me, id_or_slug)
+
+    if not secrets_box.configured():
+        # Refuse rather than store a token we cannot protect.
+        raise HTTPException(
+            status_code=503,
+            detail=("This service has no credential encryption key, so it will "
+                    "not accept a store token. Set CUE_CRED_KEY (openssl rand "
+                    "-hex 32) and redeploy."),
+        )
+
+    try:
+        cred = crm_credentials.save(
+            tenant_id=tenant["id"],
+            store_domain=req.store_domain,
+            admin_token=req.admin_token,
+            client_id=req.client_id,
+            client_secret=req.client_secret,
+            created_by=me["id"],
+        )
+    except crm_credentials.CredentialError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Who installed which store, and when. The one action in the console that
+    # points Cue at a real customer database deserves a line in the log.
+    print(f"[cue] tenant {tenant['slug']}: store {cred['store_domain']} "
+          f"connected by {me['email']} (key {cred['key_id']})", flush=True)
+
+    probe = _test_and_record(tenant, cred)
+    tenant = _sync_provider(tenant, probe["ok"])
+    return _crm_payload(tenant, probe)
+
+
+@router.post("/tenants/{id_or_slug}/crm/test")
+def test_tenant_crm(id_or_slug: str, authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "client_admin")
+    tenant = _own_tenant(me, id_or_slug)
+
+    cred = crm_credentials.get_row(tenant["id"])
+    if cred is None:
+        raise HTTPException(status_code=404, detail="No store is connected to this tenant")
+
+    # A passing retest is how a tenant recovers after a bad token: fix it in
+    # Shopify, press Test, and this flips them back to live without a support
+    # call. A failing one drops them to demo data rather than to an error.
+    probe = _test_and_record(tenant, cred)
+    tenant = _sync_provider(tenant, probe["ok"])
+    return _crm_payload(tenant, probe)
+
+
+@router.delete("/tenants/{id_or_slug}/crm")
+def disconnect_tenant_crm(id_or_slug: str, authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "client_admin")
+    tenant = _own_tenant(me, id_or_slug)
+
+    crm_credentials.delete(tenant["id"])
+    print(f"[cue] tenant {tenant['slug']}: store disconnected by {me['email']}",
+          flush=True)
+    # Back to the demo dataset rather than to a 503: a disconnected tenant
+    # should degrade to something an associate can still demo with.
+    tenant = _sync_provider(tenant, live=False)
+    return _crm_payload(tenant)
 
 
 # --- users -------------------------------------------------------------------
@@ -432,6 +610,83 @@ def _platform_checks() -> list[dict]:
     # console imply a promise the code does not keep.
     checks.append(_check("retention", "Retention enforcement", "warn",
                          "privacy.retention_days is stored but nothing deletes yet"))
+
+    # --- merchant credentials -------------------------------------------------
+    enc = secrets_box.status()
+    checks.append(_check(
+        "cred_key", "Credential encryption key",
+        "ok" if enc.get("configured") else "fail",
+        f"key {enc['key_id']}" + (" (+ rotation key)" if enc.get("rotation_key_present") else "")
+        if enc.get("configured")
+        else enc.get("error", "CUE_CRED_KEY is not set — no store can be connected"),
+    ))
+
+    # A tenant pointed at the Shopify adapter with nothing to authenticate with
+    # serves 503 to the lens. Silent from the floor, obvious here.
+    orphaned = db.query(
+        """
+        SELECT t.slug FROM tenants t
+         WHERE t.status = 'active' AND t.crm_provider = 'shopify'
+           AND NOT EXISTS (SELECT 1 FROM tenant_crm_credentials c
+                            WHERE c.tenant_id = t.id)
+         ORDER BY t.slug
+        """
+    )
+    # The legacy environment fallback genuinely serves the 'shopify' slug, so it
+    # is not an orphan while those variables are still set.
+    if crm_provider.env_shopify_configured():
+        orphaned = [r for r in orphaned if r["slug"] != "shopify"]
+    checks.append(_check(
+        "crm_credentials", "Shopify tenants have a store connected",
+        "ok" if not orphaned else "fail",
+        "all connected" if not orphaned
+        else "no credentials: " + ", ".join(r["slug"] for r in orphaned),
+    ))
+
+    # A token that worked at setup and stopped working since — revoked app,
+    # rotated secret, uninstalled custom app. Nobody finds this out until an
+    # associate is standing in front of a customer.
+    stale = db.query(
+        """
+        SELECT t.slug, c.last_test_ok, c.last_tested_at, c.scopes
+          FROM tenant_crm_credentials c JOIN tenants t ON t.id = c.tenant_id
+         WHERE t.status = 'active'
+         ORDER BY t.slug
+        """
+    )
+    failing = [r["slug"] for r in stale if r["last_test_ok"] is False]
+    untested = [r["slug"] for r in stale if r["last_test_ok"] is None]
+    short = [
+        r["slug"] for r in stale
+        if r["last_test_ok"]
+        and any(s not in (r["scopes"] or []) for s in crm_credentials.REQUIRED_SCOPES)
+    ]
+    if failing:
+        detail, status = "last test failed: " + ", ".join(failing), "fail"
+    elif short:
+        detail, status = "missing required scopes: " + ", ".join(short), "warn"
+    elif untested:
+        detail, status = "never tested: " + ", ".join(untested), "unknown"
+    elif stale:
+        detail, status = f"{len(stale)} connected and passing", "ok"
+    else:
+        detail, status = "no stores connected", "unknown"
+    checks.append(_check("crm_health", "Connected stores answer", status, detail))
+
+    # Rotation audit: which rows still hold the retired key. Compares key ids,
+    # never key material.
+    if enc.get("configured"):
+        old = db.query(
+            "SELECT count(*) AS n FROM tenant_crm_credentials WHERE key_id <> %s",
+            (enc["key_id"],),
+        )
+        n_old = (old[0] if old else {}).get("n", 0)
+        if n_old:
+            checks.append(_check(
+                "cred_rotation", "Credentials sealed with the current key", "warn",
+                f"{n_old} still sealed with a previous key — re-enter those tokens "
+                "before dropping CUE_CRED_KEY_OLD",
+            ))
     return checks
 
 
@@ -469,6 +724,8 @@ def platform(authorization: str | None = BearerHeader):
         "service": {
             "llm_provider": get_provider().name,
             "stt_provider": get_stt().name,
+            # Named per tenant here rather than on /health, which is open.
+            "tenants": crm_provider.tenant_status_detail(),
             "commit": (os.environ.get("RAILWAY_GIT_COMMIT_SHA")
                        or os.environ.get("GIT_COMMIT") or "")[:7] or None,
             "deployed_at": os.environ.get("RAILWAY_DEPLOYMENT_CREATED_AT"),

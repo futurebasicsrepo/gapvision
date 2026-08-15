@@ -218,9 +218,11 @@ Pin one transcript for a scripted demo with
 | `OPENAI_API_KEY` / `GROQ_API_KEY` / `DEEPGRAM_API_KEY` | — | Key for the selected STT provider |
 | `GAPVISION_LLM` | `mock` | LLM provider: `mock`, `anthropic`, `openai`, `google` |
 | `GAPVISION_CRM` | `mock` | CRM provider: `mock`, `shopify` (Gap adapter later) |
-| `SHOPIFY_STORE_DOMAIN` | — | e.g. `your-store.myshopify.com` (shopify CRM only) |
-| `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` | — | Dev Dashboard app credentials (2026+ flow; token auto-minted, auto-refreshed) |
-| `SHOPIFY_ADMIN_TOKEN` | — | Alternative: static token from a pre-2026 legacy custom app |
+| `CUE_CRED_KEY` | — | **Required to connect any store.** 32 bytes (`openssl rand -hex 32`) sealing merchants' CRM tokens at rest. Without it the service refuses to store one |
+| `CUE_CRED_KEY_OLD` | — | The previous sealing key, during a rotation. Drop it once `/api/admin/platform` stops reporting rows on the old key |
+| `SHOPIFY_STORE_DOMAIN` | — | **Deprecated.** Single-store fallback for the `shopify` tenant only — per-tenant credentials supersede it |
+| `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` | — | **Deprecated**, as above |
+| `SHOPIFY_ADMIN_TOKEN` | — | **Deprecated**, as above |
 | `AI_SERVICE_URL` | `http://localhost:8000` | Where the Node server finds the Brain |
 | `VITE_SERVER_URL` | `http://localhost:4000` | Where the clients find the realtime server — and, through its proxy, everything else |
 
@@ -228,28 +230,44 @@ Clients no longer take a `VITE_AI_URL`. They are static bundles, so anything
 compiled into them is published; they reach the AI service only through the
 realtime server, which holds the key server-side.
 
-## Running on a real Shopify store
+## Connecting a real Shopify store
 
-GapVision runs on live commerce data from any Shopify store (the wedge into
-every Shopify POS retailer):
+Cue runs on live commerce data from any Shopify store, and credentials are **per
+tenant**, so one deployment serves any number of merchants. Each merchant
+creates their own custom app and supplies a token — there is no Shopify app
+review in the loop, which is what makes this the wedge into every Shopify POS
+retailer.
 
-1. Shopify Admin → Settings → Apps and sales channels → **Develop apps** →
-   **Build apps in Dev Dashboard** (2026+ flow) → your app → create a
-   **version** → in the **Access** section add scopes `read_customers`,
-   `read_orders`, `read_products`, `read_inventory` → **Release** the version →
-   **Installs** → **Install app** on your store.
-2. Grab the app's **Client ID** and **Client secret** from its credentials
-   page. (No static token in the new flow — the adapter mints and refreshes
-   24-hour tokens automatically via the client-credentials grant.)
-3. Start the AI service with:
-   `GAPVISION_CRM=shopify SHOPIFY_STORE_DOMAIN=xxx.myshopify.com SHOPIFY_CLIENT_ID=... SHOPIFY_CLIENT_SECRET=... uvicorn app.main:app --port 8000`
-   (Legacy pre-2026 custom apps can still use `SHOPIFY_ADMIN_TOKEN` instead.)
-3. The beacon panel now lists the store's real recent customers; guest cards
-   derive tier from spend, sizes from purchase history, personas from product
-   tags, and recommendations from live in-stock inventory.
+**In the merchant's Shopify admin** — Settings → Apps and sales channels →
+**Develop apps** → Create an app → **Configure Admin API scopes**:
+
+| Scope | Without it |
+|---|---|
+| `read_customers` | no guest identity or tier |
+| `read_orders` | no purchase history, no derived sizes |
+| `read_products` | no recommendations |
+| `read_inventory` | recommendations can't say what's actually on the floor |
+
+Install the app, reveal the **Admin API access token** (`shpat_…`). Apps built
+in the 2026+ Dev Dashboard have no static token — use the **Client ID** and
+**Client secret** instead and the adapter mints and refreshes 24-hour tokens
+itself.
+
+**In Cue Console** — Tenants → pick the retailer → **Shopify** → paste the
+`.myshopify.com` domain and the token → **Connect and test**. Saving runs a live
+check immediately and reports which scopes the token actually carries, so a
+missing scope is caught at setup rather than by an associate on the floor.
+Connecting a store is also what takes that tenant off the demo dataset;
+disconnecting puts it back.
+
+The token is sealed with AES-256-GCM before it reaches Postgres (`CUE_CRED_KEY`,
+which the database never sees) and is never returned by any API — the console
+shows a fingerprint. Details and threat model: `app/secrets_box.py`,
+`migrations/002_tenant_crm_credentials.sql`.
 
 Derivation rules and offline tests: `app/crm_shopify.py`,
-`tests/test_shopify_adapter.py` (run `python3 tests/test_shopify_adapter.py`).
+`tests/test_shopify_adapter.py` (run `python3 tests/test_shopify_adapter.py`),
+`tests/test_crm_credentials.py` (needs a Postgres at `CUE_TEST_DATABASE_URL`).
 
 ## Roadmap
 

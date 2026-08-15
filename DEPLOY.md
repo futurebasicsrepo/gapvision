@@ -26,10 +26,14 @@ railway up --service realtime     --path-as-root packages/server
 **ai-service**
 | Var | Value |
 |---|---|
-| `GAPVISION_CRM` | `shopify` |
-| `SHOPIFY_STORE_DOMAIN` | `<store>.myshopify.com` |
-| `SHOPIFY_CLIENT_ID` + `SHOPIFY_CLIENT_SECRET` | from the Dev Dashboard app (read-only scopes; adapter auto-mints 24h tokens) |
+| `CUE_CRED_KEY` | `openssl rand -hex 32` — seals merchants' Shopify tokens at rest. Without it the service refuses to store one, so no store can be connected |
 | `GAPVISION_LLM` | `mock` (or `anthropic` + `ANTHROPIC_API_KEY` when ready) |
+
+Shopify credentials are **not** environment variables any more. Connect each
+retailer in Cue Console → Tenants → Shopify; the domain and token are stored
+per tenant and encrypted at rest. The old `GAPVISION_CRM` / `SHOPIFY_*` vars
+still serve the `shopify` tenant as a deprecated fallback — remove them from
+Railway once that tenant has been connected through the console.
 
 **realtime**
 | Var | Value |
