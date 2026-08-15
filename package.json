@@ -20,6 +20,7 @@
     "test:voice-browser": "node packages/glasses-plugin/test/voice-browser.mjs",
     "test:gestures": "node packages/glasses-plugin/test/gestures.test.mjs",
     "test:endpointing": "node packages/glasses-plugin/test/endpointing.test.mjs",
+    "test:pageshape": "npx esbuild packages/glasses-plugin/src/layout.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/layout.mjs && node packages/glasses-plugin/test/page-shape.test.mjs",
     "test:gestures-browser": "node packages/glasses-plugin/test/gestures-browser.mjs",
     "db:migrate": "cd packages/ai-service && python -c \"from app import db; db.migrate()\"",
     "db:seed": "cd packages/ai-service && python -m app.seed",

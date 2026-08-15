@@ -73,7 +73,9 @@ function log(msg: string) {
 let bridge: GlassesBridge;
 let socket: Socket;
 let voice: VoiceController;
-let currentLines: string[] = [];
+/** The set of containers currently built on the glass, as a comparable key.
+ *  Not the line count — see `renderCue`. */
+let currentShape = "";
 let pageBuilt = false;
 let engaged = false;
 
@@ -112,9 +114,15 @@ async function renderCue(cue: Cue, latencyMs?: number) {
     },
     latencyMs,
   );
-  const lines = cue.lines || [];
-  const sameShape =
-    pageBuilt && lines.slice(0, CUE_LINES).length === currentLines.slice(0, CUE_LINES).length;
+  // "Same shape" means *the same containers exist*, not the same number of
+  // lines. The cheap path below upgrades containers by id; it cannot create
+  // one. When the fact rail arrived, the guest page needed five containers the
+  // idle page had never built (the rail and the module indicator) — and since
+  // both pages have three lines, the old check said "same shape", took the
+  // cheap path, and silently drew none of them. The HUD looked unchanged
+  // because it was unchanged.
+  const shape = page.textObject.map((c) => c.containerID).join(",");
+  const sameShape = pageBuilt && shape === currentShape;
 
   if (!pageBuilt) {
     await bridge.createStartUpPageContainer(page);
@@ -131,7 +139,7 @@ async function renderCue(cue: Cue, latencyMs?: number) {
   } else {
     await bridge.rebuildPageContainer(page);
   }
-  currentLines = lines;
+  currentShape = shape;
 }
 
 /** Where scrolling has got to: 0 is the cue, 1..n the recommendations. */

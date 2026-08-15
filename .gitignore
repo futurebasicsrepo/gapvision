@@ -12,3 +12,6 @@ dist-preview/
 
 # Even Hub packages — built artifacts, never committed
 *.ehpk
+
+# esbuild output for the layout unit test
+packages/glasses-plugin/dist-test/

@@ -150,7 +150,12 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
   const hasRail = facts.length > 0;
   const lineX = hasRail ? MODULE_X : X;
   const lineW = hasRail ? MODULE_W : W;
-  lines.forEach((content, i) => {
+  // Always three line containers, empty ones included. Their *contents* change
+  // constantly — every scroll, every answer — and a container that comes and
+  // goes changes the page shape, which forces a full rebuild instead of a text
+  // update. An empty container draws nothing and costs nothing; a rebuild on
+  // every scroll costs a redraw of the whole glass.
+  Array.from({ length: CUE_LINES }, (_, i) => lines[i] || "").forEach((content, i) => {
     textObject.push({
       xPosition: lineX, yPosition: BODY_TOP + i * 44,
       width: lineW, height: 38,
