@@ -195,9 +195,73 @@ def resolve_product(
 
     if best is not None and best_score >= 1:
         return best, "named"
+
+    # Last resort: assume they mean what's on the lens.
+    #
+    # Only when they did not name something. Found on real hardware: with a tee
+    # on the lens, "do you have a blue sweatshirt in large" answered "Yes. 7 of
+    # the Heavyweight Relaxed Tee in L" — the floor doesn't carry a sweatshirt,
+    # and the associate would have told a customer yes. Naming a garment we
+    # don't stock has to produce a no, not the price of whatever was already on
+    # the glass. Contextless questions ("how many left", "how much is it") name
+    # nothing and should still fall through to focus.
+    if _names_absent_garment(transcript, inventory):
+        return None, "unstocked"
     if focus and _scheme_compatible(focus, size):
         return focus, "focus"
     return None, "none"
+
+
+# Spoken garment words. Only needs to cover what an associate would say while
+# holding something — if a word here matches nothing on the floor, they are
+# asking about a product this store doesn't have.
+_GARMENT_WORDS = {
+    "sweatshirt", "sweater", "jumper", "hoodie", "cardigan", "fleece",
+    "tee", "tshirt", "shirt", "blouse", "top", "polo", "tank", "vest",
+    "jeans", "denim", "pants", "trousers", "chinos", "joggers", "leggings",
+    "shorts", "skirt", "dress", "jumpsuit", "romper",
+    "jacket", "coat", "parka", "blazer", "anorak", "windbreaker", "puffer",
+    "shoes", "sneakers", "trainers", "boots", "sandals", "heels",
+    "hat", "cap", "beanie", "scarf", "gloves", "belt", "bag", "socks",
+}
+
+
+def _forms(token: str) -> set[str]:
+    """A token and its singular. People say "any cardigans left", and the floor
+    lists "Cardigan" — matching on the literal token alone missed that, which a
+    test caught before hardware did."""
+    out = {token}
+    if token.endswith("ies") and len(token) > 4:
+        out.add(token[:-3] + "y")
+    if token.endswith("es") and len(token) > 3:
+        out.add(token[:-2])
+    if token.endswith("s") and len(token) > 2:
+        out.add(token[:-1])
+    return out
+
+
+def _names_absent_garment(transcript: str, inventory: list[dict]) -> bool:
+    """Did they name a garment the floor does not carry?
+
+    True only when the question contains a garment word and *no* form of it
+    matches anything in stock — so "do you have a blue sweatshirt" is a no,
+    while "how many of these jeans" still resolves normally.
+    """
+    spoken: set[str] = set()
+    for token in _tokens(transcript):
+        forms = _forms(token)
+        if forms & _GARMENT_WORDS:
+            spoken |= forms
+    if not spoken:
+        return False
+
+    stocked: set[str] = set()
+    for item in inventory:
+        words = list(_tokens(item["name"]))
+        words += [t for tag in item.get("tags", []) for t in _tokens(tag)]
+        for w in words:
+            stocked |= _forms(w)
+    return not (spoken & stocked)
 
 
 def size_availability(item: dict, size: str | None) -> tuple[str, int | None]:
@@ -293,6 +357,19 @@ def answer_query(
                 None,
                 [f"[ICON:WARN] Which item? (asked for {size})",
                  "[ICON:CHAT] Say the product name"],
+                how=how, size=size,
+            )
+        if how == "unstocked":
+            # They named something this floor doesn't carry. "We don't have
+            # one" is a real answer an associate can give a customer standing
+            # in front of them; "no match" sounds like the software failed and
+            # invites them to repeat the question at it.
+            return _package(
+                transcript, intent,
+                "We don't carry that on this floor — nothing here matches it.",
+                None,
+                ["[ICON:WARN] Not carried on this floor",
+                 "[ICON:CHAT] Try another name, or check the stockroom"],
                 how=how, size=size,
             )
         # An answer with no lines is a blank lens. The associate pressed the

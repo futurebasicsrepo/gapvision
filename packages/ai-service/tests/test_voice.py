@@ -405,3 +405,60 @@ def test_an_open_question_with_nothing_selected_does_not_explode(monkeypatch):
     result = answer_query("tell me about it", crm.INVENTORY, guest=None, focus_sku=None)
     assert result["glasses_lines"]
     assert result["intent"] == "open"
+
+
+# --- naming something we don't stock -----------------------------------------
+#
+# Found on real hardware. With a tee on the lens, "do you have a blue sweatshirt
+# in large" answered "Yes. 7 of the Heavyweight Relaxed Tee in L at Essentials."
+# The floor carries no sweatshirt. The associate would have told the customer
+# yes, and sent them looking for something that does not exist.
+#
+# The cause was the last-resort deixis fallback firing even when the associate
+# had named a garment — so an unrecognised product silently became whatever was
+# already on the glass. This is the failure the product's central claim rejects,
+# and it was in the deterministic matcher, not the model.
+
+UNSTOCKED_QUESTIONS = [
+    "do you have a blue sweatshirt in large",
+    "how much is the blue sweatshirt",
+    "Can you look up a blue sweatshirt from the Gap? Tell me price.",
+    "what about the parka",
+    "any cardigans left",
+    "where are the boots",
+]
+
+
+@pytest.mark.parametrize("transcript", UNSTOCKED_QUESTIONS)
+def test_naming_an_unstocked_garment_is_a_no_not_a_substitution(transcript):
+    tee = next(i for i in crm.INVENTORY if "Relaxed Tee" in i["name"])
+    r = answer_query(transcript, crm.INVENTORY, guest=None, focus_sku=tee["sku"])
+
+    assert not r["answer"].lower().startswith("yes")
+    # It must not name — or quote stock for — the thing that happened to be
+    # on the lens.
+    assert "Relaxed Tee" not in r["answer"], r["answer"]
+    assert r["product"] is None
+    assert r["glasses_lines"]
+
+
+@pytest.mark.parametrize("transcript", [
+    "do you have these in a large",
+    "how many left",
+    "how much is it",
+    "where is it",
+])
+def test_deixis_still_resolves_to_what_is_on_the_lens(transcript):
+    """The fix must not cost the feature it sits next to: a contextless
+    question names nothing, so it should still mean 'the thing I'm holding'."""
+    tee = next(i for i in crm.INVENTORY if "Relaxed Tee" in i["name"])
+    r = answer_query(transcript, crm.INVENTORY, guest=None, focus_sku=tee["sku"])
+    assert r["product"] and r["product"]["name"] == "Heavyweight Relaxed Tee"
+
+
+def test_a_stocked_garment_word_still_matches():
+    """'jeans' is a garment word AND on the floor — the guard must not fire."""
+    r = answer_query("do you have the barrel jeans in a 32x30", crm.INVENTORY,
+                     guest=None, focus_sku=None)
+    assert r["product"]["name"] == "High Rise Barrel Jeans"
+    assert r["answer"].lower().startswith("yes")
