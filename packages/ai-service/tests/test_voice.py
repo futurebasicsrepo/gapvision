@@ -344,3 +344,64 @@ def test_health_stays_open_and_leaks_nothing():
 def test_health_reports_stt_provider():
     body = client().get("/health").json()
     assert body["stt_provider"] == "mock"
+
+
+# --- the lens is never blank -------------------------------------------------
+#
+# Found in production: "do you have these in a 32" with nothing on the lens
+# returned a correct `answer` string and an empty `glasses_lines`. The associate
+# pressed the temple, spoke, watched the level meter, and got nothing back —
+# which reads as broken hardware rather than as "I didn't recognise that item".
+#
+# The specific branch passed `[]` for its lines. Rather than pin that one case,
+# assert the property across every route through the engine: an answer that
+# can't be shown is not an answer.
+
+BLANK_LENS_CASES = [
+    # (transcript, engaged guest, focus sku)
+    ("do you have these in a 32", None, None),          # the production case
+    ("do you have these in a 32", "guest", None),
+    ("do you have the flurblewurm in a medium", None, None),
+    ("how many left", None, None),
+    ("where is it", None, None),
+    ("how much is it", None, None),
+    ("what did she buy last time", None, None),
+    ("what should I show her next", None, None),
+    ("asdfgh qwerty", None, None),
+    ("", None, None),
+    ("do you have these", "guest", None),
+    ("32", None, None),
+]
+
+
+@pytest.mark.parametrize("transcript,who,sku", BLANK_LENS_CASES)
+def test_every_answer_reaches_the_glass(transcript, who, sku):
+    guest = crm.get_guest("g_sarah_chen") if who else None
+    result = answer_query(transcript, crm.INVENTORY, guest=guest, focus_sku=sku)
+
+    assert result["glasses_lines"], (
+        f"blank lens for {transcript!r} — answer was {result['answer']!r}"
+    )
+    assert result["answer"], f"no spoken answer for {transcript!r}"
+    # The brand grammar: at most three lines, and nothing that overruns the glass.
+    assert len(result["cue"]["lines"]) <= 3
+    for line in result["glasses_lines"]:
+        assert len(line) <= 64, line
+
+
+def test_an_open_question_with_nothing_selected_does_not_explode(monkeypatch):
+    """A provider that offers `answer_question` but returns nothing used to fall
+    through to `item['name']` with item=None — a 500 on the one route whose
+    contract is that it never 500s."""
+    from app import voice
+
+    class Empty:
+        name = "empty"
+
+        def answer_question(self, *a, **k):
+            return {"answer": ""}
+
+    monkeypatch.setattr(voice, "get_provider", lambda: Empty())
+    result = answer_query("tell me about it", crm.INVENTORY, guest=None, focus_sku=None)
+    assert result["glasses_lines"]
+    assert result["intent"] == "open"

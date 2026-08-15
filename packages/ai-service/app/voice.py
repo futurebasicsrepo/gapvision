@@ -266,7 +266,13 @@ def answer_query(
     """Route a transcript to a grounded answer. Pure function — easy to test."""
     transcript = (transcript or "").strip()
     if not transcript:
-        return _package(transcript, "empty", "Didn't catch a question.", None, [])
+        # `main.py` normally intercepts this before we get here, but a route
+        # that returns an answer with nothing to show is a blank lens wherever
+        # it lives. Every exit from this function paints something.
+        return _package(
+            transcript, "empty", "Didn't catch that — press and ask again.", None,
+            ["[ICON:WARN] Didn't catch that", "[ICON:CHAT] Press and ask again"],
+        )
 
     focus = next((i for i in inventory if i.get("sku") == focus_sku), None) if focus_sku else None
     size = extract_size(transcript)
@@ -289,10 +295,16 @@ def answer_query(
                  "[ICON:CHAT] Say the product name"],
                 how=how, size=size,
             )
+        # An answer with no lines is a blank lens. The associate pressed the
+        # temple, spoke, watched the meter, and got nothing back — which reads
+        # as broken hardware, not as "I didn't recognise that item". Whatever
+        # we say in `answer` has to also be sayable on the glass.
         return _package(
             transcript, intent,
             "No floor item matches that — say the product name and ask again.",
-            None, [],
+            None,
+            ["[ICON:WARN] No match on the floor",
+             "[ICON:CHAT] Say the product name"],
         )
 
     if intent == "location":
@@ -492,6 +504,19 @@ def _answer_open(transcript, guest, item, inventory) -> dict:
                  f"[ICON:ARROW] {item['name']}" if item else "[ICON:ARROW] —"],
                 provider_name=provider.name,
             )
+    # No provider wired, or one that answered with nothing. Fall back to the
+    # facts we hold about whatever is on the lens.
+    if not item:
+        # Nothing on the lens and no model: there is genuinely nothing to say.
+        # Say that on the glass rather than dereferencing a None and turning a
+        # shrug into a 500 on the one route that promises it never 500s.
+        return _package(
+            transcript, "open",
+            "Nothing on the lens to answer about — name the item and ask again.",
+            None,
+            ["[ICON:WARN] Nothing selected",
+             "[ICON:CHAT] Name the item and ask again"],
+        )
     return _package(
         transcript, "open",
         f"The {item['name']} is {_money(item.get('price'))} at {item.get('location','Floor')}, "
