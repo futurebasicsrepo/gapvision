@@ -103,27 +103,32 @@ const MODULE_W = DISPLAY_W - MODULE_X - X;
  * large for its container" and "cut off" — opposite descriptions of one
  * thing: **the host has a floor under how small it will draw a glyph, and a
  * box below that floor does not shrink the text, it clips it.** Then 24, and
- * the clock still lost its bottom edge, so the floor is above 24. The three
- * sentence lines at 26 have never been reported clipped, so it is at or just
- * under 26.
+ * the clock still lost its bottom edge.
  *
- * `ROW_H` is 28 — the first value clear of every observation. It is still an
- * inference from three data points and a guess at the fourth, which is two
- * more guesses than this has earned. **`buildRuler()` below settles it**: one
- * screen showing the same word at five heights, reachable by scrolling up at
- * idle. Whatever Kyle reads off it is the number, and it goes here.
+ * That was three builds of inferring a number from a sentence of feedback,
+ * and two of the three inferences were wrong. So 0.1.8 shipped `buildRuler()`
+ * — the same word at 20/24/26/28/32 on one screen — and Kyle read it off the
+ * glass: **20 and 24 clip. 26, 28 and 32 are whole.**
  *
- * Worth saying plainly because it constrains the design: if the host has a
- * floor, the supporting rows *cannot* be made smaller than the sentence. The
- * type hierarchy the brand asks for is not available on this hardware. What
- * is available is choosing what earns a row at all.
+ * So the floor is 26, and 26 is where every row sits. Not 28: the standing
+ * complaint has been that the supporting rows are too large, and 26 is the
+ * smallest this display will draw whole. There is nothing below it to try.
+ *
+ * Which settles a design question too, and it is worth stating plainly rather
+ * than discovering again: **the supporting rows cannot be smaller than the
+ * sentence, because the sentence is already at the floor.** The type
+ * hierarchy the brand asks for is not available on this hardware. Every row
+ * is one size. What is still ours to choose is what earns a row at all.
+ *
+ * `buildRuler()` stays in the build. It cost one screen, it answered a
+ * question three releases could not, and the next firmware may move the floor.
  */
-const ROW_H = 28;
+const ROW_H = 26;         // measured on glass, 2026-08-15
 const HEADER_H = ROW_H;
-const LINE_H = 26;        // ← the sentence's type size
+const LINE_H = ROW_H;
 const LINE_STEP = 32;     // baseline-to-baseline
-const RAIL_ROW = ROW_H;   // ← the rail's type size
-const META_H = ROW_H;     // ← and the supporting rows
+const RAIL_ROW = ROW_H;
+const META_H = ROW_H;
 const PAD = 4;            // breathing room inside every box
 
 const HEADER_Y = 12;
@@ -279,7 +284,7 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     });
   }
   textObject.push({
-    xPosition: DISPLAY_W - X - 90, yPosition: HEADER_Y, width: 90, height: HEADER_H,
+    xPosition: DISPLAY_W - X - 104, yPosition: HEADER_Y, width: 104, height: HEADER_H,
     paddingLength: PAD,
     containerID: 2, containerName: "cue-clock", zOrderIndex: 2,
     // The clock, not the latency. An associate mid-shift wants the time far

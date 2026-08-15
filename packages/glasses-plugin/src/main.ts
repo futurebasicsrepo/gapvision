@@ -21,7 +21,7 @@
 import { io, type Socket } from "socket.io-client";
 import { getBridge, type GlassesBridge } from "./bridge";
 import { decodeGesture, describeGesture, type DecodedGesture } from "./gestures";
-import { buildCue, buildRuler, CUE_LINES, IDLE_CUE, RULER_HEIGHTS, toDisplayText, type Cue } from "./layout";
+import { buildCue, buildRuler, CUE_LINES, FACT_CHARS, IDLE_CUE, RULER_HEIGHTS, toDisplayText, type Cue } from "./layout";
 import { markBytes } from "./mark";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
 
@@ -255,20 +255,26 @@ function moduleLabel() { return recIndex < 0 ? "CUE" : "PICK"; }
  * lead, and tier and points follow because they change how you open.
  */
 /**
- * "SARAH CHEN" -> "SARAH C".
+ * The full name when it fits, first name plus an initial when it doesn't.
  *
- * The rail is 168px wide and holds about nine characters at this type size.
- * A full name does not fit, and the version that clips — "SARAH CHE" — is
- * worse than useless: it reads as a broken display rather than a shortened
- * name. The surname is the half you can drop, because the associate is about
- * to say the first name out loud and the full name is on the guest card when
- * they arrive.
+ * The rail is ten characters wide at the measured row height. "SARAH CHEN" is
+ * exactly ten and keeps her surname; "MARCUS WEBB" is eleven and becomes
+ * "MARCUS W". What must never happen is the middle case — "MARCUS WEB" reads
+ * as a broken display rather than a shortened name, and the surname is the
+ * droppable half anyway, since the associate is about to say the first name
+ * out loud and the full name is on the guest card when they arrive.
+ *
+ * Asking `FACT_CHARS` rather than hardcoding ten means this follows the row
+ * height and the glyph ratio automatically, instead of becoming another
+ * constant that quietly stops being true.
  */
 function railName(name?: string): string {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "";
-  if (parts.length === 1) return parts[0];
-  return `${parts[0]} ${parts[parts.length - 1][0]}`;
+  const full = String(name || "").trim().replace(/\s+/g, " ");
+  if (full.length <= FACT_CHARS) return full;
+  const parts = full.split(" ");
+  if (parts.length < 2) return full;   // one long word — let the rail slice it
+  const short = `${parts[0]} ${parts[parts.length - 1][0]}`;
+  return short.length <= FACT_CHARS ? short : parts[0];
 }
 
 function railFor(payload: DisplayPayload): string[] {

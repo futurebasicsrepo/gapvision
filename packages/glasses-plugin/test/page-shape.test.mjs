@@ -160,12 +160,10 @@ check("the mark and the wordmark are different shapes",
     ...(p.listObject || []).map((c) => [c.containerName,
       c.height / c.itemContainer.itemCount]),
   ];
-  // The floor has moved twice as the hardware told us more: 20, then 24, and
-  // 24 still clipped the clock's bottom edge. 26 is the lowest height never
-  // reported clipped (the sentence lines). `buildRuler()` is what will replace
-  // this guess with a measurement — when it does, change this number and the
-  // rows that fail are the rows to fix.
-  const FLOOR = 26;
+  // No longer a guess. `buildRuler()` put five heights on the glass and Kyle
+  // read them: 20 and 24 clip, 26 and up are whole. If a firmware update moves
+  // this, the ruler is still in the build — re-run it rather than re-deriving.
+  const FLOOR = 26;   // measured on glass: 24 clips, 26 is whole
   const short = rows.filter(([, h]) => h < FLOOR);
   check(`no row is under the host's observed legible floor of ${FLOOR}px`,
     short.length === 0, short.map(([n, h]) => `${n}=${h}`).join(", ") || "all clear");
