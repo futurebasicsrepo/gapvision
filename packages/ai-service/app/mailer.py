@@ -285,14 +285,17 @@ _HINTS = {
     "HTTP401":
         "The provider rejected the API key. Check it for a truncated paste — "
         "the key begins `re_` — and that it has not been revoked.",
-    # A 403 from this API is not an authorisation problem, it is the edge. The
-    # only way we have ever produced one is by sending a banned User-Agent,
-    # which the client now sets. If this appears again the request is being
-    # blocked before it reaches the API, so the key is the wrong thing to look
-    # at — the raw body is reported alongside for exactly that reason.
+    # 403 covers two unrelated things, which is why the raw body is reported
+    # beside the hint and why this sentence no longer claims to know which:
+    # an unverified sending domain (JSON body, says so plainly), and the edge
+    # refusing the request before the API sees it (plain-text "error code:
+    # 1010", historically from a banned User-Agent). Twice now I have asserted
+    # one meaning for this status and been wrong. It is not the key — a bad key
+    # answers 401.
     "HTTP403":
-        "Blocked before reaching the provider's API — this is their edge, not "
-        "your key. Check the raw reason below; a bad key answers 401, not 403.",
+        "Refused, and not because of the key — a bad key answers 401. Usually "
+        "the sending domain in CUE_MAIL_FROM is not verified with the provider "
+        "yet. The raw reason below says which.",
     "HTTP422":
         "The provider refused the message. Nearly always the sending domain: "
         "the domain in CUE_MAIL_FROM has to be verified with the provider, and "
