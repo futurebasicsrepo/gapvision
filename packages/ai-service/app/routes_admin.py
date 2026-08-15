@@ -326,6 +326,27 @@ def list_users(tenant: str | None = None, authorization: str | None = BearerHead
     return {"users": [identity.public_user(r) for r in rows]}
 
 
+@router.get("/staff")
+def list_staff(authorization: str | None = BearerHeader):
+    """Cue staff — the accounts with no tenant.
+
+    Its own route rather than a flag on /users, deliberately. That endpoint is
+    manager-and-up and tenant-scoped by construction: scope_tenant() refuses a
+    cue_admin who names no tenant, and the query filters on tenant_id. Teaching
+    it to return rows outside a tenant would put a hole in the one function
+    every other read in this file depends on, to save a route.
+    """
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    rows = db.query(
+        """
+        SELECT id, tenant_id, email, name, role, status, created_at, last_login_at
+          FROM users WHERE tenant_id IS NULL ORDER BY name
+        """
+    )
+    return {"staff": [identity.public_user(r) for r in rows]}
+
+
 @router.post("/users", status_code=201)
 def create_user(req: UserCreate, authorization: str | None = BearerHeader):
     me = current_user(authorization)

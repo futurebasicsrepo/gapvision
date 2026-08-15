@@ -779,7 +779,7 @@ export default function Tenants() {
  */
 const ROLES = ["associate", "manager", "client_admin", "cue_admin"];
 
-function PersonRow({ user, onChange, onError }) {
+export function PersonRow({ user, onChange, onError }) {
   const me = session.user;
   const myRank = ROLES.indexOf(me?.role || "associate");
   const grantable = ROLES.filter((r) => ROLES.indexOf(r) <= myRank);

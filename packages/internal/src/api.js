@@ -109,6 +109,10 @@ export const api = {
     request(`/api/admin/tenants/${encodeURIComponent(slug)}/crm`, { method: "DELETE" }),
 
   // --- people and hardware --------------------------------------------------
+  // Staff have no tenant, so they are unreachable through /users - that route
+  // is tenant-scoped by construction and would have to be weakened to see them.
+  staff: () => request("/api/admin/staff"),
+  createStaff: (body) => request("/api/admin/users", { method: "POST", body: { ...body, role: "cue_admin" } }),
   users: (tenant) => request(`/api/admin/users?tenant=${encodeURIComponent(tenant)}`),
   createUser: (body) => request("/api/admin/users", { method: "POST", body }),
   updateUser: (id, body) => request(`/api/admin/users/${id}`, { method: "PATCH", body }),

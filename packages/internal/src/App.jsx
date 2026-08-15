@@ -4,6 +4,7 @@ import { CueBracket, Wordmark } from "./components/Mark.jsx";
 import Login from "./components/Login.jsx";
 import Health from "./components/Health.jsx";
 import Tenants from "./components/Tenants.jsx";
+import Staff from "./components/Staff.jsx";
 import Plates from "./components/Plates.jsx";
 import Architecture from "./components/Architecture.jsx";
 import Brand from "./components/Brand.jsx";
@@ -26,6 +27,7 @@ const SECTIONS = [
     items: [
       { key: "health", name: "Health", hint: "services and checks" },
       { key: "tenants", name: "Tenants", hint: "retailers, people, billing" },
+      { key: "staff", name: "Cue staff", hint: "us, and who can sign in" },
       { key: "plates", name: "Plates", hint: "printed doors, and revocation" },
     ],
   },
@@ -43,6 +45,7 @@ const SECTIONS = [
 
 const TITLES = {
   health: ["Health", "What the platform can prove about itself right now."],
+  staff: ["Cue staff", "Accounts with no tenant. Invite a colleague, change a role, end a session."],
   tenants: ["Tenants", "Every retailer, their people, their hardware, what they've used."],
   plates: ["Plates", "Every printed door, how hard each is being used, and the one control that matters."],
   architecture: ["Architecture", "The system, the decisions behind it, and what's still missing."],
@@ -163,6 +166,7 @@ export default function App() {
         <div className="main-body">
           {view === "health" && <Health />}
           {view === "tenants" && <Tenants />}
+          {view === "staff" && <Staff />}
           {view === "plates" && <Plates />}
           {view === "architecture" && <Architecture />}
           {view === "features" && (
