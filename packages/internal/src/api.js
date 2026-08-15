@@ -112,6 +112,9 @@ export const api = {
   users: (tenant) => request(`/api/admin/users?tenant=${encodeURIComponent(tenant)}`),
   createUser: (body) => request("/api/admin/users", { method: "POST", body }),
   updateUser: (id, body) => request(`/api/admin/users/${id}`, { method: "PATCH", body }),
+  // Invites landed with the mailbox. Resend covers the two real cases: the
+  // first one expired (a week), and it went to a typo'd address.
+  resendInvite: (id) => request(`/api/admin/users/${id}/invite`, { method: "POST" }),
   devices: (tenant) => request(`/api/admin/devices?tenant=${encodeURIComponent(tenant)}`),
   updateDevice: (id, body) => request(`/api/admin/devices/${id}`, { method: "PATCH", body }),
 
