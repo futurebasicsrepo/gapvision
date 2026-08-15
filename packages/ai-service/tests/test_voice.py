@@ -462,3 +462,34 @@ def test_a_stocked_garment_word_still_matches():
                      guest=None, focus_sku=None)
     assert r["product"]["name"] == "High Rise Barrel Jeans"
     assert r["answer"].lower().startswith("yes")
+
+
+# --- plural product names ----------------------------------------------------
+#
+# Found on hardware. "Do you have any shirts?" answered "Yes. 4 of the
+# Heavyweight Logo Hoodie in XL at Active Zone" — on a floor stocking a Poplin
+# Shirt. {shirts} never intersects {poplin, shirt}, so the named-product score
+# was zero and the resolver fell through to whatever was on the lens.
+#
+# Same family as the blue-sweatshirt bug and half-fixed by it: that change
+# taught the *absent-garment guard* about plurals but not the scoring loop, so
+# naming a garment the floor genuinely stocks still hit the deixis fallback.
+
+@pytest.mark.parametrize("transcript,expected", [
+    ("do you have any shirts", "Poplin Shirt"),
+    ("any shirts left", "Poplin Shirt"),
+    ("do you have shirts in medium", "Poplin Shirt"),
+    ("how many joggers are there", "Utility Cargo Joggers"),
+    ("do you have the barrel jeans in a 32x30", "High Rise Barrel Jeans"),
+    ("any hoodies in large", "Heavyweight Logo Hoodie"),
+    ("where are the blazers", "Relaxed Linen Blazer"),
+])
+def test_a_plural_still_names_the_product(transcript, expected):
+    """With something unrelated on the lens, so a miss falls through to it."""
+    lens = next(i for i in crm.INVENTORY if "Relaxed Tee" in i["name"])
+    r = answer_query(transcript, crm.INVENTORY, guest=None, focus_sku=lens["sku"])
+    assert r["product"], f"resolved nothing for {transcript!r}"
+    assert r["product"]["name"] == expected, (
+        f"{transcript!r} -> {r['product']['name']}, expected {expected}"
+    )
+    assert r["resolved_by"] == "named"

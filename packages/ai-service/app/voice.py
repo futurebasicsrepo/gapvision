@@ -168,11 +168,18 @@ def resolve_product(
     (deictic — they mean what's on the lens), 'size-scheme' (only one thing on
     the floor is sized the way they asked), or 'none'/'ambiguous'.
     """
-    toks = set(_tokens(transcript))
+    # Match on singular and plural both ways. Found on hardware: "do you have
+    # any shirts?" scored zero against "Poplin Shirt" — {shirts} never
+    # intersects {poplin, shirt} — so it fell through to the item on the lens
+    # and answered about a hoodie. An associate asking for shirts, in a store
+    # that stocks shirts, was told about the wrong garment.
+    toks = _match_forms(_tokens(transcript))
     best, best_score = None, 0
     for item in inventory:
-        name_toks = set(_tokens(item["name"]))
-        tag_toks = {t for tag in item.get("tags", []) for t in _tokens(tag)}
+        name_toks = _match_forms(_tokens(item["name"]))
+        tag_toks = _match_forms(
+            [t for tag in item.get("tags", []) for t in _tokens(tag)]
+        )
         score = len(toks & name_toks) * 2 + len(toks & tag_toks)
         if score > best_score:
             best, best_score = item, score
@@ -237,6 +244,15 @@ def _forms(token: str) -> set[str]:
         out.add(token[:-2])
     if token.endswith("s") and len(token) > 2:
         out.add(token[:-1])
+    return out
+
+
+def _match_forms(tokens: list[str]) -> set[str]:
+    """Every token plus its singular, as one set — so matching is plural-blind
+    in both directions."""
+    out: set[str] = set()
+    for token in tokens:
+        out |= _forms(token)
     return out
 
 
@@ -390,7 +406,7 @@ def answer_query(
         return _answer_price(transcript, item, how)
     if intent == "stock":
         return _answer_stock(transcript, item, size, how, guest)
-    return _answer_open(transcript, guest, item, inventory)
+    return _answer_open(transcript, guest, item, inventory, how)
 
 
 def _answer_stock(transcript, item, size, how, guest) -> dict:
@@ -558,7 +574,7 @@ def _answer_recommend(transcript, guest, inventory) -> dict:
     )
 
 
-def _answer_open(transcript, guest, item, inventory) -> dict:
+def _answer_open(transcript, guest, item, inventory, how="none") -> dict:
     """Open-ended question: hand to the LLM provider if one is wired, else
     answer with the grounded facts we do have rather than pretending."""
     provider = get_provider()
@@ -572,14 +588,14 @@ def _answer_open(transcript, guest, item, inventory) -> dict:
                     transcript, "open", answer, item,
                     [f"[ICON:CHAT] {_clip(answer)}"] +
                     ([f"[ICON:ARROW] {item['name']}"] if item else []),
-                    provider_name=provider.name,
+                    provider_name=provider.name, how=how,
                 )
         except Exception as e:  # a model outage must not break the lens
             return _package(
                 transcript, "open", f"Model unavailable ({e}).", item,
                 ["[ICON:WARN] Model unavailable",
                  f"[ICON:ARROW] {item['name']}" if item else "[ICON:ARROW] —"],
-                provider_name=provider.name,
+                provider_name=provider.name, how=how,
             )
     # No provider wired, or one that answered with nothing. Fall back to the
     # facts we hold about whatever is on the lens.
@@ -593,6 +609,7 @@ def _answer_open(transcript, guest, item, inventory) -> dict:
             None,
             ["[ICON:WARN] Nothing selected",
              "[ICON:CHAT] Name the item and ask again"],
+            how=how,
         )
     return _package(
         transcript, "open",
@@ -602,6 +619,7 @@ def _answer_open(transcript, guest, item, inventory) -> dict:
         [f"[ICON:ARROW] {item['name']}",
          f"        @ {item.get('location','Floor')}  {_money(item.get('price'))}",
          f"        {item.get('stock', 0)} on hand"],
+        how=how,
     )
 
 
