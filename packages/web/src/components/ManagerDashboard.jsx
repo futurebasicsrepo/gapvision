@@ -250,7 +250,8 @@ export default function ManagerDashboard({ user }) {
         <div className="row-list">
           {data.engagements.length === 0 && <Empty>No engagements recorded yet.</Empty>}
           {data.engagements.map((e) => (
-            <div className="row" key={e.id}>
+            <div className="engagement" key={e.id}>
+            <div className="row">
               <div>
                 {e.associate || (
                   /* Say why, not just that. "Unattributed" reads as a bug;
@@ -270,6 +271,32 @@ export default function ManagerDashboard({ user }) {
                 <span className="meta">{clock(e.started_at)}</span>
               </div>
             </div>
+            {/* What the glasses actually said, and what they offered. Without
+                this the row records that an engagement happened and nothing
+                about whether the cue was any good — which is the only
+                question a pilot has to answer. */}
+            {(e.cue_lines || []).filter(Boolean).length > 0 && (
+              <div className="cue-said">
+                {e.cue_lines.filter(Boolean).map((line, i) => (
+                  <div key={i} className={i === 0 ? "cue-said-lead" : ""}>{line}</div>
+                ))}
+              </div>
+            )}
+            {(e.recommendations || []).length > 0 && (
+              <div className="recs">
+                {e.recommendations.slice(0, 3).map((r) => (
+                  <span className="rec" key={r.sku || r.name}>
+                    {r.name}
+                    {typeof r.price === "number" && <em> {money(Math.round(r.price * 100))}</em>}
+                    {r.location && <em> · {r.location}</em>}
+                  </span>
+                ))}
+                {e.recommendations.length > 3 && (
+                  <span className="meta">+{e.recommendations.length - 3} more</span>
+                )}
+              </div>
+            )}
+          </div>
           ))}
         </div>
       </div>
@@ -285,22 +312,29 @@ export default function ManagerDashboard({ user }) {
         <div className="row-list">
           {(data.voice?.voice || []).length === 0 && <Empty>No voice queries yet.</Empty>}
           {(data.voice?.voice || []).map((v) => (
-            <div className="row" key={v.id}>
-              <div>
-                {/* Withheld by default — say so rather than showing a blank. */}
-                {v.transcript
-                  ? <span className="quote">“{v.transcript}”</span>
-                  : <span className="meta">
-                      {v.ok ? (v.intent || "question") : "not understood"} · transcript not stored
-                    </span>}
-                {v.associate && <span className="meta"> · {v.associate}</span>}
+            <div className="qa" key={v.id}>
+              <div className="row">
+                <div>
+                  {/* Withheld by default — say so rather than showing a blank. */}
+                  {v.transcript
+                    ? <span className="quote">“{v.transcript}”</span>
+                    : <span className="meta">
+                        {v.ok ? (v.intent || "question") : "not understood"} · transcript not stored
+                      </span>}
+                  {v.associate && <span className="meta"> · {v.associate}</span>}
+                </div>
+                <div className="row-right">
+                  <span className={`pill ${v.ok ? "neutral" : "warnpill"}`}>
+                    {v.ok ? v.intent || "answered" : "missed"}
+                  </span>
+                  <span className="meta">{v.latency_ms ? `${v.latency_ms}ms` : ""}</span>
+                </div>
               </div>
-              <div className="row-right">
-                <span className={`pill ${v.ok ? "neutral" : "warnpill"}`}>
-                  {v.ok ? v.intent || "answered" : "missed"}
-                </span>
-                <span className="meta">{v.latency_ms ? `${v.latency_ms}ms` : ""}</span>
-              </div>
+              {/* The answer is the half that says whether Cue was any good.
+                  A question with no answer beside it cannot be judged — you
+                  can see the floor asked about stock, but not whether we told
+                  them something true. */}
+              {v.answer && <div className="qa-answer">{v.answer}</div>}
             </div>
           ))}
         </div>

@@ -227,6 +227,12 @@ io.on("connection", (socket) => {
         associate_email: socket.data.email,
         device_serial: socket.data.deviceSerial,
         device_model: socket.data.deviceModel,
+        // What the glasses are about to show. Sent here rather than derived
+        // later because stock moves: "what did we suggest" and "what would we
+        // suggest now" are different questions, and only the first is
+        // reviewable after the fact.
+        recommendations: context.recommendations || [],
+        cue_lines: context.script?.cue?.lines || context.script?.glasses_lines || [],
       });
       socket.data.engagementId = opened?.engagement_id || null;
 
@@ -471,6 +477,10 @@ async function finalizeVoice(socket, reason) {
     audio_seconds: result.audio_seconds ?? null,
     stt_provider: result.stt_provider || null,
     transcript: result.transcript || null,
+    // The answer rides the same privacy flag as the transcript, on the AI
+    // service side. Sending it unconditionally and letting the tenant's own
+    // setting decide keeps that decision in one place.
+    answer: result.answer || null,
   });
 
   socket.emit("voice:result", result);

@@ -14,6 +14,7 @@ nobody trusts. Weights are configurable per tenant for the same reason.
 """
 from __future__ import annotations
 
+import json
 import os
 from datetime import date
 
@@ -51,14 +52,27 @@ def _bump_usage(tenant_id: str, *, engagements: int = 0, voice: int = 0, stt_sec
 def start_engagement(
     tenant_id: str, *, guest_ref: str | None, zone: str | None,
     associate_user_id: str | None = None,
+    recommendations: list | None = None, cue_lines: list | None = None,
 ) -> dict:
+    """Open an engagement, and record what the glasses showed to open it.
+
+    The recommendations are stored as they were sent rather than re-derived
+    later, because stock moves: "what did we suggest at 2pm" and "what would
+    we suggest now" are different questions and only the first one is
+    reviewable. Same for the cue — the three lines the associate actually read
+    are the product, and a cue nobody kept is a cue nobody can critique.
+    """
     row = db.query_one(
         """
-        INSERT INTO engagements (tenant_id, associate_user_id, guest_ref, zone)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO engagements
+            (tenant_id, associate_user_id, guest_ref, zone, recommendations, cue_lines)
+        VALUES (%s, %s, %s, %s, %s::jsonb, %s)
         RETURNING id, started_at
         """,
-        (tenant_id, associate_user_id, guest_ref, zone),
+        # `%s::jsonb` with json.dumps is the convention this codebase already
+        # uses for tenants.config and tenants.privacy — same shape, same place.
+        (tenant_id, associate_user_id, guest_ref, zone,
+         json.dumps(recommendations or []), list(cue_lines or []) or None),
     )
     _bump_usage(tenant_id, engagements=1)
     return row
@@ -84,27 +98,35 @@ def record_voice_query(
     intent: str | None = None, ok: bool = True, resolved_by: str | None = None,
     latency_ms: int | None = None, audio_seconds: float | None = None,
     stt_provider: str | None = None, transcript: str | None = None,
+    answer: str | None = None,
 ) -> dict:
     """Store one voice query.
 
-    The transcript is dropped unless the tenant has explicitly opted in. What
-    the associate said standing next to a customer is not something Cue should
-    accumulate by default, and the analytics don't need it — intent, outcome
-    and latency do the work.
+    The transcript and the answer are dropped unless the tenant has explicitly
+    opted in. What the associate said standing next to a customer is not
+    something Cue should accumulate by default, and the operational analytics
+    don't need it — intent, outcome and latency do that work.
+
+    Both halves ride the same flag on purpose. The answer quotes the guest's
+    record back at them — their size, their cart, what they bought last time —
+    so it is no less sensitive than the question. Keeping one without the other
+    would also make the log unreadable: a question with no answer cannot be
+    judged, and an answer with no question is a sentence about nothing.
     """
-    keep_transcript = bool((tenant.get("privacy") or {}).get("store_transcripts"))
+    keep_words = bool((tenant.get("privacy") or {}).get("store_transcripts"))
     row = db.query_one(
         """
         INSERT INTO voice_queries
             (tenant_id, engagement_id, user_id, intent, ok, resolved_by,
-             latency_ms, audio_seconds, stt_provider, transcript)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             latency_ms, audio_seconds, stt_provider, transcript, answer)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id, created_at
         """,
         (
             tenant["id"], engagement_id, user_id, intent, ok, resolved_by,
             latency_ms, audio_seconds, stt_provider,
-            transcript if keep_transcript else None,
+            transcript if keep_words else None,
+            answer if keep_words else None,
         ),
     )
     _bump_usage(tenant["id"], voice=1, stt_seconds=float(audio_seconds or 0))
@@ -248,7 +270,8 @@ def recent_engagements(tenant_id: str, limit: int = 20) -> list[dict]:
     return db.query(
         """
         SELECT e.id, e.guest_ref, e.zone, e.started_at, e.ended_at,
-               e.outcome, e.sale_cents, u.name AS associate
+               e.outcome, e.sale_cents, e.recommendations, e.cue_lines,
+               u.name AS associate
           FROM engagements e
      LEFT JOIN users u ON u.id = e.associate_user_id
          WHERE e.tenant_id = %s
@@ -263,8 +286,8 @@ def recent_voice(tenant_id: str, limit: int = 20) -> list[dict]:
     return db.query(
         """
         SELECT v.id, v.intent, v.ok, v.resolved_by, v.latency_ms,
-               v.audio_seconds, v.stt_provider, v.transcript, v.created_at,
-               u.name AS associate
+               v.audio_seconds, v.stt_provider, v.transcript, v.answer,
+               v.created_at, u.name AS associate
           FROM voice_queries v
      LEFT JOIN users u ON u.id = v.user_id
          WHERE v.tenant_id = %s

@@ -97,6 +97,10 @@ class EngagementStart(BaseModel):
     associate_email: str | None = None
     device_serial: str | None = None
     device_model: str | None = None
+    #: What the glasses showed to open this engagement. Stored as sent — see
+    #: analytics.start_engagement for why it is not re-derived later.
+    recommendations: list = []
+    cue_lines: list[str] = []
 
 
 class EngagementEnd(BaseModel):
@@ -118,6 +122,8 @@ class VoiceRecord(BaseModel):
     audio_seconds: float | None = None
     stt_provider: str | None = None
     transcript: str | None = None
+    #: Dropped alongside the transcript unless the tenant stores words.
+    answer: str | None = None
 
 
 class AssistRecord(BaseModel):
@@ -213,6 +219,7 @@ def ingest_engagement_start(req: EngagementStart, request: Request,
         associate_user_id=_associate(
             t, device_serial=req.device_serial, email=req.associate_email,
             device_model=req.device_model),
+        recommendations=req.recommendations, cue_lines=req.cue_lines,
     )
     return {"engagement_id": str(row["id"]), "started_at": row["started_at"]}
 
@@ -243,6 +250,7 @@ def ingest_voice(req: VoiceRecord, request: Request,
         intent=req.intent, ok=req.ok, resolved_by=req.resolved_by,
         latency_ms=req.latency_ms, audio_seconds=req.audio_seconds,
         stt_provider=req.stt_provider, transcript=req.transcript,
+        answer=req.answer,
     )
     return {"voice_query_id": str(row["id"])}
 

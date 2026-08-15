@@ -458,6 +458,17 @@ function TenantDetail({ tenant, onChanged }) {
       onChanged();
     } catch (e) { setError(e.message); }
   }
+  /** Merge, never replace. `privacy` is a single jsonb column, so PATCHing a
+   *  bare `{store_transcripts}` would silently drop retention_days and the
+   *  opt-in tiers alongside it. */
+  async function setPrivacy(patch) {
+    try {
+      await api.updateTenant(tenant.slug, {
+        privacy: { ...(tenant.privacy || {}), ...patch },
+      });
+      onChanged();
+    } catch (e) { setError(e.message); }
+  }
 
   async function assignDevice(deviceId, userId) {
     // Optimistic: the select has already moved, and snapping it back on a
@@ -548,6 +559,43 @@ function TenantDetail({ tenant, onChanged }) {
         <p className="meta" style={{ marginBottom: 16, lineHeight: 1.5 }}>
           Commercial terms are Cue-side only — a retailer's own admin can set
           their privacy posture but can't change either of these.
+        </p>
+
+        {/* Privacy posture. Off by default and deliberately a little hard to
+            turn on: it is the difference between analytics and a record of
+            what staff said near customers. It lives here rather than nowhere
+            because it was previously only reachable by a hand-written PATCH,
+            which is not a control — it is a trapdoor. */}
+        <div className="form-grid" style={{ marginBottom: 10 }}>
+          <label className="field">
+            <span>Store what was said</span>
+            <select
+              value={(tenant.privacy || {}).store_transcripts ? "on" : "off"}
+              onChange={(e) => setPrivacy({ store_transcripts: e.target.value === "on" })}
+            >
+              <option value="off">off — intent and latency only</option>
+              <option value="on">on — keep questions and answers</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Retention</span>
+            <select
+              value={String((tenant.privacy || {}).retention_days ?? 90)}
+              onChange={(e) => setPrivacy({ retention_days: Number(e.target.value) })}
+            >
+              {[30, 60, 90, 180, 365].map((d) => (
+                <option key={d} value={d}>{d} days</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className="meta" style={{ marginBottom: 16, lineHeight: 1.5 }}>
+          With this on, the manager dashboard shows the question the floor asked
+          and the answer Cue gave. Both halves move together — an answer quotes
+          the guest's own record back at them, and a question with no answer
+          beside it can't be judged.{" "}
+          <strong>Retention is not enforced yet</strong>; the number is recorded
+          and nothing deletes on it.
         </p>
 
         {devices === null ? (

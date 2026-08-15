@@ -297,6 +297,82 @@ def test_transcripts_are_not_stored_unless_the_tenant_opts_in(client):
                  json={"privacy": {"store_transcripts": False, "retention_days": 90}})
 
 
+def test_the_answer_rides_the_same_privacy_flag_as_the_question(client):
+    """A stored question with a discarded answer is unreadable, and an answer
+    is no less sensitive than the question — it quotes the guest's record back
+    at them. So both halves move together, or neither does."""
+    def send(transcript, answer):
+        client.post("/api/ingest/voice", headers=service_key(), json={
+            "tenant": "t_alpha", "intent": "stock", "ok": True,
+            "transcript": transcript, "answer": answer, "audio_seconds": 1.0,
+        })
+
+    def latest():
+        rows = client.get("/api/analytics/voice",
+                          headers=auth(client, "mgr@alpha.example.com")).json()
+        return rows["voice"][0]
+
+    # Default posture: neither half is kept.
+    send("do we have these in a 32", "Yes — 3 on hand in 32x30")
+    row = latest()
+    assert row["transcript"] is None
+    assert row["answer"] is None, "the answer outlived the question it belongs to"
+
+    client.patch("/api/admin/tenants/t_alpha", headers=auth(client, "admin@alpha.example.com"),
+                 json={"privacy": {"store_transcripts": True, "retention_days": 90}})
+    send("do we have these in a 32", "Yes — 3 on hand in 32x30")
+    row = latest()
+    assert row["transcript"] == "do we have these in a 32"
+    assert row["answer"] == "Yes — 3 on hand in 32x30"
+
+    client.patch("/api/admin/tenants/t_alpha", headers=auth(client, "admin@alpha.example.com"),
+                 json={"privacy": {"store_transcripts": False, "retention_days": 90}})
+
+
+def test_an_engagement_records_what_was_actually_shown(client):
+    """Recording that an engagement happened, without what Cue said, makes
+    "was the cue any good" unanswerable — which is the only question a pilot
+    has to answer."""
+    recs = [
+        {"sku": "GAP-BARREL-28", "name": "High Rise Barrel Jean",
+         "price": 89.95, "location": "Denim Wall", "stock": 9},
+        {"sku": "GAP-CREW-M", "name": "CashSoft Crew", "price": 59.95,
+         "location": "Front Table", "stock": 4},
+    ]
+    lines = ["SARAH CHEN", "IN CART CASHSOFT CREW", "OFFER IT IN SIZE M"]
+    opened = client.post("/api/ingest/engagement/start", headers=service_key(), json={
+        "tenant": "t_alpha", "guest_ref": "guest-001", "zone": "Denim Wall",
+        "recommendations": recs, "cue_lines": lines,
+    })
+    assert opened.status_code == 201
+    eid = opened.json()["engagement_id"]
+
+    rows = client.get("/api/analytics/engagements",
+                      headers=auth(client, "mgr@alpha.example.com")).json()["engagements"]
+    row = next(e for e in rows if str(e["id"]) == eid)
+    assert row["cue_lines"] == lines
+    assert [r["sku"] for r in row["recommendations"]] == [r["sku"] for r in recs]
+    # Stored as sent, prices included — re-deriving later would give a
+    # different answer, because stock and price move.
+    assert row["recommendations"][0]["price"] == 89.95
+    assert row["recommendations"][0]["stock"] == 9
+
+
+def test_an_engagement_without_a_cue_still_records(client):
+    """The columns are additive and nullable. Anything still sending the old
+    payload — an older realtime deploy, a test harness — must keep working."""
+    opened = client.post("/api/ingest/engagement/start", headers=service_key(), json={
+        "tenant": "t_alpha", "guest_ref": "guest-002", "zone": "Front Table",
+    })
+    assert opened.status_code == 201
+    eid = opened.json()["engagement_id"]
+    rows = client.get("/api/analytics/engagements",
+                      headers=auth(client, "mgr@alpha.example.com")).json()["engagements"]
+    row = next(e for e in rows if str(e["id"]) == eid)
+    assert row["recommendations"] == []
+    assert row["cue_lines"] is None
+
+
 def test_leaderboard_counts_assists_not_just_sales(client, fixtures):
     """The whole point of the weighting: someone who only helps other people's
     guests must still be able to place."""

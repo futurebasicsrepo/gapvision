@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import SystemMap from "./SystemMap.jsx";
 
 /**
  * Architecture — the reference a new cuesea employee reads on day one.
@@ -32,12 +33,12 @@ const PIPELINE = [
   {
     name: "Depth",
     sub: "FastAPI · the AI service",
-    note: "Grounded answers, recommendations, the cue grammar. STT and LLM are both pluggable by env var.",
+    note: "Grounded answers, recommendations, the cue grammar. Deepgram and Grok in production, both swappable by env var.",
   },
   {
     name: "Postgres",
     sub: "the control plane",
-    note: "Tenants, people, devices, engagements, voice queries, usage rollups. Guests are referenced, never copied.",
+    note: "Tenants, people, devices, engagements, voice queries, usage rollups. Guests are referenced, never copied — an engagement holds the CRM's id, the cue we showed and the products we offered, and no customer record.",
   },
 ];
 
@@ -78,10 +79,19 @@ export default function Architecture() {
   return (
     <div className="grid grid-12">
       <div className="card span-12">
+        <h3>The system</h3>
+        <p className="card-note">
+          One picture, and the thing it exists to say: the service key never
+          leaves the boxed region, and the customer record never enters it.
+        </p>
+        <SystemMap />
+      </div>
+
+      <div className="card span-12">
         <h3>The path a cue takes</h3>
         <p className="card-note">
-          Left to right, this is the whole product. An associate never touches
-          anything but the first two boxes.
+          The same thing in words, with the reasoning. An associate never
+          touches anything but the first two boxes.
         </p>
         <Flow />
       </div>
@@ -137,6 +147,36 @@ export default function Architecture() {
       </div>
 
       <div className="card span-6">
+        <h3>How attribution works</h3>
+        <div className="doc">
+          <p>
+            The Even SDK cannot tell us who is wearing a pair of glasses. Its{" "}
+            <code>UserInfo</code> carries a uid, a display name, an avatar and a
+            country — no email. So attribution runs on the <strong>serial the
+            device knows about itself</strong>.
+          </p>
+          <ul>
+            <li>The plugin reads the serial and sends it on <code>register</code>.</li>
+            <li>Realtime attaches it to every event it reports.</li>
+            <li>
+              Depth resolves serial → person through <code>devices</code>. An
+              unknown serial <strong>self-registers unassigned</strong> rather
+              than being thrown away, so the Console can ask "these have been on
+              the floor, who is wearing them?" instead of asking someone to read
+              a serial number off a pair of glasses.
+            </li>
+            <li>A human assigns the owner here, in Tenants.</li>
+          </ul>
+          <p>
+            Activity from an unassigned device is still recorded against the
+            tenant — it just has no name on it, which is why Cue Studio says{" "}
+            <em>unassigned device</em> rather than <em>unattributed</em>. One
+            says what to do about it.
+          </p>
+        </div>
+      </div>
+
+      <div className="card span-6">
         <h3>What we deliberately don't store</h3>
         <div className="doc">
           <p>
@@ -147,10 +187,21 @@ export default function Architecture() {
             there is no data to browse.
           </p>
           <p>
-            <strong>Transcripts.</strong> Off by default, per tenant. The
-            analytics need intent, outcome and latency — not the words an
-            associate said near a customer. When they're withheld the API says
-            so explicitly, so it doesn't read as a bug.
+            <strong>Transcripts, and the answers beside them.</strong> Off by
+            default, per tenant, and both halves ride the same flag. The
+            operational analytics need intent, outcome and latency — not the
+            words an associate said near a customer. An answer quotes the
+            guest's record back at them, so it is no less sensitive than the
+            question; and a question stored without its answer cannot be
+            judged anyway. When they're withheld the API says so explicitly,
+            so it doesn't read as a bug.
+          </p>
+          <p>
+            <strong>What we do keep per engagement:</strong> the cue we showed
+            and the products we offered. Stored as sent rather than re-derived
+            later, because stock moves — "what did we suggest at 2pm" and "what
+            would we suggest now" are different questions and only the first is
+            reviewable.
           </p>
           <p>
             <strong>Faces.</strong> No camera on the glasses, by standing
@@ -202,9 +253,9 @@ export default function Architecture() {
               doesn't cover <code>/auth</code>.
             </li>
             <li>
-              <strong>Attribution rides on an email in the socket payload.</strong>{" "}
-              Binding devices to people through the <code>devices</code> table is
-              the real answer.
+              <strong>Nothing enforces a retention window on floor
+              messages either.</strong> Whatever floor comms ends up storing
+              inherits the same gap as transcripts.
             </li>
             <li>
               <strong>Infrastructure still says gapvision.</strong> Repo,

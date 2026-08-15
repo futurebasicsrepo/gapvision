@@ -114,6 +114,40 @@ body {
 .amount { font-family: var(--mono); font-size: 12.5px; font-weight: 500; }
 .quote { color: var(--paper); }
 
+/* ---------- What was actually shown and said ----------
+   Both of these hang off a row rather than sitting inside it: the row is the
+   fact that something happened, and these are the evidence. Indented and
+   dimmer so a manager scanning outcomes is not slowed down by them, legible
+   the moment they stop to look. */
+.engagement, .qa { display: flex; flex-direction: column; gap: 4px; }
+
+/* The three lines the associate read off the glass, in the glass's own
+   grammar — mono, tracked, uppercase already by the time it reaches here. */
+.cue-said {
+  margin: 0 0 0 12px; padding: 7px 11px;
+  border-left: 2px solid rgba(143, 199, 240, 0.22);
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.55;
+  color: var(--sea-200); letter-spacing: 0.02em;
+}
+.cue-said-lead { color: var(--sea-100); }
+
+.recs { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 12px; }
+.rec {
+  font-size: 11.5px; color: var(--sea-100);
+  background: rgba(4, 18, 46, 0.55);
+  border: 1px solid rgba(143, 199, 240, 0.14);
+  border-radius: 999px; padding: 3px 10px;
+}
+.rec em { font-style: normal; color: var(--sea-200); }
+
+/* The answer, under its question. This is the half that says whether Cue was
+   any good, so it gets paper-weight text rather than meta grey. */
+.qa-answer {
+  margin: 0 0 0 12px; padding: 7px 11px;
+  border-left: 2px solid rgba(143, 199, 240, 0.22);
+  font-size: 12.5px; line-height: 1.5; color: var(--sea-100);
+}
+
 .pill {
   font-family: var(--mono); font-size: 10.5px; font-weight: 500; padding: 3px 9px;
   border-radius: 999px; border: 1px solid rgba(143, 199, 240, 0.22);
