@@ -13,5 +13,10 @@ dist-preview/
 # Even Hub packages — built artifacts, never committed
 *.ehpk
 
+# Git bundles. These are the sandbox→Mac push relay (see claude/handoff.md):
+# a bundle is a transport for commits that are already in history, so
+# committing one would store the repo inside the repo.
+*.bundle
+
 # esbuild output for the layout unit test
 packages/glasses-plugin/dist-test/
