@@ -17,8 +17,8 @@
 
 body {
   font-family: var(--sans);
-  background: var(--sea-900);
-  color: var(--paper);
+  background: var(--slate-800);
+  color: var(--slate-100);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
@@ -34,7 +34,7 @@ body {
 .rail {
   width: 236px; flex: none; position: sticky; top: 0; align-self: flex-start;
   height: 100vh; display: flex; flex-direction: column;
-  background: var(--sea-800); border-right: 1px solid rgba(143, 199, 240, 0.14);
+  background: var(--slate-700); border-right: 1px solid rgba(255, 255, 255, 0.077);
   padding: 20px 0 16px;
 }
 /* No flame edge here, tempting as it was. The rail is one screen region and
@@ -57,14 +57,14 @@ body {
 }
 .rail-item {
   display: block; width: 100%; text-align: left; border: 0; cursor: pointer;
-  background: transparent; color: var(--sea-100); font: inherit;
+  background: transparent; color: var(--slate-200); font: inherit;
   padding: 9px 10px; border-radius: 8px; margin-bottom: 2px;
   border-left: 2px solid transparent;
 }
-.rail-item:hover { background: rgba(143, 199, 240, 0.06); color: var(--paper); }
+.rail-item:hover { background: rgba(255, 255, 255, 0.033); color: var(--slate-100); }
 .rail-item.active {
-  background: rgba(143, 199, 240, 0.10); border-left-color: var(--flame);
-  color: var(--paper);
+  background: rgba(255, 255, 255, 0.055); border-left-color: var(--flame);
+  color: var(--slate-100);
 }
 .rail-item-name { display: block; font-size: 13.5px; font-weight: 500; }
 .rail-item.active .rail-item-name { font-weight: 600; }
@@ -75,27 +75,27 @@ body {
 
 .rail-foot {
   padding: 14px 20px 0; margin-top: 12px;
-  border-top: 1px solid rgba(143, 199, 240, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.066);
   display: flex; flex-direction: column; gap: 5px; align-items: flex-start;
 }
 .rail-user {
-  font-family: var(--mono); font-size: 11px; color: var(--sea-200);
+  font-family: var(--mono); font-size: 11px; color: var(--slate-300);
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .main { flex: 1; min-width: 0; padding: 26px 30px 64px; }
 .main-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 22px; }
 .main-title { font-size: 25px; font-weight: 600; letter-spacing: -0.022em; line-height: 1.15; }
-.main-sub { color: var(--sea-200); font-size: 13px; margin-top: 4px; line-height: 1.5; }
+.main-sub { color: var(--slate-300); font-size: 13px; margin-top: 4px; line-height: 1.5; }
 .main-body { max-width: 1280px; }
 
 /* Hamburger — only ever visible once the rail becomes an overlay. */
 .nav-toggle {
-  display: none; background: var(--sea-800); border: 1px solid rgba(143, 199, 240, 0.2);
+  display: none; background: var(--slate-700); border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 8px; padding: 9px 10px; cursor: pointer; flex: none;
 }
 .nav-toggle span {
-  display: block; width: 16px; height: 2px; background: var(--sea-100); border-radius: 2px;
+  display: block; width: 16px; height: 2px; background: var(--slate-200); border-radius: 2px;
 }
 .nav-toggle span + span { margin-top: 3px; }
 .rail-scrim { display: none; }
@@ -133,32 +133,32 @@ body {
   color: var(--flame-300); text-transform: uppercase;
 }
 .topbar-right { display: flex; align-items: center; gap: 14px; }
-.whoami { font-family: var(--mono); font-size: 11.5px; color: var(--sea-200); }
+.whoami { font-family: var(--mono); font-size: 11.5px; color: var(--slate-300); }
 
 .view-switch {
-  display: flex; gap: 4px; background: var(--sea-800); padding: 4px;
-  border-radius: 9px; border: 1px solid var(--edge, rgba(143, 199, 240, 0.14));
+  display: flex; gap: 4px; background: var(--slate-700); padding: 4px;
+  border-radius: 9px; border: 1px solid var(--edge, rgba(255, 255, 255, 0.077));
   flex-wrap: wrap;
 }
 .view-switch button {
-  border: 0; background: transparent; color: var(--sea-100);
+  border: 0; background: transparent; color: var(--slate-200);
   font: inherit; font-size: 13px; font-weight: 500; padding: 7px 15px;
   border-radius: 6px; cursor: pointer;
 }
-.view-switch button:hover { color: var(--paper); }
-.view-switch button.active { background: var(--sea-600); color: var(--paper); font-weight: 600; }
+.view-switch button:hover { color: var(--slate-100); }
+.view-switch button.active { background: var(--sea-600); color: var(--slate-100); font-weight: 600; }
 
 .linkish {
-  background: none; border: 0; color: var(--sea-200); font: inherit; font-size: 12px;
+  background: none; border: 0; color: var(--slate-300); font: inherit; font-size: 12px;
   cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
 }
-.linkish:hover { color: var(--paper); }
+.linkish:hover { color: var(--slate-100); }
 
 /* ---------- Cards & grid ---------- */
 .grid { display: grid; gap: 14px; }
 .grid-12 { grid-template-columns: repeat(12, 1fr); align-items: start; }
 .card {
-  background: var(--sea-800); border: 1px solid rgba(143, 199, 240, 0.14);
+  background: var(--slate-700); border: 1px solid rgba(255, 255, 255, 0.077);
   border-radius: var(--radius); padding: 18px;
 }
 .card h3 {
@@ -166,7 +166,7 @@ body {
   letter-spacing: 0.14em; color: var(--sea-300); margin-bottom: 12px; font-weight: 500;
 }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.card-note { color: var(--sea-200); font-size: 12.5px; line-height: 1.6; margin: -4px 0 14px; max-width: 68ch; }
+.card-note { color: var(--slate-300); font-size: 12.5px; line-height: 1.6; margin: -4px 0 14px; max-width: 68ch; }
 .span-3 { grid-column: span 3; }
 .span-4 { grid-column: span 4; }
 .span-6 { grid-column: span 6; }
@@ -179,17 +179,17 @@ body {
   text-transform: uppercase; color: var(--sea-300); font-weight: 500;
 }
 .stat-value { font-size: 30px; font-weight: 600; line-height: 1.08; letter-spacing: -0.025em; }
-.stat-sub { font-size: 12px; color: var(--sea-200); line-height: 1.45; }
+.stat-sub { font-size: 12px; color: var(--slate-300); line-height: 1.45; }
 
-.meta { color: var(--sea-200); font-size: 12px; }
-.empty { color: var(--sea-200); font-size: 12.5px; padding: 8px 0; line-height: 1.5; }
+.meta { color: var(--slate-300); font-size: 12px; }
+.empty { color: var(--slate-300); font-size: 12.5px; padding: 8px 0; line-height: 1.5; }
 
 .pill {
   font-family: var(--mono); font-size: 10.5px; font-weight: 500; padding: 3px 9px;
-  border-radius: 999px; border: 1px solid rgba(143, 199, 240, 0.22);
-  color: var(--sea-100); letter-spacing: 0.06em; white-space: nowrap;
+  border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.121);
+  color: var(--slate-200); letter-spacing: 0.06em; white-space: nowrap;
 }
-.pill.muted { color: var(--sea-200); border-color: rgba(143, 199, 240, 0.14); }
+.pill.muted { color: var(--slate-300); border-color: rgba(255, 255, 255, 0.077); }
 .pill.flame { color: var(--flame-300); border-color: rgba(255, 176, 138, 0.5); }
 
 /* ---------- Status ----------
@@ -199,13 +199,13 @@ body {
 .checks { display: flex; flex-direction: column; gap: 7px; }
 .check {
   display: flex; align-items: center; gap: 12px;
-  background: rgba(4, 18, 46, 0.55); border: 1px solid rgba(143, 199, 240, 0.10);
+  background: rgba(4, 18, 46, 0.55); border: 1px solid rgba(255, 255, 255, 0.055);
   border-left-width: 3px; border-radius: 8px; padding: 11px 13px;
 }
 .check-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .check-label { font-size: 13px; font-weight: 500; }
 .check-detail {
-  font-family: var(--mono); font-size: 11.5px; color: var(--sea-200);
+  font-family: var(--mono); font-size: 11.5px; color: var(--slate-300);
   margin-left: auto; text-align: right; padding-left: 12px;
 }
 /* Sea for pass: a wall of green ticks trains you to stop reading them. Flame
@@ -220,36 +220,36 @@ body {
 .check.fail  .check-label { color: var(--flame-300); }
 .check.unknown { border-left-color: var(--ink-500); }
 .check.unknown .check-dot { background: var(--ink-300); }
-.check.unknown .check-label { color: var(--sea-200); }
+.check.unknown .check-label { color: var(--slate-300); }
 
 /* ---------- Tables ---------- */
 .table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .table th {
   font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--sea-300); font-weight: 500;
-  text-align: left; padding: 0 12px 9px; border-bottom: 1px solid rgba(143, 199, 240, 0.14);
+  text-align: left; padding: 0 12px 9px; border-bottom: 1px solid rgba(255, 255, 255, 0.077);
   white-space: nowrap;
 }
 .table td {
-  padding: 11px 12px; border-bottom: 1px solid rgba(143, 199, 240, 0.07);
+  padding: 11px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.039);
   vertical-align: middle;
 }
 .table tr:last-child td { border-bottom: 0; }
 .table tbody tr.clickable { cursor: pointer; }
-.table tbody tr.clickable:hover { background: rgba(143, 199, 240, 0.05); }
-.table tbody tr.selected { background: rgba(143, 199, 240, 0.09); }
+.table tbody tr.clickable:hover { background: rgba(255, 255, 255, 0.028); }
+.table tbody tr.selected { background: rgba(255, 255, 255, 0.05); }
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
 /* `.table th` sets text-align: left and outranks `.num` on specificity, which
    silently left-aligns numeric headers over right-aligned figures. */
 .table th.num { text-align: right; }
-.ident { font-family: var(--mono); font-size: 12.5px; color: var(--sea-100); }
+.ident { font-family: var(--mono); font-size: 12.5px; color: var(--slate-200); }
 .table-wrap { overflow-x: auto; }
 
 /* ---------- Buttons & forms ---------- */
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .btn {
-  background: var(--sea-700); border: 1px solid rgba(143, 199, 240, 0.22);
-  color: var(--paper); font: inherit; font-size: 13px; font-weight: 500;
+  background: var(--slate-600); border: 1px solid rgba(255, 255, 255, 0.121);
+  color: var(--slate-100); font: inherit; font-size: 13px; font-weight: 500;
   padding: 9px 14px; border-radius: 8px; cursor: pointer;
 }
 .btn:hover:not(:disabled) { background: var(--sea-600); }
@@ -260,9 +260,9 @@ body {
 .btn.small { padding: 6px 11px; font-size: 12px; }
 
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
-.field span { color: var(--sea-100); }
+.field span { color: var(--slate-200); }
 .field input, .field select {
-  background: var(--sea-900); border: 1px solid rgba(143, 199, 240, 0.2); color: var(--paper);
+  background: var(--slate-800); border: 1px solid rgba(255, 255, 255, 0.11); color: var(--slate-100);
   border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 13.5px;
 }
 .field input:focus, .field select:focus {
@@ -273,16 +273,16 @@ body {
 /* Inline assignment control. Sized to the table row rather than the form
    scale — it lives among data, not among labelled fields. */
 .assign {
-  background: rgba(4, 18, 46, 0.7); border: 1px solid rgba(143, 199, 240, 0.2);
-  color: var(--paper); font: inherit; font-size: 12.5px;
+  background: rgba(4, 18, 46, 0.7); border: 1px solid rgba(255, 255, 255, 0.11);
+  color: var(--slate-100); font: inherit; font-size: 12.5px;
   padding: 5px 8px; border-radius: 6px; cursor: pointer; max-width: 190px;
 }
 .assign:focus { outline: 2px solid var(--sea-400); outline-offset: 1px; }
 
 .notice {
   font-size: 13px; border-radius: 8px; padding: 10px 12px; line-height: 1.5;
-  border: 1px solid rgba(143, 199, 240, 0.25); background: rgba(4, 18, 46, 0.5);
-  color: var(--sea-100);
+  border: 1px solid rgba(255, 255, 255, 0.138); background: rgba(4, 18, 46, 0.5);
+  color: var(--slate-200);
 }
 .notice.error {
   color: var(--flame-300); border-color: rgba(255, 140, 87, 0.4);
@@ -293,31 +293,31 @@ body {
 .signin-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
 .signin { width: 100%; max-width: 390px; display: flex; flex-direction: column; gap: 15px; }
 .signin h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.022em; }
-.signin-sub { color: var(--sea-200); font-size: 13.5px; margin-top: -11px; line-height: 1.5; }
+.signin-sub { color: var(--slate-300); font-size: 13.5px; margin-top: -11px; line-height: 1.5; }
 
 /* ---------- Reference prose (Architecture, Brand) ---------- */
 .doc { max-width: 74ch; }
-.doc p { font-size: 13.5px; line-height: 1.65; color: var(--sea-100); margin-bottom: 12px; }
+.doc p { font-size: 13.5px; line-height: 1.65; color: var(--slate-200); margin-bottom: 12px; }
 .doc p:last-child { margin-bottom: 0; }
-.doc strong { color: var(--paper); font-weight: 600; }
+.doc strong { color: var(--slate-100); font-weight: 600; }
 .doc code {
-  font-family: var(--mono); font-size: 12px; color: var(--sea-100);
+  font-family: var(--mono); font-size: 12px; color: var(--slate-200);
   background: rgba(4, 18, 46, 0.7); padding: 1px 5px; border-radius: 4px;
 }
 .doc ul { margin: 0 0 12px 0; padding-left: 18px; }
-.doc li { font-size: 13.5px; line-height: 1.6; color: var(--sea-100); margin-bottom: 6px; }
+.doc li { font-size: 13.5px; line-height: 1.6; color: var(--slate-200); margin-bottom: 6px; }
 
 .h4 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 
 /* Flow diagram — a row of stages with the hop labelled between them. */
 .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; }
 .flow-node {
-  background: rgba(4, 18, 46, 0.6); border: 1px solid rgba(143, 199, 240, 0.18);
+  background: rgba(4, 18, 46, 0.6); border: 1px solid rgba(255, 255, 255, 0.099);
   border-radius: 8px; padding: 11px 13px; min-width: 132px; flex: 1 1 132px;
 }
 .flow-node .n-name { font-size: 13px; font-weight: 600; }
 .flow-node .n-sub { font-family: var(--mono); font-size: 10.5px; color: var(--sea-300); margin-top: 3px; }
-.flow-node .n-note { font-size: 11.5px; color: var(--sea-200); margin-top: 6px; line-height: 1.45; }
+.flow-node .n-note { font-size: 11.5px; color: var(--slate-300); margin-top: 6px; line-height: 1.45; }
 .flow-arrow {
   align-self: center; padding: 0 9px; color: var(--sea-300);
   font-family: var(--mono); font-size: 11px; white-space: nowrap;
@@ -326,7 +326,7 @@ body {
 /* ---------- Swatches ---------- */
 .ramp { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; }
 .swatch {
-  border-radius: 8px; overflow: hidden; border: 1px solid rgba(143, 199, 240, 0.16);
+  border-radius: 8px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.088);
   background: rgba(4, 18, 46, 0.5); text-align: left; cursor: copy;
   font: inherit; color: inherit; padding: 0; width: 100%;
   /* Explicit column flex, not block: a <button> centres its content box
@@ -342,13 +342,13 @@ body {
   box-shadow: inset 0 0 0 1px rgba(251, 249, 245, 0.14);
 }
 .swatch-body { display: block; padding: 7px 9px 9px; }
-.swatch-token { font-family: var(--mono); font-size: 10.5px; color: var(--sea-100); }
+.swatch-token { font-family: var(--mono); font-size: 10.5px; color: var(--slate-200); }
 .swatch-hex {
-  font-family: var(--mono); font-size: 11.5px; color: var(--paper);
+  font-family: var(--mono); font-size: 11.5px; color: var(--slate-100);
   text-transform: uppercase; letter-spacing: 0.02em;
 }
 .swatch-note { font-size: 10.5px; color: var(--sea-300); margin-top: 3px; line-height: 1.35; }
-.swatch:hover { border-color: rgba(143, 199, 240, 0.42); }
+.swatch:hover { border-color: rgba(255, 255, 255, 0.231); }
 .swatch:focus-visible { outline: 2px solid var(--sea-400); outline-offset: 2px; }
 
 .rule-line {
@@ -384,23 +384,23 @@ body {
    frame and the key beneath it. */
 .sysmap {
   background: rgba(4, 18, 46, 0.45);
-  border: 1px solid rgba(143, 199, 240, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 10px;
   padding: 14px 16px 10px;
 }
 .sysmap-key {
   display: flex; flex-wrap: wrap; gap: 18px;
   margin-top: 10px; padding-top: 10px;
-  border-top: 1px solid rgba(143, 199, 240, 0.10);
-  font-size: 11.5px; color: var(--sea-200);
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  font-size: 11.5px; color: var(--slate-300);
 }
 .sysmap-key span { display: inline-flex; align-items: center; gap: 7px; }
 .sysmap-key i { display: inline-block; }
-.k-solid { width: 18px; height: 0; border-top: 1.5px solid rgba(143, 199, 240, 0.55); }
-.k-dashed { width: 18px; height: 0; border-top: 1.5px dashed rgba(143, 199, 240, 0.55); }
+.k-solid { width: 18px; height: 0; border-top: 1.5px solid rgba(255, 255, 255, 0.303); }
+.k-dashed { width: 18px; height: 0; border-top: 1.5px dashed rgba(255, 255, 255, 0.303); }
 .k-box {
   width: 14px; height: 10px; border-radius: 3px;
-  border: 1px dashed rgba(143, 199, 240, 0.45);
+  border: 1px dashed rgba(255, 255, 255, 0.248);
 }
 
 
@@ -418,7 +418,7 @@ body {
 .dl {
   display: flex; gap: 12px; align-items: center;
   background: rgba(4, 18, 46, 0.55);
-  border: 1px solid rgba(143, 199, 240, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 10px; padding: 12px;
 }
 .dl-preview {
@@ -434,21 +434,21 @@ body {
 .dl-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .dl-links a {
   font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
-  color: var(--sea-100); text-decoration: none;
-  border: 1px solid rgba(143, 199, 240, 0.22);
+  color: var(--slate-200); text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.121);
   border-radius: 5px; padding: 2px 7px;
 }
-.dl-links a:hover { border-color: var(--sea-300); color: var(--paper); }
+.dl-links a:hover { border-color: var(--sea-300); color: var(--slate-100); }
 .dl-sep {
-  width: 1px; height: 14px; background: rgba(143, 199, 240, 0.18); margin: 0 2px;
+  width: 1px; height: 14px; background: rgba(255, 255, 255, 0.099); margin: 0 2px;
 }
 .dl-all {
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
-  color: var(--sea-100); text-decoration: none;
-  border: 1px solid rgba(143, 199, 240, 0.28);
+  color: var(--slate-200); text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.154);
   border-radius: 6px; padding: 4px 10px;
 }
-.dl-all:hover { border-color: var(--sea-300); color: var(--paper); }
+.dl-all:hover { border-color: var(--sea-300); color: var(--slate-100); }
 
 
 /* ---------- Rendered markdown ----------
@@ -457,16 +457,16 @@ body {
    a full-width line at this size is genuinely harder to read, and these are
    documents somebody works through rather than glances at. */
 .doc-md { max-width: 78ch; }
-.doc-md > p { line-height: 1.6; margin: 0 0 14px; color: var(--sea-100); }
-.doc-md .doc-h { line-height: 1.25; color: var(--paper); }
+.doc-md > p { line-height: 1.6; margin: 0 0 14px; color: var(--slate-200); }
+.doc-md .doc-h { line-height: 1.25; color: var(--slate-100); }
 .doc-md .doc-h1 { font-size: 21px; margin: 4px 0 14px; }
 .doc-md .doc-h2 { font-size: 17px; margin: 30px 0 12px; }
 .doc-md .doc-h3 { font-size: 14.5px; margin: 22px 0 9px; }
-.doc-md .doc-h4 { font-size: 13px; margin: 18px 0 8px; color: var(--sea-100); }
+.doc-md .doc-h4 { font-size: 13px; margin: 18px 0 8px; color: var(--slate-200); }
 .doc-md .doc-list { margin: 0 0 14px; padding-left: 20px; }
-.doc-md .doc-list li { line-height: 1.55; margin-bottom: 6px; color: var(--sea-100); }
+.doc-md .doc-list li { line-height: 1.55; margin-bottom: 6px; color: var(--slate-200); }
 .doc-md .doc-rule {
-  border: 0; border-top: 1px solid rgba(143, 199, 240, 0.12); margin: 26px 0;
+  border: 0; border-top: 1px solid rgba(255, 255, 255, 0.066); margin: 26px 0;
 }
 /* A pull-quote, used in the docs for the thing somebody will otherwise learn
    the expensive way. Flame on the edge, because that is the ramp's whole job. */
@@ -475,24 +475,24 @@ body {
   border-left: 2px solid var(--flame);
   background: rgba(4, 18, 46, 0.5);
   border-radius: 0 8px 8px 0;
-  line-height: 1.55; color: var(--sea-100);
+  line-height: 1.55; color: var(--slate-200);
 }
 .doc-md .doc-pre {
   background: rgba(4, 18, 46, 0.65);
-  border: 1px solid rgba(143, 199, 240, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 8px; padding: 12px 14px; overflow-x: auto;
   font-family: var(--mono); font-size: 12px; line-height: 1.5;
-  color: var(--sea-100); margin: 0 0 16px;
+  color: var(--slate-200); margin: 0 0 16px;
 }
 .doc-md .table-wrap { margin: 0 0 18px; }
 .doc-md a { color: var(--sea-300); }
-.doc-md strong { color: var(--paper); font-weight: 600; }
+.doc-md strong { color: var(--slate-100); font-weight: 600; }
 
 
 /* The employee one-pager, shown at full width on a paper ground because that
    is what it is — a printed page, not a product screen. */
 .onepager {
   display: block; width: 100%; height: auto;
-  border-radius: 8px; border: 1px solid rgba(143, 199, 240, 0.12);
+  border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.066);
   background: var(--paper);
 }

@@ -2,7 +2,7 @@
 
 # Cue — features as of 15 August 2026
 
-Plugin `0.1.11`, `main` at `04f4f02`. Read off the code, not the roadmap:
+Plugin `0.1.11`, `main` at `75eb000`. Read off the code, not the roadmap:
 everything in **Works today** is built, wired and deployed. Everything else is
 in its own section, and the sections are honest about the difference.
 
@@ -102,6 +102,18 @@ call. The question and the answer move together: an answer quotes the guest's
 own record back at them, and a question with no answer beside it can't be
 judged.
 
+### The guest page — app.cuesea.ai/here
+
+The only surface a customer touches, and the only route in Cue Studio that is
+public by design. Tap or scan a plate, land on paper-toned page that names the
+room you are in, say what you need, and it is on an associate's glass before
+you have put your phone away. Stop is on the same screen, one tap, and it takes
+back both the check-in and anything still waiting on the floor.
+
+Out-of-stock sizes are shown and marked `check` rather than hidden: what we
+know is that our count says none, which is weaker than "out", and the floor
+routinely holds stock the system has not caught up with.
+
 ### Cue Console — cuesea staff only
 
 Platform health, cross-tenant usage, tenant creation, people and device
@@ -119,7 +131,7 @@ customer record never enters them.
 
 | Thing | The caveat |
 |---|---|
-| **Size questions** | Only fully answerable against the mock dataset. The Shopify adapter fetches variants but doesn't yet emit per-size counts, so a live store answers "unknown" for size availability. This is the highest-value small fix on the list. |
+| **Size questions** | Fixed. The Shopify adapter now emits per-size counts from the variants the query was already fetching and discarding, taking the size from the option actually named "size" rather than from the variant title — so a two-option product doesn't put a colour in the answer. Untested against a live store with real variants. |
 | **Floor location** | The Shopify adapter hardcodes location to "Floor". Per-zone placement needs a product metafield. |
 | **Voice and gestures in the browser** | Fully wired server-side and covered by tests, but Cue Studio has no UI that drives them — they are exercised from the glasses or the test harness. |
 | **The demo harness** | The associate view with its beacon buttons and its leaderboard names is demo-only, and the seeded names appear for the `gap` tenant alone. |
@@ -135,8 +147,67 @@ customer record never enters them.
 ## Not built
 
 - **Even Hub submission** — packs clean; the store listing has not been created.
-- **QR check-in / presence** — the opt-in identification path.
 - **Anthropic, OpenAI and Google model providers** — registered and stubbed.
+
+---
+
+## Front doors — how a guest says "I'm here"
+
+One endpoint, many doors. A plate tap, a QR scan, the retailer's app, a wallet
+pass, an order collection and an associate asking politely are the same event
+arriving through different holes in the wall. A new door is a row in
+`SOURCES`, not a subsystem.
+
+**Consent is a property of the door, not of the request.** Each source declares
+what kind of agreement stands behind it — `device`, `deliberate`, `transaction`
+or `assisted` — and the caller cannot override it. If it were a free field, the
+weakest door in the system could claim the strongest provenance and the column
+would stop being evidence of anything, which is the one thing it exists to be.
+The open route accepts only the two plate doors; everything else arrives from a
+system that holds the service key.
+
+**Deliberately not modelled:** no path, no dwell, no zone-to-zone movement.
+Presence is a moment at a place. A system that can reconstruct somebody's walk
+through a shop is a different product with a different consent story, and the
+way you avoid building it by accident is to not have the table. A test asserts
+the missing columns rather than trusting a comment to hold the line.
+
+**What the guest asks for.** Presence says somebody is in fitting room three;
+a request says they want a 32 in the barrel jean, which is the sentence the
+product is for. The guest page (`app.cuesea.ai/here`) checks them in, offers
+what they need as chips, what is on the floor as a picker with that product's
+real variant sizes, and a box for the rest. It reaches the covering associate's
+glasses as a frame they can press to take, claimed server-side so two people
+never walk to the same room with the same jean.
+
+**Identity is optional, and that is the design.** The cue needs to know who you
+are; a request only needs to know where you are. The page mints a per-visit
+reference that points at no customer record and dies with the tab. Signing in
+buys the guest card, through the retailer's own account.
+
+**Two paths, one plate.** iOS opens an app only for a link the domain's own
+association file claims, so a cuesea.ai URL can never open Gap's app. The plate
+prints ours and a tenant config field decides: our form, or a handoff into the
+retailer's app with a way to carry on here. Gap ships their route, one field
+changes, every plate already on a wall starts opening the app.
+
+**The plate URL is a token.** `?p=K7QX3MZP2A9F` — nothing about the store is
+legible in it, one token per door so either can be revoked without touching the
+other, and it resolves server-side or not at all. What that does *not* buy is
+unshareability: anything printed can be photographed. The tap door can be made
+genuinely unshareable with a rotating-cryptogram tag (the service verifies the
+counter and refuses a replay); a printed QR cannot rotate, so its mitigations
+are revocation, the presence TTL, and `GET /api/analytics/plates` making an
+over-used token visible.
+
+**Plates.** `packages/brand/build-plates.py` generates the printable artwork:
+print PDF with bleed and crop marks, proof, and an installation sheet, with the
+zone baked into every URL. An acrylic plate is a beacon that costs eleven
+dollars and never needs a battery — the zone is not inferred, it is printed on
+the thing. The tap and the scan carry different `src` values so we learn which
+door people actually use. The QR is decoded back out of the rendered artwork in
+the test suite, and the installation sheet's second step, in the largest type
+on the page, is *lock the tag*.
 
 ---
 

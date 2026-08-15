@@ -13,8 +13,8 @@
 
 body {
   font-family: var(--sans);
-  background: var(--sea-900);
-  color: var(--paper);
+  background: var(--slate-800);
+  color: var(--slate-100);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
@@ -37,25 +37,25 @@ body {
 .brand { display: flex; align-items: center; gap: 14px; }
 .brand-sub {
   font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em;
-  color: var(--sea-200); text-transform: uppercase;
+  color: var(--slate-300); text-transform: uppercase;
 }
 .topbar-right { display: flex; align-items: center; gap: 14px; }
 
 .view-switch {
-  display: flex; gap: 4px; background: var(--sea-800); padding: 4px;
-  border-radius: 9px; border: 1px solid rgba(143, 199, 240, 0.14);
+  display: flex; gap: 4px; background: var(--slate-700); padding: 4px;
+  border-radius: 9px; border: 1px solid rgba(255, 255, 255, 0.077);
 }
 .view-switch button {
-  border: 0; background: transparent; color: var(--sea-100);
+  border: 0; background: transparent; color: var(--slate-200);
   font: inherit; font-size: 13px; font-weight: 500; padding: 7px 15px;
   border-radius: 6px; cursor: pointer;
 }
-.view-switch button:hover { color: var(--paper); }
-.view-switch button.active { background: var(--sea-600); color: var(--paper); font-weight: 600; }
+.view-switch button:hover { color: var(--slate-100); }
+.view-switch button.active { background: var(--sea-600); color: var(--slate-100); font-weight: 600; }
 
 .conn-dot {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--mono); font-size: 11px; color: var(--sea-200);
+  font-family: var(--mono); font-size: 11px; color: var(--slate-300);
 }
 /* The live indicator is a sea dot, not a green one — hud green belongs to
    the glass and would read as a status colour anywhere else. */
@@ -66,16 +66,16 @@ body {
 .conn-dot.offline::before { background: var(--ink-300); }
 
 .linkish {
-  background: none; border: 0; color: var(--sea-200); font: inherit; font-size: 12px;
+  background: none; border: 0; color: var(--slate-300); font: inherit; font-size: 12px;
   cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
 }
-.linkish:hover { color: var(--paper); }
+.linkish:hover { color: var(--slate-100); }
 
 /* ---------- Cards & grid ---------- */
 .grid { display: grid; gap: 14px; }
 .grid-dashboard { grid-template-columns: repeat(12, 1fr); align-items: start; }
 .card {
-  background: var(--sea-800); border: 1px solid rgba(143, 199, 240, 0.14);
+  background: var(--slate-700); border: 1px solid rgba(255, 255, 255, 0.077);
   border-radius: var(--radius); padding: 18px;
 }
 .card h3 {
@@ -83,8 +83,8 @@ body {
   letter-spacing: 0.14em; color: var(--sea-300); margin-bottom: 12px; font-weight: 500;
 }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.card-note { color: var(--sea-200); font-size: 12.5px; line-height: 1.55; margin: -2px 0 14px; }
-.footnote { padding: 13px 18px; font-family: var(--mono); font-size: 11.5px; color: var(--sea-200); }
+.card-note { color: var(--slate-300); font-size: 12.5px; line-height: 1.55; margin: -2px 0 14px; }
+.footnote { padding: 13px 18px; font-family: var(--mono); font-size: 11.5px; color: var(--slate-300); }
 .span-3 { grid-column: span 3; }
 .span-4 { grid-column: span 4; }
 .span-6 { grid-column: span 6; }
@@ -100,19 +100,19 @@ body {
 /* Proportional figures: tabular-nums makes a large standalone number look
    loose. Tabular is reserved for columns that must align. */
 .stat-value { font-size: 30px; font-weight: 600; line-height: 1.08; letter-spacing: -0.025em; }
-.stat-sub { font-size: 12px; color: var(--sea-200); line-height: 1.45; }
+.stat-sub { font-size: 12px; color: var(--slate-300); line-height: 1.45; }
 
 /* ---------- Lists ---------- */
 .row-list { display: flex; flex-direction: column; gap: 7px; }
 .row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  background: rgba(4, 18, 46, 0.55); border: 1px solid rgba(143, 199, 240, 0.10);
+  background: rgba(4, 18, 46, 0.55); border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 8px; padding: 10px 12px; font-size: 13px;
 }
-.row .meta, .meta { color: var(--sea-200); font-size: 12px; }
+.row .meta, .meta { color: var(--slate-300); font-size: 12px; }
 .row-right { display: flex; align-items: center; gap: 10px; }
 .amount { font-family: var(--mono); font-size: 12.5px; font-weight: 500; }
-.quote { color: var(--paper); }
+.quote { color: var(--slate-100); }
 
 /* ---------- What was actually shown and said ----------
    Both of these hang off a row rather than sitting inside it: the row is the
@@ -125,60 +125,60 @@ body {
    grammar — mono, tracked, uppercase already by the time it reaches here. */
 .cue-said {
   margin: 0 0 0 12px; padding: 7px 11px;
-  border-left: 2px solid rgba(143, 199, 240, 0.22);
+  border-left: 2px solid rgba(255, 255, 255, 0.121);
   font-family: var(--mono); font-size: 11.5px; line-height: 1.55;
-  color: var(--sea-200); letter-spacing: 0.02em;
+  color: var(--slate-300); letter-spacing: 0.02em;
 }
-.cue-said-lead { color: var(--sea-100); }
+.cue-said-lead { color: var(--slate-200); }
 
 .recs { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 12px; }
 .rec {
-  font-size: 11.5px; color: var(--sea-100);
+  font-size: 11.5px; color: var(--slate-200);
   background: rgba(4, 18, 46, 0.55);
-  border: 1px solid rgba(143, 199, 240, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.077);
   border-radius: 999px; padding: 3px 10px;
 }
-.rec em { font-style: normal; color: var(--sea-200); }
+.rec em { font-style: normal; color: var(--slate-300); }
 
 /* The answer, under its question. This is the half that says whether Cue was
    any good, so it gets paper-weight text rather than meta grey. */
 .qa-answer {
   margin: 0 0 0 12px; padding: 7px 11px;
-  border-left: 2px solid rgba(143, 199, 240, 0.22);
-  font-size: 12.5px; line-height: 1.5; color: var(--sea-100);
+  border-left: 2px solid rgba(255, 255, 255, 0.121);
+  font-size: 12.5px; line-height: 1.5; color: var(--slate-200);
 }
 
 .pill {
   font-family: var(--mono); font-size: 10.5px; font-weight: 500; padding: 3px 9px;
-  border-radius: 999px; border: 1px solid rgba(143, 199, 240, 0.22);
-  color: var(--sea-100); letter-spacing: 0.06em; white-space: nowrap;
+  border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.121);
+  color: var(--slate-200); letter-spacing: 0.06em; white-space: nowrap;
 }
 /* Flame is scarce on purpose — that scarcity is what makes it read as a cue.
    In Cue Studio it appears in exactly two places: the assists series on the
    leaderboard (the point that card is making), and a genuinely missed
    question. An engagement that ended without a sale is an ordinary outcome,
    not an alarm, so it stays sea. */
-.pill.engaged { color: var(--sea-100); border-color: rgba(143, 199, 240, 0.45); }
-.pill.available { color: var(--sea-200); }
-.pill.neutral { color: var(--sea-200); }
+.pill.engaged { color: var(--slate-200); border-color: rgba(255, 255, 255, 0.248); }
+.pill.available { color: var(--slate-300); }
+.pill.neutral { color: var(--slate-300); }
 .pill.warnpill { color: var(--flame-300); border-color: rgba(255, 176, 138, 0.5); }
 
-.empty { color: var(--sea-200); font-size: 12.5px; padding: 8px 0; line-height: 1.5; }
+.empty { color: var(--slate-300); font-size: 12.5px; padding: 8px 0; line-height: 1.5; }
 
 /* ---------- Sign in ---------- */
 .signin-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
 .signin { width: 100%; max-width: 390px; display: flex; flex-direction: column; gap: 15px; }
 .signin h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.022em; }
-.signin-sub { color: var(--sea-200); font-size: 13.5px; margin-top: -11px; }
+.signin-sub { color: var(--slate-300); font-size: 13.5px; margin-top: -11px; }
 .signin label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
-.signin label span { color: var(--sea-100); }
+.signin label span { color: var(--slate-200); }
 .signin input {
-  background: var(--sea-900); border: 1px solid rgba(143, 199, 240, 0.2); color: var(--paper);
+  background: var(--slate-800); border: 1px solid rgba(255, 255, 255, 0.11); color: var(--slate-100);
   border-radius: 8px; padding: 11px 12px; font: inherit; font-size: 14px;
 }
 .signin input:focus { outline: 2px solid var(--sea-400); outline-offset: 1px; border-color: transparent; }
 .signin button.primary {
-  background: var(--sea-600); border: 1px solid var(--sea-500); color: var(--paper);
+  background: var(--sea-600); border: 1px solid var(--sea-500); color: var(--slate-100);
   font: inherit; font-size: 14px; font-weight: 600; padding: 11px; border-radius: 8px;
   cursor: pointer; margin-top: 2px;
 }
@@ -197,11 +197,11 @@ body {
 
 /* ---------- Leaderboard ---------- */
 .legend { display: flex; gap: 14px; flex-wrap: wrap; }
-.legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--sea-100); }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--slate-200); }
 .legend-item i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 
 .lb-row {
-  background: rgba(4, 18, 46, 0.55); border: 1px solid rgba(143, 199, 240, 0.10);
+  background: rgba(4, 18, 46, 0.55); border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 8px; padding: 10px 12px;
   display: grid; grid-template-columns: 1fr; gap: 7px;
 }
@@ -210,13 +210,13 @@ body {
   font-family: var(--mono); font-size: 11px; color: var(--sea-300);
   min-width: 16px; text-align: right; font-weight: 500;
 }
-.lb-detail { font-family: var(--mono); font-size: 11px; color: var(--sea-200); letter-spacing: 0.02em; }
+.lb-detail { font-family: var(--mono); font-size: 11px; color: var(--slate-300); letter-spacing: 0.02em; }
 .scorebar-row { display: flex; align-items: center; gap: 10px; }
 .scorebar { flex: 1; display: flex; align-items: stretch; height: 9px; }
 .scoreseg { display: block; height: 100%; min-width: 2px; }
 .scorebar-total {
   font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums;
-  color: var(--paper); min-width: 46px; text-align: right;
+  color: var(--slate-100); min-width: 46px; text-align: right;
 }
 
 @media (max-width: 900px) {
@@ -226,8 +226,8 @@ body {
 }
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .tenant-pick {
-  background: var(--sea-700); border: 1px solid rgba(143, 199, 240, 0.22);
-  color: var(--paper); font: inherit; font-size: 13px; font-weight: 500;
+  background: var(--slate-600); border: 1px solid rgba(255, 255, 255, 0.121);
+  color: var(--slate-100); font: inherit; font-size: 13px; font-weight: 500;
   padding: 10px 14px; border-radius: 8px; cursor: pointer;
 }
 .tenant-pick:hover { background: var(--sea-600); }

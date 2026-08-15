@@ -11,7 +11,7 @@
  *   · flame is never body text on paper (2.7:1) — use flame-600 or flame-700. One flame per screen region.
  *   · hud green never touches a light ground. On dark it marks what the product itself says - the cue in the lens, a cue quoted back in Studio, and the HUD chrome of a nav. It is never a measurement: a passing check, a chart series or a bar is sea, because a wall of green ticks trains you to stop reading them.
  *   · 70 / 25 / 5 — paper, sea, flame.
- *   · slate-800 is the ground and slate-100 the type on it. Never put slate-300 or lighter on slate-700 or lighter - it falls under 4.5:1.
+ *   · slate-800 is the ground and slate-100 the type on it. slate-300 is the floor for text and is measured against slate-700, not slate-800 - a card is the worst ground in the app, and muted type lands on cards constantly.
  */
 
 
@@ -57,9 +57,9 @@
   --slate-800: #1A2029;                /* the product ground */
   --slate-700: #222833;                /* raised surface */
   --slate-600: #2F3540;                /* structural line */
-  --slate-300: #7E858D;                /* muted type, 4.6:1 on slate-800 */
-  --slate-200: #A5ABB3;                /* secondary type, 7.4:1 */
-  --slate-100: #F6F6F4;                /* body type on the ground, 14.8:1 */
+  --slate-300: #899199;                /* muted type, 4.6:1 on slate-700 (the worst case) */
+  --slate-200: #A5ABB3;                /* secondary type, 7.1:1 on slate-800 */
+  --slate-100: #F6F6F4;                /* body type on the ground, 15.1:1 */
 
   /* --- type --- */
   --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
