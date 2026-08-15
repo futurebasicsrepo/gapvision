@@ -37,11 +37,14 @@ Tap a beacon button: the virtual lens renders exactly what the G2 would show.
 
 ## TODO before pilot
 
-- Real gesture event mapping (press/double/swipe sys event codes) — verify on
-  device or in the official simulator; MockBridge shims them today.
-- Voice query: stream `audioEvent.audioPcm` (16 kHz PCM) to a server STT
-  endpoint, answer via `textContainerUpgrade`.
+- ~~Real gesture event mapping~~ — **done**. `gestures.ts` decodes the SDK's
+  protobuf enums (`OsEventTypeList`, `EventSourceType`); MockBridge emits the
+  same shapes so dev exercises the real decoder.
+- ~~Voice query~~ — **done and live**. Deepgram nova-2 for speech, Grok for
+  open-ended judgement; 505 ms measured through the production socket path.
 - Associate login / zone assignment (currently hardcoded "Denim Wall").
+- **Fonts are fetched from Google and are not in the manifest whitelist** — see
+  "Shipping to Even Hub" below. Decide before submitting.
 
 ## Shipping to Even Hub
 
@@ -53,9 +56,22 @@ backgrounds. Released is terminal: versions are immutable and the only way
 back is publishing a higher one.
 
 ```bash
-VITE_SERVER_URL=https://realtime-production-80f4.up.railway.app npm run build
-npx @evenrealities/evenhub-cli pack app.json dist -o cue-lens-0.1.0.ehpk
+VITE_SERVER_URL=https://realtime-production-80f4.up.railway.app npm run pack
 ```
+
+`npm run pack` sets `CUE_PACK=1`, which drops `public/` from the build. That
+directory holds `dev-utterance.pcm` — recorded speech the MockBridge streams so
+voice is demoable in a browser — and MockBridge only runs when there is no
+native bridge, which on a G2 is never. Packing it shipped 93 KB of dead weight
+in a 140 KB package; without it the package is 55 KB.
+
+**Unresolved before submission: the phone page fetches Instrument Sans, IBM Plex
+Mono and Doto from `fonts.googleapis.com` and `fonts.gstatic.com`, neither of
+which is in `app.json`'s network whitelist.** The manifest tells a reviewer
+"all requests go to cuesea's own service", and that is currently not true.
+Either self-host the faces, drop to system fonts on the phone page, or add the
+two hosts and give up the single-host claim. A retail floor on store wifi is
+also a poor place to depend on a CDN at launch.
 
 Then upload the `.ehpk` in the dev portal and attach `store/icon-*.png`.
 

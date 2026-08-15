@@ -9,3 +9,6 @@ __pycache__/
 .DS_Store
 nohup.out
 dist-preview/
+
+# Even Hub packages — built artifacts, never committed
+*.ehpk
