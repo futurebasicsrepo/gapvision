@@ -1,7 +1,7 @@
 /**
  * cuesea — brand tokens.  GENERATED — DO NOT EDIT.
  *
- * Source: packages/brand/tokens.json (v3.0, 2026-08-14)
+ * Source: packages/brand/tokens.json (v3.2, 2026-08-15)
  * Regenerate: npm run brand:sync
  *
  * The rules that are not negotiable, kept here so they're visible at the
@@ -9,8 +9,9 @@
  *
  *   · sea-300 and lighter never carry text on paper.
  *   · flame is never body text on paper (2.7:1) — use flame-600 or flame-700. One flame per screen region.
- *   · hud green never touches a light ground. Not a border, not an underline, not a chart series. It exists in the lens and nowhere else.
+ *   · hud green never touches a light ground. On dark it marks what the product itself says - the cue in the lens, a cue quoted back in Studio, and the HUD chrome of a nav. It is never a measurement: a passing check, a chart series or a bar is sea, because a wall of green ticks trains you to stop reading them.
  *   · 70 / 25 / 5 — paper, sea, flame.
+ *   · slate-800 is the ground and slate-100 the type on it. Never put slate-300 or lighter on slate-700 or lighter - it falls under 4.5:1.
  */
 
 
@@ -35,7 +36,7 @@
   --flame-300: #FFB08A;
   --flame-100: #FFE2D2;
 
-  /* --- hud: The cue inside the glass. Device-fixed, monochrome-safe on the G2's 576×288 display. */
+  /* --- hud: The product's own voice. Born in the glass; now also carries the interfaces that speak for it. */
   --hud-500: #4BFF9A;                  /* peak — the three cue lines */
   --hud-400: #35E585;                  /* body */
   --hud-300: #22B869;                  /* meta strip */
@@ -51,6 +52,15 @@
   --chalk  : #F2EEE7;                  /* secondary paper */
   --paper  : #FBF9F5;                  /* primary light ground */
 
+  /* --- slate: The product ground. Neutral, so sea can mean measurement instead of background. */
+  --slate-900: #141920;                /* gradient floor */
+  --slate-800: #1A2029;                /* the product ground */
+  --slate-700: #222833;                /* raised surface */
+  --slate-600: #2F3540;                /* structural line */
+  --slate-300: #7E858D;                /* muted type, 4.6:1 on slate-800 */
+  --slate-200: #A5ABB3;                /* secondary type, 7.4:1 */
+  --slate-100: #F6F6F4;                /* body type on the ground, 14.8:1 */
+
   /* --- type --- */
   --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --serif: "Instrument Serif", Georgia, serif;
@@ -62,16 +72,34 @@
 
 /**
  * Cue Studio / Cue Console
- * Sea-toned dense UI. Plex Mono for all identifiers, the depth ramp for every chart.
+ * Slate-grounded dense UI. Plex Mono for all identifiers, the depth ramp for every measurement, flame for the one thing per region that wants attention.
  */
 .studio, .console, .app-shell {
-  --ground: var(--sea-900);
-  --card: var(--sea-800);
-  --edge: rgba(143, 199, 240, 0.14);
-  --edge-strong: rgba(143, 199, 240, 0.26);
-  --text: var(--paper);
-  --text-secondary: var(--sea-100);
-  --text-muted: #7FA3C4;
+  --ground: var(--slate-800);
+  --card: var(--slate-700);
+  --edge: rgba(255, 255, 255, 0.075);
+  --edge-strong: rgba(255, 255, 255, 0.14);
+  --text: var(--slate-100);
+  --text-secondary: var(--slate-200);
+  --text-muted: var(--slate-300);
   --accent: var(--sea-300);
   --cue: var(--flame);
+  --lens: var(--hud-500);
+  --lens-dim: var(--hud-300);
+}
+
+/**
+ * The glass material
+ * Blur on exactly two surfaces - the topbar and the rail. Blur on a scrolling list is what janks a mid-range Android, so panels that scroll use --pane-solid.
+ */
+.studio, .console, .app-shell {
+  --pane-bg: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.022));
+  --pane-solid: linear-gradient(180deg, #252C37, #1C222B);
+  --pane-edge: rgba(255, 255, 255, 0.11);
+  --pane-lift: inset 0 1px 0 rgba(255,255,255,.24), 0 16px 48px rgba(0,0,0,.32);
+  --hair: rgba(255, 255, 255, 0.075);
+  --blur: blur(26px) saturate(180%);
+  --r-pane: 20px;
+  --r-card: 16px;
+  --r-ctl: 12px;
 }
