@@ -1,3 +1,5 @@
+<!-- GENERATED — do not edit. Source: FEATURES.md. Run `npm run docs:sync`. -->
+
 # Cue — features as of 15 August 2026
 
 Plugin `0.1.11`, `main` at `04f4f02`. Read off the code, not the roadmap:

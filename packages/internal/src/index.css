@@ -449,3 +449,41 @@ body {
   border-radius: 6px; padding: 4px 10px;
 }
 .dl-all:hover { border-color: var(--sea-300); color: var(--paper); }
+
+
+/* ---------- Rendered markdown ----------
+   The reference docs are long-form reading, not dashboard chrome, so this is
+   the one place in the console with a measure: prose caps out at 78ch because
+   a full-width line at this size is genuinely harder to read, and these are
+   documents somebody works through rather than glances at. */
+.doc-md { max-width: 78ch; }
+.doc-md > p { line-height: 1.6; margin: 0 0 14px; color: var(--sea-100); }
+.doc-md .doc-h { line-height: 1.25; color: var(--paper); }
+.doc-md .doc-h1 { font-size: 21px; margin: 4px 0 14px; }
+.doc-md .doc-h2 { font-size: 17px; margin: 30px 0 12px; }
+.doc-md .doc-h3 { font-size: 14.5px; margin: 22px 0 9px; }
+.doc-md .doc-h4 { font-size: 13px; margin: 18px 0 8px; color: var(--sea-100); }
+.doc-md .doc-list { margin: 0 0 14px; padding-left: 20px; }
+.doc-md .doc-list li { line-height: 1.55; margin-bottom: 6px; color: var(--sea-100); }
+.doc-md .doc-rule {
+  border: 0; border-top: 1px solid rgba(143, 199, 240, 0.12); margin: 26px 0;
+}
+/* A pull-quote, used in the docs for the thing somebody will otherwise learn
+   the expensive way. Flame on the edge, because that is the ramp's whole job. */
+.doc-md .doc-quote {
+  margin: 0 0 16px; padding: 10px 14px;
+  border-left: 2px solid var(--flame);
+  background: rgba(4, 18, 46, 0.5);
+  border-radius: 0 8px 8px 0;
+  line-height: 1.55; color: var(--sea-100);
+}
+.doc-md .doc-pre {
+  background: rgba(4, 18, 46, 0.65);
+  border: 1px solid rgba(143, 199, 240, 0.10);
+  border-radius: 8px; padding: 12px 14px; overflow-x: auto;
+  font-family: var(--mono); font-size: 12px; line-height: 1.5;
+  color: var(--sea-100); margin: 0 0 16px;
+}
+.doc-md .table-wrap { margin: 0 0 18px; }
+.doc-md a { color: var(--sea-300); }
+.doc-md strong { color: var(--paper); font-weight: 600; }
