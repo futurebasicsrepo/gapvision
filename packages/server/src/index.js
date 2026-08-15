@@ -419,6 +419,9 @@ async function finalizeVoice(socket, reason) {
     answer: result.answer || "",
     ok: result.ok !== false,
     ms: Date.now() - session.startedAt,
+    // Diagnostic, surfaced to the manager view so a level problem on real
+    // hardware can be read off without another plugin build.
+    levels: result.audio_levels || null,
     at: new Date().toISOString(),
   });
   if (state.voiceLog.length > 100) state.voiceLog.shift();

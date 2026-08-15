@@ -242,3 +242,63 @@ _PROVIDERS: dict[str, type[BaseSTT]] = {
 def get_stt() -> BaseSTT:
     choice = _env("CUE_STT", "GAPVISION_STT", default="mock").lower()
     return _PROVIDERS.get(choice, MockSTT)()
+
+
+def rms_envelope(pcm: bytes, sample_rate: int = SAMPLE_RATE,
+                 frame_ms: int = 100) -> list[float]:
+    """Per-frame RMS across an utterance, 0.0-1.0.
+
+    Diagnostic, not part of the answer path. The plugin closes the mic when its
+    own on-device level drops below a fixed floor; on real hardware that never
+    fired and every question ran to the 12 s cap. This is how we find out what
+    the levels actually are in a real room instead of guessing at a constant —
+    computed server-side from audio we already have, so it costs no round trip
+    through the Even Hub upload flow.
+    """
+    frame = max(1, int(sample_rate * frame_ms / 1000))
+    out: list[float] = []
+    total_frames = len(pcm) // 2 // frame
+    for f in range(total_frames):
+        base = f * frame * 2
+        acc = 0
+        # Every 4th sample is plenty to characterise a 100 ms frame.
+        for i in range(0, frame, 4):
+            (s,) = struct.unpack_from("<h", pcm, base + i * 2)
+            acc += abs(s)
+        out.append(round((acc / max(1, frame // 4)) / 32768.0, 5))
+    return out
+
+
+def describe_levels(pcm: bytes, sample_rate: int = SAMPLE_RATE) -> dict:
+    """One line an operator can act on: where is the noise floor, where is
+    speech, and would the plugin's silence threshold ever have been crossed?"""
+    env = rms_envelope(pcm, sample_rate)
+    if not env:
+        return {"frames": 0}
+    ordered = sorted(env)
+    pct = lambda p: ordered[min(len(ordered) - 1, int(len(ordered) * p))]  # noqa: E731
+    # The constant the plugin currently uses (voice.ts SILENCE_FLOOR).
+    floor = 0.012
+    below = [i for i, v in enumerate(env) if v < floor]
+    return {
+        "frames": len(env),
+        "seconds": round(len(env) * 0.1, 1),
+        "min": ordered[0],
+        "p10": pct(0.10),
+        "median": pct(0.50),
+        "p90": pct(0.90),
+        "max": ordered[-1],
+        "client_floor": floor,
+        "frames_below_floor": len(below),
+        # The plugin needs ~9 consecutive quiet frames (900 ms hangover).
+        "longest_quiet_run_ms": _longest_run(env, floor) * 100,
+        "tail_1s": env[-10:],
+    }
+
+
+def _longest_run(env: list[float], floor: float) -> int:
+    best = run = 0
+    for v in env:
+        run = run + 1 if v < floor else 0
+        best = max(best, run)
+    return best

@@ -24,7 +24,14 @@ from .personas import match_products
 from .routes_admin import router as admin_router
 from .routes_analytics import ingest as ingest_router, router as analytics_router
 from .routes_auth import router as auth_router
-from .stt import MAX_AUDIO_BYTES, SAMPLE_RATE, STTError, audio_duration_seconds, get_stt
+from .stt import (
+    MAX_AUDIO_BYTES,
+    SAMPLE_RATE,
+    STTError,
+    audio_duration_seconds,
+    describe_levels,
+    get_stt,
+)
 from .voice import answer_query
 
 app = FastAPI(title="Cue AI Service", version="0.5.0")
@@ -195,6 +202,7 @@ def voice_query(req: VoiceQueryRequest, request: Request, x_gapvision_key: str |
 
     transcript = (req.transcript or "").strip()
     duration = None
+    levels = None
     if not transcript:
         if not req.audio_b64:
             raise HTTPException(status_code=400, detail="Provide audio_b64 or transcript")
@@ -205,15 +213,21 @@ def voice_query(req: VoiceQueryRequest, request: Request, x_gapvision_key: str |
         if len(pcm) > MAX_AUDIO_BYTES:
             raise HTTPException(status_code=413, detail="Audio exceeds the per-utterance limit")
         duration = round(audio_duration_seconds(pcm, req.sample_rate), 2)
+        # Diagnostic only. The plugin decides when to close the mic from its own
+        # on-device level; on real hardware that never fired and every question
+        # ran to the 12 s cap. Measuring the audio we already have tells us what
+        # the real levels are without another Even Hub upload to find out.
+        levels = describe_levels(pcm, req.sample_rate)
+        print(f"[cue] audio levels {levels}", flush=True)
         try:
             transcript = stt.transcribe(pcm, req.sample_rate)
         except STTError as e:
-            return _voice_failure(str(e), stt.name, duration)
+            return _voice_failure(str(e), stt.name, duration, levels)
         except Exception as e:  # vendor client blew up in an unexpected way
-            return _voice_failure(f"Transcription failed: {e}", stt.name, duration)
+            return _voice_failure(f"Transcription failed: {e}", stt.name, duration, levels)
 
     if not transcript:
-        return _voice_failure("Didn't catch that — try again", stt.name, duration)
+        return _voice_failure("Didn't catch that — try again", stt.name, duration, levels)
 
     guest = crm.get_guest(req.guest_id) if req.guest_id else None
     result = answer_query(
@@ -225,6 +239,7 @@ def voice_query(req: VoiceQueryRequest, request: Request, x_gapvision_key: str |
     result.update({
         "ok": True,
         "tenant": (req.tenant or "gap").lower(),
+        "audio_levels": levels,
         "zone": req.zone,
         "stt_provider": stt.name,
         "audio_seconds": duration,
@@ -232,7 +247,8 @@ def voice_query(req: VoiceQueryRequest, request: Request, x_gapvision_key: str |
     return result
 
 
-def _voice_failure(message: str, stt_name: str, duration: float | None) -> dict:
+def _voice_failure(message: str, stt_name: str, duration: float | None,
+                   levels: dict | None = None) -> dict:
     return {
         "ok": False,
         "transcript": "",
@@ -242,4 +258,7 @@ def _voice_failure(message: str, stt_name: str, duration: float | None) -> dict:
         "matches": [],
         "stt_provider": stt_name,
         "audio_seconds": duration,
+        # A failure is the most useful sample there is: an utterance that
+        # transcribed to nothing is exactly the one whose levels we want.
+        "audio_levels": levels,
     }
