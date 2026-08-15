@@ -24,6 +24,9 @@ from .personas import match_products
 from .routes_admin import router as admin_router
 from .routes_analytics import ingest as ingest_router, router as analytics_router
 from .routes_auth import router as auth_router
+from .routes_guest import (guest as guest_router,
+                           ingest as guest_ingest_router,
+                           router as guest_analytics_router)
 from .stt import (
     MAX_AUDIO_BYTES,
     SAMPLE_RATE,
@@ -198,6 +201,11 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(analytics_router)
 app.include_router(ingest_router)
+# The guest surface: check-in config, the catalogue a request form
+# offers, and requests themselves. Same key, same boundary.
+app.include_router(guest_router)
+app.include_router(guest_ingest_router)
+app.include_router(guest_analytics_router)
 
 
 @app.get("/api/guests")

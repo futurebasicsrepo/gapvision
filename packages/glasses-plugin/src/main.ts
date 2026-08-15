@@ -108,6 +108,26 @@ type RadioMessage = {
   priority?: "urgent" | "normal"; at?: string;
 };
 let inbox: RadioMessage[] = [];
+
+/**
+ * A guest asking for something, from their own phone.
+ *
+ * The one thing on this display that a customer wrote. It takes the frame on
+ * the same rule urgent floor traffic does — a person standing in a fitting
+ * room in one shoe is the most time-sensitive thing in the building, and a
+ * request that waits for someone to next open a menu is a request that did
+ * not arrive.
+ *
+ * `line` is composed server-side with the size first, deliberately: it is the
+ * part that must survive truncation on a 21-character row. A clipped product
+ * name still names the jean. A clipped size is a wrong answer.
+ */
+type GuestRequest = {
+  request_id: string; zone?: string; line: string;
+  need?: string; product?: string; size?: string; note?: string; at?: string;
+};
+/** The request currently holding the frame, if any. */
+let onRequest: GuestRequest | null = null;
 /** The urgent message currently holding the frame, if any. Held rather than
  *  flagged so a press can act on the right one when two arrive together. */
 let onUrgent: RadioMessage | null = null;
@@ -371,6 +391,32 @@ async function showUrgent(m: RadioMessage) {
 }
 
 /**
+ * A guest request takes the whole frame.
+ *
+ * Same shape as an urgent message and for the same reason — no rail means no
+ * new containers, so the interrupt is free inside the host's budget. The zone
+ * leads, because the first thing an associate needs is where to walk.
+ */
+async function showRequest(r: GuestRequest) {
+  onRequest = r;
+  await renderCue({
+    lines: [
+      toDisplayText(r.zone || "FLOOR").toUpperCase(),
+      toDisplayText(r.line),
+      "PRESS TO TAKE IT",
+    ],
+    facts: [], meta: [], moduleCount: 0,
+  });
+}
+
+/** Back to whatever was underneath — the guest card if there is one, idle if
+ *  not. Used by every path that ends an interrupt. */
+async function restoreFrame() {
+  if (engaged && lastDisplay) await renderCue(cueOf(lastDisplay));
+  else await showIdle();
+}
+
+/**
  * The floor menu: what is waiting, then what you can say back.
  *
  * One screen for both, because they are the same gesture — someone who has
@@ -448,6 +494,7 @@ async function showIdle() {
   onRuler = false;
   menuIndex = -1;
   onUrgent = null;
+  onRequest = null;
   cards = [];
   cardIndex = 0;
   engaged = false;
@@ -537,11 +584,13 @@ function onRootPage(): boolean {
   let resumable = false;
   try { resumable = !!JSON.parse(sessionStorage.getItem(RESUME_KEY) || "null")?.guestId; }
   catch { resumable = false; }
-  // The floor menu, an urgent message and the ruler are all pages: a double
-  // press on any of them means "back", never "quit the app". Getting this
-  // wrong is how double-tap once closed Cue instead of stopping the mic.
+  // The floor menu, an urgent message, a guest request and the ruler are all
+  // pages: a double press on any of them means "back", never "quit the app".
+  // Getting this wrong is how double-tap once closed Cue instead of stopping
+  // the mic — and a request is the worst place to get it wrong, because the
+  // app would quit while a customer stands in a fitting room waiting.
   return !engaged && !resumable && cardIndex === 0 && voice.current === "idle"
-    && menuIndex < 0 && !onUrgent && !onRuler;
+    && menuIndex < 0 && !onUrgent && !onRequest && !onRuler;
 }
 
 /**
@@ -574,8 +623,18 @@ function onGesture(g: DecodedGesture) {
         socket?.emit("radio:send", { message: "ON MY WAY", tenant: TENANT });
         log(`radio → ON MY WAY (to ${onUrgent.from})`);
         onUrgent = null;
-        if (engaged && lastDisplay) void renderCue(cueOf(lastDisplay));
-        else void showIdle();
+        void restoreFrame();
+        return;
+      }
+      // Taking a guest request. The claim is settled server-side — the frame
+      // clears here on the optimistic assumption it worked, and `request:taken`
+      // is what actually decides. Waiting for the round trip would leave an
+      // associate pressing a button that appears to do nothing.
+      if (onRequest) {
+        socket?.emit("request:claim", { requestId: onRequest.request_id });
+        log(`request → taking ${onRequest.line}`);
+        onRequest = null;
+        void restoreFrame();
         return;
       }
       // In the floor menu, a press sends what the cursor is on.
@@ -764,6 +823,29 @@ async function main() {
   socket.on("glasses:display", (payload: DisplayPayload) => void onDisplay(payload));
   socket.on("voice:result", (result: VoiceResult) => void voice.onResult(result));
   socket.on("voice:state", (s: { state: string }) => log(`voice state ← ${s.state}`));
+  socket.on("request:new", (r: GuestRequest) => {
+    log(`request ← ${r.zone || "floor"}: ${r.line}`);
+    void showRequest(r);
+  });
+
+  socket.on("request:taken", ({ requestId, by }: { requestId?: string; by?: string }) => {
+    // Somebody else got there first — or the claim failed. Either way the
+    // frame must stop offering it, and only if it is the one being shown:
+    // clearing on any request would wipe a different one that just landed.
+    if (!onRequest || onRequest.request_id !== requestId) return;
+    log(`request ← taken${by ? ` by ${by}` : ""}`);
+    onRequest = null;
+    void restoreFrame();
+  });
+
+  socket.on("request:cleared", () => {
+    // The guest withdrew. Nobody should walk anywhere.
+    if (!onRequest) return;
+    log("request ← guest cancelled");
+    onRequest = null;
+    void restoreFrame();
+  });
+
   socket.on("radio:message", (m: RadioMessage) => {
     // Our own message, echoed back so the dashboard and the web harness get
     // the full log. Nobody needs to read on their own glass the thing they

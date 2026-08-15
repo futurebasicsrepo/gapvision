@@ -27,6 +27,7 @@ a shift:
     engagements.cue_lines               contains the guest's name, verbatim
     engagements.recommendations         what this specific person was offered
     assists.note                        free text, so assume the worst
+    guest_requests.guest_ref, .note     the pointer, and words a guest typed
 
     kept: intent, ok, latency_ms, audio_seconds, stt_provider, zone,
           started_at, ended_at, outcome, sale_cents, and every usage rollup
@@ -137,24 +138,50 @@ def sweep(tenant: dict) -> dict[str, Any]:
         (tid, days, BATCH),
     )
 
-    more = max(n_voice, n_eng, n_ast) >= BATCH
+    # A guest's own words, typed on their own phone. Treated like a voice
+    # transcript rather than like an analytics field — and the pointer goes
+    # with it. What stays is the ask itself (sku, size, need, zone, timings),
+    # because "which sizes do people want in fitting rooms and how long do they
+    # wait" is a question about a shop and not about a shopper.
+    n_req = db.execute(
+        """
+        WITH aged AS (
+            SELECT id FROM guest_requests
+             WHERE tenant_id = %s
+               AND created_at < now() - make_interval(days => %s)
+               -- `<> ''` and not `IS NOT NULL`: the column is NOT NULL, so the
+               -- redacted value is the empty string, and matching on NULL
+               -- would re-sweep every row forever and never report zero.
+               AND (guest_ref <> '' OR note IS NOT NULL)
+             LIMIT %s
+        )
+        UPDATE guest_requests r
+           SET guest_ref = '', note = NULL
+          FROM aged WHERE r.id = aged.id
+        """,
+        (tid, days, BATCH),
+    )
+
+    more = max(n_voice, n_eng, n_ast, n_req) >= BATCH
 
     db.execute(
         """
         INSERT INTO retention_runs
             (tenant_id, retention_days, voice_redacted,
-             engagements_redacted, assists_redacted, more_remaining)
-        VALUES (%s, %s, %s, %s, %s, %s)
+             engagements_redacted, assists_redacted, requests_redacted,
+             more_remaining)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         """,
-        (tid, days, n_voice, n_eng, n_ast, more),
+        (tid, days, n_voice, n_eng, n_ast, n_req, more),
     )
 
     result = {
         "tenant": tenant.get("slug"), "retention_days": days,
         "voice_redacted": n_voice, "engagements_redacted": n_eng,
-        "assists_redacted": n_ast, "more_remaining": more,
+        "assists_redacted": n_ast, "requests_redacted": n_req,
+        "more_remaining": more,
     }
-    if n_voice or n_eng or n_ast:
+    if n_voice or n_eng or n_ast or n_req:
         log.info("retention swept %s", result)
     return result
 

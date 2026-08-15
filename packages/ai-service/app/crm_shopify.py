@@ -140,7 +140,10 @@ query floorProducts($first: Int!) {
     edges { node {
       id title handle productType tags totalInventory
       priceRangeV2 { minVariantPrice { amount } }
-      variants(first: 10) { edges { node { title inventoryQuantity price } } }
+      variants(first: 25) { edges { node {
+        title inventoryQuantity price
+        selectedOptions { name value }
+      } } }
     } }
   }
 }"""
@@ -397,16 +400,58 @@ class ShopifyCRM:
                 if p.get("productType"):
                     tags.append(p["productType"].lower())
                 tags.extend(_keyword_tags(p["title"]))
-                items.append({
+                item = {
                     "sku": p["handle"],
                     "name": p["title"],
                     "price": float(p["priceRangeV2"]["minVariantPrice"]["amount"]),
                     "tags": sorted(set(tags)),
                     "location": "Floor",  # per-zone via product metafield later
                     "stock": stock,
-                })
+                }
+                sizes = _variant_sizes(p)
+                # Omitted rather than emitted empty. A product with no size
+                # option — a candle, a tote — genuinely has no size breakdown,
+                # and `{}` would read downstream as "we looked and there are
+                # none in stock", which is a different and wrong answer.
+                if sizes:
+                    item["sizes"] = sizes
+                items.append(item)
             return items
         return self._cached("inventory", fetch)
+
+
+def _variant_sizes(product: dict) -> dict[str, int]:
+    """Per-size unit counts, the shape `crm.INVENTORY` has always had.
+
+    The query was already retrieving variants and throwing them away, which is
+    why "do you have these in a 32" answered "unknown" against a live store
+    while answering exactly against the mock. The data was on the wire.
+
+    The size is taken from the option actually named "size" rather than from
+    the variant title: a two-option product titles its variants "32x30 / Indigo",
+    and treating that string as a size would put a colour in the answer and
+    split one size across every colourway.
+    """
+    out: dict[str, int] = {}
+    for edge in (product.get("variants") or {}).get("edges") or []:
+        v = edge.get("node") or {}
+        label = None
+        for opt in v.get("selectedOptions") or []:
+            if str(opt.get("name", "")).strip().lower() in ("size", "waist", "length"):
+                label = str(opt.get("value", "")).strip()
+                break
+        if label is None:
+            title = str(v.get("title") or "").strip()
+            # "Default Title" is Shopify's placeholder for a product with no
+            # options at all. It is not a size and must not become one.
+            if not title or title.lower() == "default title" or "/" in title:
+                continue
+            label = title
+        if not label:
+            continue
+        qty = v.get("inventoryQuantity")
+        out[label] = out.get(label, 0) + (int(qty) if qty is not None else 0)
+    return out
 
 
 # ---------------------------------------------------------------- connection test

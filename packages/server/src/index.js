@@ -366,6 +366,34 @@ io.on("connection", (socket) => {
     socket.emit("voice:state", { state: "idle" });
   });
 
+  /**
+   * An associate taking a request off the glass.
+   *
+   * The claim is conditioned server-side on the row still being open, so two
+   * people pressing at the same moment produce one claim and one honest
+   * "already taken" — rather than two associates walking to the same fitting
+   * room with the same jean, which is the exact failure a shared queue
+   * invents if nobody guards it.
+   */
+  socket.on("request:claim", async ({ requestId } = {}) => {
+    const t = socket.data.tenant || DEMO_TENANT;
+    if (!requestId) return;
+    const claimed = await ingest("request/claim", {
+      tenant: t, request_id: String(requestId),
+      associate_email: socket.data.email,
+    });
+    if (!claimed) {
+      // Either it was taken a second ago or the control plane is unreachable.
+      // Both mean the same thing to the person holding the glasses: stop
+      // looking at it. Telling only the claimer keeps everyone else's frame.
+      socket.emit("request:taken", { requestId, by: null, mine: false });
+      return;
+    }
+    const by = stateFor(t).associates.get(socket.id)?.name || "Someone";
+    io.to(associatesRoom(t)).emit("request:taken", { requestId, by });
+    broadcastDashboard(t);
+  });
+
   /** Digital radio: associate-to-associate comms, mirrored to dashboard. */
   socket.on("radio:send", ({ from, message, channel, priority } = {}) => {
     const t = socket.data.tenant || DEMO_TENANT;
@@ -584,20 +612,156 @@ app.post("/api/presence", async (req, res) => {
   const state = stateFor(t);
   const zoneName = zone || "Floor";
   let delivered = 0;
-  for (const [socketId, a] of state.associates) {
-    if (a.zone && a.zone !== zoneName) continue;
-    const sock = io.sockets.sockets.get(socketId);
-    if (!sock) continue;
-    // The same path a simulated beacon takes — context fetched, cue composed,
-    // card pushed to that associate's glasses.
-    await enterGuest(sock, { guestId: guestRef, zone: zoneName, tenant: t,
-                             source: src });
-    delivered += 1;
+
+  // An anonymous check-in is a real arrival and not a guest card. There is no
+  // CRM record behind `anon-…`, so fetching context would 404 and put "AI
+  // service unavailable" on somebody's glasses — an error message caused by a
+  // guest exercising the least identifying option we offer.
+  //
+  // They are still present, still in a zone, and can still ask for a size.
+  // That is the whole point: the cue needs to know who you are, a request
+  // needs to know where you are.
+  if (!String(guestRef).startsWith("anon-")) {
+    for (const [socketId, a] of state.associates) {
+      if (a.zone && a.zone !== zoneName) continue;
+      const sock = io.sockets.sockets.get(socketId);
+      if (!sock) continue;
+      // The same path a simulated beacon takes — context fetched, cue
+      // composed, card pushed to that associate's glasses.
+      await enterGuest(sock, { guestId: guestRef, zone: zoneName, tenant: t,
+                               source: src });
+      delivered += 1;
+    }
   }
 
   res.json({ ok: true, zone: zoneName, source: src,
-             consent: recorded.consent, delivered });
+             consent: recorded.consent, delivered,
+             identified: !String(guestRef).startsWith("anon-") });
 });
+
+/**
+ * Ask the AI service something on a guest's behalf.
+ *
+ * Same shape as `ingest`, different failure posture: ingest is fire and
+ * forget because an analytics write must never be felt by someone mid
+ * conversation. A guest page is a person waiting for an answer, so this one
+ * surfaces the upstream status instead of swallowing it.
+ */
+async function forGuest(path, { method = "GET", body } = {}) {
+  const res = await fetch(`${AI_SERVICE_URL}${path}`, {
+    method,
+    headers: aiHeaders(AI_API_KEY),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const text = await res.text();
+  return { status: res.status, body: text ? JSON.parse(text) : {} };
+}
+
+/**
+ * Where this retailer wants a check-in to happen.
+ *
+ * The plate prints one URL and this decides what the page does with it —
+ * because iOS only opens an app for a link on a domain that app's own
+ * association file claims, so a cuesea.ai URL cannot open Gap's app no matter
+ * what we put in it. Gap ships their route, we flip one tenant config field,
+ * and every plate already screwed to a wall starts opening the app. Nothing
+ * gets reprinted, which is the only reason a plate is allowed to be dumb.
+ */
+app.get("/api/checkin/config", async (req, res) => {
+  const t = String(req.query.t || req.query.tenant || DEMO_TENANT);
+  try {
+    const r = await forGuest(`/api/guest/config?tenant=${encodeURIComponent(t)}`);
+    res.status(r.status).json(r.body);
+  } catch (e) {
+    console.error(`[cue] checkin config failed: ${e.message}`);
+    res.status(502).json({ error: "upstream_unavailable" });
+  }
+});
+
+/**
+ * What a guest can ask for.
+ *
+ * Sizes, never unit counts — the AI service strips them and this route is the
+ * reason that matters: it is open, so anything it returns is public. "Three
+ * left in a 32" is a sentence about a retailer's business, and a page that
+ * answered it would be a live stock feed anyone could poll from the car park.
+ */
+app.get("/api/catalogue", async (req, res) => {
+  const t = String(req.query.t || req.query.tenant || DEMO_TENANT);
+  try {
+    const r = await forGuest(`/api/guest/catalogue?tenant=${encodeURIComponent(t)}`);
+    res.status(r.status).json(r.body);
+  } catch (e) {
+    console.error(`[cue] catalogue failed: ${e.message}`);
+    res.status(502).json({ error: "upstream_unavailable" });
+  }
+});
+
+/**
+ * A guest asking for something, and the moment this product earns its keep.
+ *
+ * Presence puts a name on the glass. This puts a size on it. An associate who
+ * knows someone is in fitting room three still has to walk over and ask; an
+ * associate who knows they want a 32 in the barrel jean arrives holding one.
+ *
+ * The AI service refuses a request with no live check-in, which is what keeps
+ * this open route honest: the only way to reach an associate's glasses is to
+ * have deliberately opened a door first.
+ */
+app.post("/api/request", async (req, res) => {
+  const { tenant, guest_ref: guestRef, zone, need, sku, product, size, note,
+          surface } = req.body || {};
+  const t = String(tenant || DEMO_TENANT);
+  if (!guestRef) return res.status(400).json({ error: "guest_ref is required" });
+
+  let opened;
+  try {
+    opened = await forGuest("/api/ingest/request", {
+      method: "POST",
+      body: { tenant: t, guest_ref: guestRef, zone, need: need || "other",
+              sku, product, size, note,
+              surface: surface === "app" ? "app" : "web" },
+    });
+  } catch (e) {
+    console.error(`[cue] request failed: ${e.message}`);
+    return res.status(502).json({ error: "upstream_unavailable" });
+  }
+  if (opened.status >= 400) {
+    return res.status(opened.status).json(opened.body);
+  }
+
+  const delivered = pushRequest(t, opened.body);
+  res.status(201).json({ ...opened.body, delivered });
+});
+
+/**
+ * Put a request on the glasses of whoever covers that zone.
+ *
+ * An associate with no zone set gets everything — on a floor with two people
+ * that is correct, and a request nobody sees is the failure that matters
+ * here, not a request one extra person sees.
+ */
+function pushRequest(tenant, request) {
+  const state = stateFor(tenant);
+  let delivered = 0;
+  for (const [socketId, a] of state.associates) {
+    if (a.zone && request.zone && a.zone !== request.zone) continue;
+    const sock = io.sockets.sockets.get(socketId);
+    if (!sock) continue;
+    sock.emit("request:new", {
+      request_id: request.request_id,
+      zone: request.zone,
+      line: request.line,
+      need: request.need,
+      product: request.product,
+      size: request.size,
+      note: request.note,
+      at: request.created_at,
+    });
+    delivered += 1;
+  }
+  return delivered;
+}
 
 /**
  * The way out, and it has to be as easy as the way in.
@@ -617,11 +781,17 @@ app.post("/api/presence/revoke", async (req, res) => {
   const { tenant, guest_ref: guestRef } = req.body || {};
   if (!guestRef) return res.status(400).json({ error: "guest_ref is required" });
 
-  const closed = await ingest("presence/revoke", {
-    tenant: String(tenant || DEMO_TENANT), guest_ref: guestRef,
-  });
+  const t = String(tenant || DEMO_TENANT);
+  const closed = await ingest("presence/revoke", { tenant: t, guest_ref: guestRef });
   if (!closed) return res.status(502).json({ error: "Could not revoke" });
-  res.json({ ok: true, closed: closed.closed });
+
+  // And everything they were waiting for. A guest who taps Stop has stopped
+  // waiting, and leaving their request open sends somebody to a fitting room
+  // with a jean for a person who has left.
+  const dropped = await ingest("request/cancel", { tenant: t, guest_ref: guestRef });
+  if (dropped?.cancelled) io.to(associatesRoom(t)).emit("request:cleared", {});
+
+  res.json({ ok: true, closed: closed.closed, cancelled: dropped?.cancelled || 0 });
 });
 
 app.get("/health", (_req, res) => {

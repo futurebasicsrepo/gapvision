@@ -155,3 +155,87 @@ Leading (pilot weeks 1–4): opt-in rate among pilot-store loyalty visitors (tar
 ## 13. Timeline & Phasing
 
 Assuming pilot target Q4 2026: **Sprint 1** — consent screen + toggle + token minting alignment; **Sprint 2** — presence SDK (geofence + ranging) behind flag, integration tests against GapVision staging; **Sprint 3** — revocation webhook, audit logging, privacy review, beacon install + calibration at pilot store. Total app-team ask: **~3 sprints of one iOS engineer plus part-time backend support** — deliberately small; every heavy component (AI, realtime, glasses client) lives on the GapVision side.
+
+---
+
+## 14. Addendum, 15 August 2026 — the plate path, and what it removes from §6
+
+Everything in §6 is still the right long-term shape. It is not the cheapest
+way to start, and since v0.1 was written the cheap way became real: presence,
+front doors, request capture and the guest page are built and running, and the
+zone problem is solved by an object rather than by software.
+
+**An acrylic plate is a beacon that costs eleven dollars and never needs a
+battery.** Its URL names where it is mounted, so the zone is not inferred from
+signal strength — it is printed on the thing. Move the plate and the zone moves
+with it. Nothing needs calibrating, nothing needs fixture power, and the store
+ops open question in §12 stops existing.
+
+### What Gap actually has to build, in this version
+
+One route and one screen.
+
+1. **A universal link on gap.com.** `https://www.gap.com/here?t=gap&z=…&src=…`,
+   with `/here` added to Gap's existing `apple-app-site-association` paths.
+   This is the part only Gap can do: iOS opens an app for a link **only** when
+   the domain's own association file claims it, so a cuesea.ai URL cannot open
+   the Gap app no matter what either of us puts in it. That constraint is the
+   reason this section exists.
+2. **A screen in the app** that reads `z` (which fitting room) and `src` (tap
+   or scan), shows the existing loyalty consent if the member has not opted in,
+   and offers: what do you need, which item, which size, anything else.
+3. **One POST**, server-to-server from Gap's gateway or direct from the app
+   through Gap's own backend:
+
+   ```
+   POST /api/request
+   { "tenant": "gap", "guest_ref": "<Gap's own customer id>",
+     "zone": "fitting-room-3", "need": "size",
+     "sku": "…", "product": "…", "size": "32x30",
+     "note": "…", "surface": "app" }
+   ```
+
+   Preceded by the same `POST /api/presence` the plate page already calls, with
+   `source: "app-checkin"`.
+
+No SDK. No BLE. No geofence. No background location permission — which is also
+the permission most likely to cost an app-store review conversation and the one
+most likely to be refused by the member.
+
+### What ships before Gap ships anything
+
+The plates work today, pointed at our page. A guest who taps and does not have
+the app gets a page that checks them in and takes their request, and the
+associate's glasses show *"32x30 · High Rise Barrel Jeans"* with the fitting
+room to walk to. **The pilot is not blocked on Gap's release train**, and the
+plates do not get reprinted when Gap does ship: the retailer's mode is a config
+field, and flipping it makes every plate already screwed to a wall start
+opening the app.
+
+### On identity, which §8 assumed
+
+v0.1 assumed presence and identity are the same event. Building it showed they
+are not, and the distinction is worth carrying into the pilot design:
+
+> The **cue** needs to know who you are. A **request** only needs to know where
+> you are.
+
+"Fitting room 3 wants a 32 in the barrel jean" is completely actionable and
+names nobody. So the web path takes requests from an anonymous, per-visit
+reference that points at no customer record, and identity buys the guest
+something extra — their sizes, their saved items, the greeting — through Gap's
+own account, in Gap's own app, which is where it belonged anyway.
+
+That inverts the §3 non-goal *"no support for non-loyalty guests"*: a
+non-loyalty guest is not invisible, they are simply anonymous, and they can
+still be handed a pair of jeans. It is a better answer for the store and a
+smaller ask for the app team.
+
+### Effort delta
+
+| | v0.1 (§6) | Plate path |
+|---|---|---|
+| Gap app | Presence SDK, geofence, BLE ranging, consent screen, revocation webhook | One universal-link route, one screen, one POST |
+| Store | Beacon clusters per zone, mounting, power, calibration | Acrylic plates, one tag each, no power |
+| Blocked on | Gap release train | Nothing |
+| Estimated app-team ask | ~3 sprints | Well under one |

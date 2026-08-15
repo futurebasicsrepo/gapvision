@@ -1,0 +1,149 @@
+/**
+ * The guest page.
+ *
+ * Paper, not sea. The brand splits on exactly this line — the product is
+ * sea-toned because an associate stares at it all shift; anything a customer
+ * touches is paper, because it belongs to the retailer's world and not to
+ * ours. A dark dense back-office panel appearing on somebody's phone in a
+ * fitting room would read as somebody else's software, which is precisely
+ * what it is.
+ *
+ * Everything here is sized for one thumb, one hand, and a phone held at arm's
+ * length in bad changing-room light: 17px body minimum, 48px touch targets,
+ * and one flame action per screen.
+ */
+
+.here-shell {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--ink-900);
+  display: flex;
+  justify-content: center;
+  padding: 24px 18px 48px;
+}
+
+.here-card {
+  width: 100%;
+  max-width: 480px;
+}
+
+.here-brand { margin-bottom: 28px; opacity: 0.85; }
+
+.here-h1 {
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+
+/* Where they are. Second only to the headline, because it is also how a
+   mis-mounted plate gets caught — a guest who reads "Fitting room 4" while
+   standing in three tells an associate, and nothing else in the system would
+   ever have noticed. */
+.here-lead {
+  font-size: 18px;
+  color: var(--flame-700);
+  font-weight: 600;
+  margin-bottom: 18px;
+}
+
+.here-quiet {
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink-500);
+  margin-bottom: 18px;
+}
+
+.here-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+  margin: 26px 0 10px;
+}
+
+.here-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.here-chip {
+  font: inherit;
+  font-size: 16px;
+  min-height: 48px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1.5px solid var(--ink-100);
+  background: #fff;
+  color: var(--ink-900);
+  cursor: pointer;
+}
+.here-chip.on {
+  border-color: var(--flame-600);
+  background: var(--flame-100);
+  font-weight: 600;
+}
+/* Out of stock as far as we know — dimmed, never removed. */
+.here-chip.thin { color: var(--ink-400); border-style: dashed; }
+
+.here-input {
+  width: 100%;
+  font: inherit;
+  font-size: 17px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--ink-100);
+  background: #fff;
+  color: var(--ink-900);
+}
+.here-input:focus { outline: 2px solid var(--sea-400); outline-offset: 1px; }
+
+/* One flame region per screen, and this is it. */
+.here-btn {
+  display: block;
+  width: 100%;
+  margin-top: 28px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  min-height: 54px;
+  padding: 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--flame-600);
+  color: var(--paper);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+.here-btn:disabled { opacity: 0.55; }
+
+.here-linkish {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  font: inherit;
+  font-size: 16px;
+  padding: 12px;
+  min-height: 48px;
+  border: 0;
+  background: transparent;
+  color: var(--sea-500);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.here-fine {
+  margin-top: 28px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-400);
+}
+
+.here-error {
+  margin-top: 18px;
+  font-size: 15px;
+  color: var(--flame-700);
+}

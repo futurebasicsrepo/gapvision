@@ -43,7 +43,7 @@ def check(name: str, fn) -> None:
 
 
 def render(zone="Fitting room 3", tenant="gap", store="Gap", size="a6",
-           base="https://cuesea.ai/here", dpi=300):
+           base="https://app.cuesea.ai/here", dpi=300):
     W, H = bp.SIZES[size]
     slug = bp.slugify(zone)
     def url(src):

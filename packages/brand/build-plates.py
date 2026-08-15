@@ -485,6 +485,51 @@ def known_sources() -> set[str] | None:
         return None
 
 
+def check_base(url: str) -> None:
+    """Ask the URL whether it exists, before it goes on acrylic.
+
+    The single most expensive failure this generator can produce is a pallet
+    of plates pointing at a page that 404s or — worse — at a site sitting
+    behind a password gate, which is what `cuesea.ai` did when this check was
+    written. Both look identical in the artwork and neither is discoverable
+    until a guest is standing in a fitting room with their phone out.
+
+    A network failure is a warning, not a refusal: somebody generating plates
+    on a plane should not be stopped, they should be told.
+    """
+    import urllib.error
+    import urllib.request
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            raise _Redirected(newurl)
+
+    opener = urllib.request.build_opener(_NoRedirect)
+    try:
+        with opener.open(url, timeout=8) as r:
+            if r.status != 200:
+                sys.exit(f"{url} answered {r.status}. Fix the route before printing.")
+    except _Redirected as r:
+        target = str(r)
+        if any(w in target.lower() for w in ("password", "login", "signin", "auth")):
+            sys.exit(
+                f"{url} redirects to {target}.\n"
+                "That is a gate, and a plate pointing at one is a plate that "
+                "does nothing. Publish the route without protection, or point "
+                "--base somewhere that answers.")
+        print(f"  ! {url} redirects to {target} — check that is deliberate",
+              file=sys.stderr)
+    except urllib.error.HTTPError as e:
+        sys.exit(f"{url} answered {e.code}. Fix the route before printing.")
+    except Exception as e:                          # offline, DNS, timeout
+        print(f"  ! could not reach {url} ({e.__class__.__name__}); "
+              f"printing unverified", file=sys.stderr)
+
+
+class _Redirected(Exception):
+    pass
+
+
 def slugify(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
 
@@ -496,8 +541,10 @@ def main() -> None:
                     help="what the plate calls the shop (default: the tenant, titled)")
     ap.add_argument("--zone", action="append", default=[], required=True,
                     help="repeatable; the human label, e.g. 'Fitting room 3'")
-    ap.add_argument("--base", default="https://cuesea.ai/here",
+    ap.add_argument("--base", default="https://app.cuesea.ai/here",
                     help="the check-in page the plate points at")
+    ap.add_argument("--skip-url-check", action="store_true",
+                    help="print without asking the URL whether it answers")
     ap.add_argument("--size", choices=sorted(SIZES), default="a6")
     ap.add_argument("--out", default=str(HERE / "out/plates"))
     args = ap.parse_args()
@@ -510,6 +557,10 @@ def main() -> None:
         if known is not None and src not in known:
             sys.exit(f"'{src}' is not a door the service knows. Add it to "
                      f"app/presence.py SOURCES before printing anything.")
+
+    if not args.skip_url_check:
+        check_base(f"{args.base}?" + urlencode(
+            {"t": args.tenant, "z": "plate-check", "src": "qr-plate"}))
 
     W, H = SIZES[args.size]
     store = args.store or args.tenant.title()

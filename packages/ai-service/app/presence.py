@@ -75,6 +75,25 @@ SOURCES: dict[str, dict[str, str]] = {
 }
 
 
+#: A guest who checked in without saying who they are.
+#:
+#: I argued against this in `docs/check-in-page.md` and was half wrong. It is
+#: right for the *cue*: an anonymous arrival composes an empty card and an
+#: associate learns nothing, so identity has to come from the retailer's own
+#: account. It is wrong for a *request*. "Fitting room 3 wants a 32 in the
+#: barrel jean" is completely actionable and names nobody — the zone is the
+#: address, and asking someone to sign in before they can ask for a size is
+#: friction charged for our convenience rather than theirs.
+#:
+#: So an anonymous reference is a pointer to nothing, minted by the guest's own
+#: browser, good for one visit. It must never be handed to the CRM.
+ANON_PREFIX = "anon-"
+
+
+def is_anonymous(guest_ref: str) -> bool:
+    return str(guest_ref or "").startswith(ANON_PREFIX)
+
+
 def source_info(source: str) -> dict[str, str]:
     info = SOURCES.get(source)
     if info is None:
