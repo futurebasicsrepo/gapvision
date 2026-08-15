@@ -225,6 +225,13 @@ def _send_https(c: dict[str, str | None], to: str, subject: str,
     req = urllib.request.Request(_API, data=payload, method="POST", headers={
         "Authorization": f"Bearer {c['api_key']}",
         "Content-Type": "application/json",
+        # Not optional. urllib introduces itself as "Python-urllib/3.x", and
+        # the provider's edge bans that signature outright — every request
+        # comes back 403 with a plain-text "error code: 1010" body, whatever
+        # the key is. It reads exactly like a rejected credential and sends you
+        # to rotate a key that was never wrong. With any real User-Agent the
+        # API answers properly: 401 and a JSON reason for a bad key.
+        "User-Agent": "cue-mailer/1.0 (+https://cuesea.ai)",
     })
     try:
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as res:
@@ -275,18 +282,17 @@ def send_test(*, to: str, name: str | None) -> dict[str, Any]:
 # because "authentication failed" sends somebody to re-type a password that was
 # never the problem.
 _HINTS = {
-    # Verified against the live API: an invalid key comes back 403, not 401,
-    # and the body is plain text from the edge rather than JSON. So these two
-    # say the same thing — sending somebody to look at domain scoping when the
-    # key is simply wrong would be worse than saying both out loud.
     "HTTP401":
-        "The provider rejected the API key. Check RESEND_API_KEY for a "
-        "truncated paste — the key begins `re_` — and that it has not been "
-        "revoked.",
+        "The provider rejected the API key. Check it for a truncated paste — "
+        "the key begins `re_` — and that it has not been revoked.",
+    # A 403 from this API is not an authorisation problem, it is the edge. The
+    # only way we have ever produced one is by sending a banned User-Agent,
+    # which the client now sets. If this appears again the request is being
+    # blocked before it reaches the API, so the key is the wrong thing to look
+    # at — the raw body is reported alongside for exactly that reason.
     "HTTP403":
-        "The provider rejected the API key, or the key is not allowed to send "
-        "from this address. Check RESEND_API_KEY first; then, if the key was "
-        "scoped to one domain, that CUE_MAIL_FROM is on that domain.",
+        "Blocked before reaching the provider's API — this is their edge, not "
+        "your key. Check the raw reason below; a bad key answers 401, not 403.",
     "HTTP422":
         "The provider refused the message. Nearly always the sending domain: "
         "the domain in CUE_MAIL_FROM has to be verified with the provider, and "

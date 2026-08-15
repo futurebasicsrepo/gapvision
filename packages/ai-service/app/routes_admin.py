@@ -536,10 +536,14 @@ def mail_test(authorization: str | None = BearerHeader):
                       f"changing anything — the provider took it.",
         }
 
+    # The provider's own words, when there are any. A hint is a guess about the
+    # likely cause; the raw reason is what actually came back, and when the two
+    # disagree the raw one is right.
+    said = (res.get("message") or "").strip()
     return {
         "ok": False, "provider": res.get("provider"), "to": to,
         "error": res.get("error"),
-        "detail": mailer.hint(res.get("error")),
+        "detail": mailer.hint(res.get("error")) + (f" Provider said: {said}" if said else ""),
     }
 
 
