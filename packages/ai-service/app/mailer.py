@@ -1,9 +1,9 @@
 """Sending mail, and being honest when we can't.
 
-    CUE_SMTP_HOST      smtp.gmail.com
+    CUE_SMTP_HOST      smtp.resend.com
     CUE_SMTP_PORT      587
-    CUE_SMTP_USER      kr@cuesea.ai
-    CUE_SMTP_PASSWORD  a Google app password, not the account password
+    CUE_SMTP_USER      resend
+    CUE_SMTP_PASSWORD  the provider's API key
     CUE_MAIL_FROM      "Cue <kr@cuesea.ai>"
 
 Unset any of those and the provider is `console`: the message is printed to
@@ -23,11 +23,23 @@ result, failures are logged with the reason, and `status()` feeds a Health
 check. A reset flow that quietly stopped working would otherwise look exactly
 like a reset flow nobody used.
 
-On Gmail specifically: `smtp.gmail.com:587` with an app password works today
-and is fine at pilot volume. Two things to know before it matters — Workspace
-caps daily recipients, and transactional mail from a personal mailbox has
-worse deliverability than a dedicated sender. Neither is a reason to build
-something bigger now; both are reasons this file has exactly one seam.
+Why a provider and not Gmail
+---------------------------
+This pointed at `smtp.gmail.com` first, which is the obvious thing and does not
+work: **Google does not offer app passwords to Workspace accounts**, and
+`kr@cuesea.ai` is one. The app-passwords page renders "the setting you are
+looking for is not available for your account" and there is no admin toggle to
+undo that — Google retired less-secure-app access through 2024–25 and points at
+OAuth 2.0 instead. Reaching Gmail properly now means a service account with
+domain-wide delegation, which is a credential, a GCP project and a code path,
+all to send three-line transactional messages.
+
+So: an SMTP provider. It is one variable, it does not tie the product's ability
+to invite people to one person's mailbox, and transactional mail from a
+dedicated sender has better deliverability than from a human inbox anyway.
+
+Any of them work — the seam is `CUE_SMTP_*` and nothing above this line knows
+which one is behind it.
 """
 from __future__ import annotations
 
@@ -140,6 +152,64 @@ def send_invite(*, to: str, name: str | None, role: str, token: str,
         f"can't be used until a password is set.\n\n"
         f"— Cue\n",
     )
+
+
+def send_test(*, to: str, name: str | None) -> dict[str, Any]:
+    who = (name or "").split(" ")[0] or "there"
+    return send(
+        to,
+        "Cue can send email",
+        f"Hi {who},\n\n"
+        f"Somebody pressed Send a test in Cue Console and this arrived, which "
+        f"means outbound email works. Invitations and password resets will now "
+        f"reach people instead of being written to the service log.\n\n"
+        f"Nothing about your account changed.\n\n"
+        f"— Cue\n",
+    )
+
+
+# Named failures. The lesson from `probe_connection`: when a credential does
+# not work, the operator needs to know *which* of the plausible things is
+# wrong. SMTP has about six ways to fail and they need six different sentences,
+# because "authentication failed" sends somebody to re-type a password that was
+# never the problem.
+_HINTS = {
+    "SMTPAuthenticationError":
+        "The server rejected the username or password. With an SMTP provider "
+        "the username is usually a fixed literal and the password is the API "
+        "key — check CUE_SMTP_USER before assuming the key is wrong. Against "
+        "Gmail this means an account password where an app password is needed, "
+        "and Workspace accounts cannot create app passwords at all.",
+    "SMTPSenderRefused":
+        "The server accepted the login but refused the From address. With a "
+        "provider this is almost always an unverified sending domain — "
+        "CUE_MAIL_FROM is on a domain whose DNS records have not been added or "
+        "have not propagated yet.",
+    "SMTPRecipientsRefused":
+        "The server refused the recipient address.",
+    "SMTPNotSupportedError":
+        "The server does not offer STARTTLS on this port. Gmail wants 587.",
+    "SMTPConnectError":
+        "Could not open a connection. Check the host and port.",
+    "SMTPServerDisconnected":
+        "The server hung up mid-conversation. Usually a wrong port — 465 is "
+        "implicit TLS and this client speaks STARTTLS, which is 587.",
+    "gaierror":
+        "The hostname did not resolve. Check CUE_SMTP_HOST for a typo.",
+    "timeout":
+        "The connection timed out. The host may be unreachable from this "
+        "deployment, or blocked outbound.",
+    "TimeoutError":
+        "The connection timed out. The host may be unreachable from this "
+        "deployment, or blocked outbound.",
+    "SSLError":
+        "TLS negotiation failed.",
+}
+
+
+def hint(error: str | None) -> str:
+    return _HINTS.get(error or "", "The send failed. The service log carries "
+                                   "the exact exception.")
 
 
 def send_reset(*, to: str, name: str | None, role: str, token: str,

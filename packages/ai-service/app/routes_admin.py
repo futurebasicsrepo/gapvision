@@ -496,6 +496,50 @@ class DeviceCreate(BaseModel):
     tenant: str | None = None
 
 
+@router.post("/mail/test")
+def mail_test(authorization: str | None = BearerHeader):
+    """Send one real message, because "configured" is not "working".
+
+    `mailer.status()` can only report that three environment variables are set.
+    A wrong app password looks identical to a right one until something is
+    actually sent — which is exactly how a deployment ends up reporting green
+    while every invitation fails silently, and nobody finds out until a new
+    colleague says they never got the link.
+
+    Sends to the caller's own address and nowhere else. An endpoint that mails
+    an arbitrary recipient is an open relay that happens to have a login on it,
+    and this one is reachable by anybody holding a Cue staff token.
+    """
+    me = current_user(authorization)
+    require(me, "cue_admin")
+
+    st = mailer.status()
+    to = me.get("email")
+
+    if not st["configured"]:
+        return {
+            "ok": False, "provider": st["provider"], "to": to,
+            "detail": "Not configured, so nothing was attempted. Set "
+                      "CUE_SMTP_HOST, CUE_SMTP_USER and CUE_SMTP_PASSWORD on "
+                      "the service, then try again.",
+        }
+
+    res = mailer.send_test(to=to, name=me.get("name"))
+    if res.get("delivered"):
+        return {
+            "ok": True, "provider": "smtp", "to": to,
+            "detail": f"Accepted by {st['host']} for delivery to {to}, sent as "
+                      f"{st['from']}. If it hasn't arrived in a minute look in "
+                      f"spam before changing anything — the server took it.",
+        }
+
+    return {
+        "ok": False, "provider": res.get("provider"), "to": to,
+        "error": res.get("error"),
+        "detail": mailer.hint(res.get("error")),
+    }
+
+
 class DeviceUpdate(BaseModel):
     label: str | None = None
     user_id: str | None = None

@@ -243,11 +243,12 @@ Three things worth knowing before you invite somebody:
   `cue_admin` requires the caller to already be `cue_admin` and forces the
   tenant to null. A retailer's `client_admin` cannot reach it by guessing a
   payload — the check is in the API, not in the interface.
-- **Until `CUE_SMTP_*` is configured, invitations are written to the service
-  log rather than sent.** The Health panel says so rather than showing green.
-  The account exists and the link is valid; somebody has to pull it out of the
-  Railway log and hand it over. Check Health before you tell a new colleague to
-  watch their inbox.
+- **Check Health before you tell a new colleague to watch their inbox.** If the
+  Outbound email row is not green, invitations are being written to the service
+  log instead of sent — the account exists and the link is valid, but somebody
+  has to pull it out of the Railway log and hand it over. Green means
+  configured, which is not the same as working: press **Send a test** under the
+  checks and read what actually arrives.
 
 Same panel: change a colleague's role, disable an account, or end their
 sessions. **Disable, don't delete** — disabling is reversible and keeps the
