@@ -12,7 +12,7 @@ thing that knows what actually happened on the floor.
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import analytics, db, identity
+from . import analytics, db, identity, presence
 from .auth import KeyHeader, guard
 from .identity import BearerHeader, current_user, require, scope_tenant
 
@@ -126,6 +126,20 @@ class VoiceRecord(BaseModel):
     answer: str | None = None
 
 
+class PresenceIn(BaseModel):
+    tenant: str
+    guest_ref: str
+    zone: str | None = None
+    #: Which front door. Consent is derived from this and never accepted from
+    #: the caller — see presence.py.
+    source: str = "demo"
+
+
+class PresenceRevoke(BaseModel):
+    tenant: str
+    guest_ref: str
+
+
 class AssistRecord(BaseModel):
     tenant: str
     helper_email: str | None = None
@@ -133,6 +147,48 @@ class AssistRecord(BaseModel):
     note: str | None = None
     device_serial: str | None = None
     device_model: str | None = None
+
+
+@ingest.post("/presence", status_code=201)
+def ingest_presence(req: PresenceIn, request: Request,
+                    x_gapvision_key: str | None = KeyHeader):
+    """A guest arrived, through one of the front doors.
+
+    Sits behind the service key like every other ingest route, which means the
+    caller is the realtime server or a retailer's gateway — never a browser. A
+    guest's own phone reaches this by loading a page that talks to the realtime
+    server, exactly as the dashboards do. Anything else would put the key in a
+    browser, and the whole trust boundary is that it never goes there.
+    """
+    guard(request, None, x_gapvision_key)
+    t = _ingest_tenant(req.tenant)
+    return presence.record(t, guest_ref=req.guest_ref, zone=req.zone,
+                           source=req.source)
+
+
+@ingest.post("/presence/revoke")
+def ingest_presence_revoke(req: PresenceRevoke, request: Request,
+                           x_gapvision_key: str | None = KeyHeader):
+    """A guest withdrawing mid-visit. Closes every live check-in for them."""
+    guard(request, None, x_gapvision_key)
+    t = _ingest_tenant(req.tenant)
+    return {"ok": True, "closed": presence.revoke(t, guest_ref=req.guest_ref)}
+
+
+@router.get("/doors")
+def get_doors(days: int = 30, tenant: str | None = None,
+              authorization: str | None = BearerHeader):
+    """Which front doors people actually use.
+
+    Counts, never a list of who came through which. The point is to decide
+    where the next hundred plates go.
+    """
+    me = current_user(authorization)
+    require(me, "manager")
+    t = _tenant_for(me, tenant)
+    return {"tenant": t["slug"], "window_days": _clamp(days, 1, 365),
+            "doors": presence.door_counts(t["id"], _clamp(days, 1, 365)),
+            "known": presence.SOURCES}
 
 
 def _ingest_tenant(slug: str) -> dict:

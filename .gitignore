@@ -20,3 +20,8 @@ dist-preview/
 
 # esbuild output for the layout unit test
 packages/glasses-plugin/dist-test/
+
+# Generated plate artwork. Per-tenant, per-zone, and regenerated in a second
+# from build-plates.py — committing print files means the repo carries a
+# snapshot of a store layout that changes every time a fitting room is renamed.
+packages/brand/out/

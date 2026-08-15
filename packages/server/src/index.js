@@ -141,6 +141,105 @@ async function ingest(path, body) {
 }
 
 // ---- Socket wiring ----------------------------------------------------------
+/**
+ * A guest has arrived, and this associate is the one who should see them.
+ *
+ * Extracted from the socket handler so the HTTP front door can call it too.
+ * The alternative was for `/api/presence` to emit `beacon:guest-enter` at the
+ * client — which does nothing, because the plugin never listens for it; it
+ * listens for `glasses:display`. The event name looked right and the guest
+ * would simply never have appeared.
+ */
+async function enterGuest(socket, { guestId, zone, tenant, source } = {}) {
+  const t = bindTenant(socket, tenant);
+  const state = stateFor(t);
+  // Every arrival is a front door, including this one. Recorded before the
+  // context call so a guest who checked in still shows as present even if
+  // the CRM is having a bad minute.
+  void ingest("presence", {
+    tenant: t, guest_ref: guestId, zone: zone || "Floor",
+    source: source || "demo",
+  });
+  try {
+    const res = await fetch(`${AI_SERVICE_URL}/api/guest-context`, {
+      method: "POST",
+      headers: aiHeaders(AI_API_KEY),
+      body: JSON.stringify({ guest_id: guestId, zone, tenant: t }),
+    });
+    if (!res.ok) throw new Error(`AI service ${res.status}`);
+    const context = await res.json();
+
+    state.stats.guestsToday += 1;
+    state.stats.scriptsServed += 1;
+    state.activeSessions.push({
+      guest: context.guest.name,
+      tier: context.guest.loyalty_tier,
+      zone: zone || "Floor",
+      at: new Date().toISOString(),
+    });
+
+    const associate = state.associates.get(socket.id);
+    if (associate) associate.status = "engaged";
+
+    // Remember what this associate is looking at. A voice question like
+    // "do we have these in a 32" is only answerable because we kept the
+    // engaged guest and the product currently on their lens.
+    socket.data.guestId = guestId;
+    socket.data.focusSku = context.recommendations?.[0]?.sku || null;
+
+    const opened = await ingest("engagement/start", {
+      tenant: t,
+      guest_ref: guestId,
+      zone: zone || "Floor",
+      associate_email: socket.data.email,
+      device_serial: socket.data.deviceSerial,
+      device_model: socket.data.deviceModel,
+      // What the glasses are about to show. Sent here rather than derived
+      // later because stock moves: "what did we suggest" and "what would we
+      // suggest now" are different questions, and only the first is
+      // reviewable after the fact.
+      recommendations: context.recommendations || [],
+      cue_lines: context.script?.cue?.lines || context.script?.glasses_lines || [],
+    });
+    socket.data.engagementId = opened?.engagement_id || null;
+
+    // Push the monochrome overlay to the requesting associate's glasses...
+    socket.emit("glasses:display", {
+      // The cue as written for the glass; `lines` is the flat form the
+      // manager view and the log use.
+      cue: context.script.cue,
+      lines: context.script.glasses_lines,
+      script: context.script,
+      recommendations: context.recommendations,
+      guest: {
+        guest_id: context.guest.guest_id,
+        name: context.guest.name,
+        tier: context.guest.loyalty_tier,
+        // For the lens fact rail. Sizes and points are what an associate
+        // glances at mid-sentence, and the payload carried neither — the
+        // rail would have rendered a tier and three blanks.
+        points: context.guest.loyalty_points,
+        sizes: context.guest.sizes,
+        // Customer depth — the cards behind the cue. Passed straight
+        // through: the lens decides what fits on a 21-character row, and
+        // the server deciding for it is how the rail ended up with facts
+        // that did not fit.
+        contact: context.guest.contact || null,
+        address: context.guest.address || null,
+        orders: context.guest.orders || null,
+        purchase_history: context.guest.purchase_history || [],
+        open_cart_online: context.guest.open_cart_online || [],
+      },
+    });
+    // ...and the full context to the manager view.
+    broadcastDashboard(t);
+  } catch (err) {
+    socket.emit("glasses:display", {
+      lines: ["[ICON:WARN] AI service unavailable", String(err.message)],
+    });
+  }
+}
+
 io.on("connection", (socket) => {
   socket.on("register", ({ role, name, zone, email, deviceSerial, deviceModel, tenant,
                           appVersion }) => {
@@ -190,88 +289,7 @@ io.on("connection", (socket) => {
    * Beacon simulation: an opted-in guest's phone enters an associate's zone.
    * Flow: signal -> AI service -> script -> glasses overlay + dashboard.
    */
-  socket.on("beacon:guest-enter", async ({ guestId, zone, tenant }) => {
-    const t = bindTenant(socket, tenant);
-    const state = stateFor(t);
-    try {
-      const res = await fetch(`${AI_SERVICE_URL}/api/guest-context`, {
-        method: "POST",
-        headers: aiHeaders(AI_API_KEY),
-        body: JSON.stringify({ guest_id: guestId, zone, tenant: t }),
-      });
-      if (!res.ok) throw new Error(`AI service ${res.status}`);
-      const context = await res.json();
-
-      state.stats.guestsToday += 1;
-      state.stats.scriptsServed += 1;
-      state.activeSessions.push({
-        guest: context.guest.name,
-        tier: context.guest.loyalty_tier,
-        zone: zone || "Floor",
-        at: new Date().toISOString(),
-      });
-
-      const associate = state.associates.get(socket.id);
-      if (associate) associate.status = "engaged";
-
-      // Remember what this associate is looking at. A voice question like
-      // "do we have these in a 32" is only answerable because we kept the
-      // engaged guest and the product currently on their lens.
-      socket.data.guestId = guestId;
-      socket.data.focusSku = context.recommendations?.[0]?.sku || null;
-
-      const opened = await ingest("engagement/start", {
-        tenant: t,
-        guest_ref: guestId,
-        zone: zone || "Floor",
-        associate_email: socket.data.email,
-        device_serial: socket.data.deviceSerial,
-        device_model: socket.data.deviceModel,
-        // What the glasses are about to show. Sent here rather than derived
-        // later because stock moves: "what did we suggest" and "what would we
-        // suggest now" are different questions, and only the first is
-        // reviewable after the fact.
-        recommendations: context.recommendations || [],
-        cue_lines: context.script?.cue?.lines || context.script?.glasses_lines || [],
-      });
-      socket.data.engagementId = opened?.engagement_id || null;
-
-      // Push the monochrome overlay to the requesting associate's glasses...
-      socket.emit("glasses:display", {
-        // The cue as written for the glass; `lines` is the flat form the
-        // manager view and the log use.
-        cue: context.script.cue,
-        lines: context.script.glasses_lines,
-        script: context.script,
-        recommendations: context.recommendations,
-        guest: {
-          guest_id: context.guest.guest_id,
-          name: context.guest.name,
-          tier: context.guest.loyalty_tier,
-          // For the lens fact rail. Sizes and points are what an associate
-          // glances at mid-sentence, and the payload carried neither — the
-          // rail would have rendered a tier and three blanks.
-          points: context.guest.loyalty_points,
-          sizes: context.guest.sizes,
-          // Customer depth — the cards behind the cue. Passed straight
-          // through: the lens decides what fits on a 21-character row, and
-          // the server deciding for it is how the rail ended up with facts
-          // that did not fit.
-          contact: context.guest.contact || null,
-          address: context.guest.address || null,
-          orders: context.guest.orders || null,
-          purchase_history: context.guest.purchase_history || [],
-          open_cart_online: context.guest.open_cart_online || [],
-        },
-      });
-      // ...and the full context to the manager view.
-      broadcastDashboard(t);
-    } catch (err) {
-      socket.emit("glasses:display", {
-        lines: ["[ICON:WARN] AI service unavailable", String(err.message)],
-      });
-    }
-  });
+  socket.on("beacon:guest-enter", (payload) => void enterGuest(socket, payload));
 
   socket.on("session:end", ({ outcome, saleCents } = {}) => {
     const state = stateFor(socket.data.tenant);
@@ -512,6 +530,99 @@ async function finalizeVoice(socket, reason) {
   socket.emit("voice:state", { state: "idle" });
   broadcastDashboard(session.tenant);
 }
+
+/**
+ * Which doors a browser is allowed to claim it came through.
+ *
+ * The AI service derives `consent` from the source, and the caller cannot
+ * override it — but that guarantee is only worth as much as the source. This
+ * route is open to the whole internet, so without this set anybody could POST
+ * `source: "app-beacon"` and manufacture a `device`-class consent record: the
+ * strongest provenance we store, asserted by a stranger with curl.
+ *
+ * The two plate doors are the only ones a guest's own browser genuinely walks
+ * through. Everything else in `app/presence.py`'s SOURCES — the retailer's
+ * app, a wallet pass, an order collection, an associate asking — arrives from
+ * a system that holds the service key and posts to the AI service directly.
+ */
+const PUBLIC_SOURCES = new Set(["nfc-plate", "qr-plate"]);
+
+/**
+ * The front door a guest's own phone can reach.
+ *
+ * A plate tap or a QR scan opens a page in the guest's browser. That page
+ * cannot hold the service key — nothing in a browser ever does — so it calls
+ * here, and this server, which does hold the key, records the arrival and
+ * puts the guest on the right associate's glasses.
+ *
+ * The zone comes from the plate itself. Each plate's URL names where it is
+ * mounted, which is why this door needs no beacons, no calibration and no
+ * fixture power: an acrylic plate in fitting room three *is* the beacon for
+ * fitting room three, and it never needs a battery.
+ */
+app.post("/api/presence", async (req, res) => {
+  const { tenant, guest_ref: guestRef, zone, source } = req.body || {};
+  const t = String(tenant || DEMO_TENANT);
+  if (!guestRef) return res.status(400).json({ error: "guest_ref is required" });
+
+  const src = String(source || "qr-plate");
+  if (!PUBLIC_SOURCES.has(src)) {
+    return res.status(400).json({ error: `'${src}' is not a public door` });
+  }
+
+  const recorded = await ingest("presence", {
+    tenant: t, guest_ref: guestRef, zone: zone || "Floor",
+    source: src,
+  });
+  if (!recorded) {
+    return res.status(502).json({ error: "Could not record presence" });
+  }
+
+  // Route to whoever is covering that zone. No associate connected is not an
+  // error the guest should see — they checked in successfully, and the cue
+  // simply has nowhere to land yet.
+  const state = stateFor(t);
+  const zoneName = zone || "Floor";
+  let delivered = 0;
+  for (const [socketId, a] of state.associates) {
+    if (a.zone && a.zone !== zoneName) continue;
+    const sock = io.sockets.sockets.get(socketId);
+    if (!sock) continue;
+    // The same path a simulated beacon takes — context fetched, cue composed,
+    // card pushed to that associate's glasses.
+    await enterGuest(sock, { guestId: guestRef, zone: zoneName, tenant: t,
+                             source: src });
+    delivered += 1;
+  }
+
+  res.json({ ok: true, zone: zoneName, source: src,
+             consent: recorded.consent, delivered });
+});
+
+/**
+ * The way out, and it has to be as easy as the way in.
+ *
+ * A check-in page that can start a session but not end one is a page that
+ * asks a guest to trust a promise it does not implement. This closes every
+ * live check-in for that guest, across every door — somebody who taps Stop
+ * means stop, not "stop for the plate I tapped".
+ *
+ * Open, like the check-in it undoes. Someone who knows another guest's
+ * reference can end that guest's session, which is a denial of presence and
+ * not a disclosure: the failure mode is a cue that does not appear, and the
+ * alternative — making people prove who they are in order to be forgotten —
+ * is worse in every case we care about.
+ */
+app.post("/api/presence/revoke", async (req, res) => {
+  const { tenant, guest_ref: guestRef } = req.body || {};
+  if (!guestRef) return res.status(400).json({ error: "guest_ref is required" });
+
+  const closed = await ingest("presence/revoke", {
+    tenant: String(tenant || DEMO_TENANT), guest_ref: guestRef,
+  });
+  if (!closed) return res.status(502).json({ error: "Could not revoke" });
+  res.json({ ok: true, closed: closed.closed });
+});
 
 app.get("/health", (_req, res) => {
   // Totals across tenants, never a list of slugs — this route is open so the

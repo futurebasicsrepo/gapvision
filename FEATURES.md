@@ -1,6 +1,6 @@
 # Cue — features as of 15 August 2026
 
-Plugin `0.1.11`, `main` at `04f4f02`. Read off the code, not the roadmap:
+Plugin `0.1.11`, `main` at `75f8b50`. Read off the code, not the roadmap:
 everything in **Works today** is built, wired and deployed. Everything else is
 in its own section, and the sections are honest about the difference.
 
@@ -133,8 +133,41 @@ customer record never enters them.
 ## Not built
 
 - **Even Hub submission** — packs clean; the store listing has not been created.
-- **QR check-in / presence** — the opt-in identification path.
+- **The check-in page** — the one piece of the front-door work still open, and
+  the only piece a guest touches. Contract written: `docs/check-in-page.md`.
 - **Anthropic, OpenAI and Google model providers** — registered and stubbed.
+
+---
+
+## Front doors — how a guest says "I'm here"
+
+One endpoint, many doors. A plate tap, a QR scan, the retailer's app, a wallet
+pass, an order collection and an associate asking politely are the same event
+arriving through different holes in the wall. A new door is a row in
+`SOURCES`, not a subsystem.
+
+**Consent is a property of the door, not of the request.** Each source declares
+what kind of agreement stands behind it — `device`, `deliberate`, `transaction`
+or `assisted` — and the caller cannot override it. If it were a free field, the
+weakest door in the system could claim the strongest provenance and the column
+would stop being evidence of anything, which is the one thing it exists to be.
+The open route accepts only the two plate doors; everything else arrives from a
+system that holds the service key.
+
+**Deliberately not modelled:** no path, no dwell, no zone-to-zone movement.
+Presence is a moment at a place. A system that can reconstruct somebody's walk
+through a shop is a different product with a different consent story, and the
+way you avoid building it by accident is to not have the table. A test asserts
+the missing columns rather than trusting a comment to hold the line.
+
+**Plates.** `packages/brand/build-plates.py` generates the printable artwork:
+print PDF with bleed and crop marks, proof, and an installation sheet, with the
+zone baked into every URL. An acrylic plate is a beacon that costs eleven
+dollars and never needs a battery — the zone is not inferred, it is printed on
+the thing. The tap and the scan carry different `src` values so we learn which
+door people actually use. The QR is decoded back out of the rendered artwork in
+the test suite, and the installation sheet's second step, in the largest type
+on the page, is *lock the tag*.
 
 ---
 
