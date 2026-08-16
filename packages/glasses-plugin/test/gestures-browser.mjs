@@ -26,6 +26,10 @@ const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(String(e)));
 
 await page.goto(URL, { waitUntil: "networkidle" });
+// The developer console is behind a disclosure now — the associate's capture
+// and settings cards are the page. Everything this suite drives lives in it,
+// and a collapsed element is not a visible one, so open it first.
+await page.evaluate(() => document.getElementById("diagnostics")?.setAttribute("open", ""));
 await page.waitForSelector("#virtual-lens .lens-text");
 
 const lens = () => page.$$eval("#virtual-lens .lens-text:not(.meta)",

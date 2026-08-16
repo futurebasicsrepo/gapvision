@@ -29,6 +29,9 @@ import { markBytes } from "./mark";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
 import { captureControls, fetchCapabilities, NO_CAPABILITIES, VisionController,
          type Capabilities, type VisionKind, type VisionState } from "./vision";
+import { defaultPrefs, effectivePrefs, loadPrefs, normaliseZone, savePref,
+         visiblePrefs, MAX_ZONE_CHARS, type FloorComms, type PrefKey,
+         type Prefs } from "./prefs";
 
 /**
  * Everything goes through the realtime server. The plugin is a static bundle,
@@ -50,7 +53,23 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || __REALTIME_URL__;
 const TENANT =
   new URLSearchParams(window.location.search).get("tenant")?.toLowerCase() || "gap";
 const TENANT_LABEL = TENANT === "shopify" ? "FUTURE BASICS · LIVE" : "GAP · DEMO";
-const ZONE = TENANT === "shopify" ? "Front Table" : "Denim Wall";
+
+/**
+ * This associate's preferences.
+ *
+ * `stored` is what is in the host's key-value store; `prefs` is what is in
+ * force, which is `stored` with anything the store does not permit resolved
+ * back to its default. See `prefs.ts` — capability and preference are different
+ * questions and this is the only place they meet.
+ *
+ * The zone used to be `const ZONE = TENANT === "shopify" ? ...`, a per-tenant
+ * constant carried into `register` and every `beacon:guest-enter`. It was the
+ * most obviously wrong thing on the page: an associate works a section of a
+ * floor, not the section their tenant's demo data was written around. It is now
+ * the default and nothing more.
+ */
+let stored: Prefs = defaultPrefs(TENANT);
+let prefs: Prefs = { ...stored };
 
 const ui = {
   bridgeStatus: document.getElementById("bridge-status")!,
@@ -73,6 +92,23 @@ let bridge: GlassesBridge;
 let socket: Socket;
 let voice: VoiceController;
 let vision: VisionController;
+/** Send the associate record — name, tenant, device and zone — to the server.
+ *  Assigned in `main()` once the socket and the user info exist. */
+let registerAssociate: () => void = () => {};
+/**
+ * A zone change that is waiting for the current engagement to end.
+ *
+ * The server rebuilds its associate record from `register`, which resets
+ * `status` to "available" and clears the gesture list. Doing that mid
+ * engagement would show a busy associate as free on the manager dashboard, and
+ * there is no other message that carries a zone — `beacon:guest-enter` carries
+ * one, but re-sending it would open a second engagement and count the guest
+ * twice. So a zone changed during an engagement is applied locally at once (it
+ * is on the next guest-enter either way) and re-registered the moment the
+ * engagement ends, which is also the moment the associate is actually standing
+ * in the new zone.
+ */
+let zoneRegisterPending = false;
 
 /**
  * What this store has turned on, fetched at boot.
@@ -249,7 +285,7 @@ function resumeSession() {
   if (!saved?.guestId) return false;
   focusSku = saved.focusSku ?? null;
   log(`resuming session for ${saved.guestId}`);
-  socket?.emit("beacon:guest-enter", { guestId: saved.guestId, zone: ZONE, tenant: TENANT });
+  socket?.emit("beacon:guest-enter", { guestId: saved.guestId, zone: prefs.zone, tenant: TENANT });
   return true;
 }
 
@@ -279,9 +315,26 @@ async function renderCue(cue: Cue, latencyMs?: number) {
   // Every container kind, not just text: the fact rail is a list container,
   // and a rail appearing or vanishing has to force a rebuild like anything
   // else. Keyed by kind so a text and a list id can never collide.
+  //
+  // A list is keyed by its **contents**, not just its id, and that is not
+  // symmetry for its own sake. The cheap path sends `textContainerUpgrade`
+  // per text container and there is no list equivalent in the SDK — so a
+  // rail whose rows changed while its id did not is a rail that never
+  // reaches the glass. Two guests both with full rails produce an identical
+  // id-only key, which means the second customer would have been shown the
+  // first one's name, tier and sizes. The unread count had the same bug more
+  // quietly: it lives in the rail, so it only ever appeared on a rebuild.
+  //
+  // The cost is a rebuild whenever rail rows change. That is the right trade:
+  // rail contents change on a new guest, an unread message and a preference
+  // toggle, none of which are hot, while the actual hot path — three cue
+  // lines changing under an unchanged rail, which is every card scroll and
+  // every voice answer — still takes the cheap path.
   const shape = [
     ...page.textObject.map((c) => `t${c.containerID}`),
-    ...(page.listObject || []).map((c) => `l${c.containerID}`),
+    ...(page.listObject || []).map(
+      (c) => `l${c.containerID}:${(c.itemContainer?.itemName || []).join("|")}`,
+    ),
   ].join(",");
   const sameShape = pageBuilt && shape === currentShape;
 
@@ -303,6 +356,26 @@ async function renderCue(cue: Cue, latencyMs?: number) {
     if (!(await pushMark(page))) return renderCue(cue, latencyMs);
   }
   currentShape = shape;
+}
+
+/**
+ * Make the next `renderCue` rebuild the page rather than take the cheap path.
+ *
+ * The cheap path sends `textContainerUpgrade` per **text** container, so a
+ * change that lives in the fact rail — a list container — is not sent at all
+ * when the shape key is unchanged. The key is the set of container ids, and the
+ * rail keeps id 9 whether it holds four rows or six, so dropping the points row
+ * or gaining an unread count reads as "same shape" and never reaches the glass.
+ *
+ * Clearing the key here is the narrow fix: the callers that change the rail's
+ * *contents* say so, and everything else keeps the cheap path it was written
+ * for. Widening the key to cover list contents would fix the same thing more
+ * generally and is the better change; it belongs with `page-shape.test.mjs`,
+ * which carries its own copy of this comparison, rather than in a settings
+ * pass.
+ */
+function rebuildNext() {
+  currentShape = "";
 }
 
 /**
@@ -388,12 +461,16 @@ function railFor(payload: DisplayPayload): string[] {
   // nice. Points are a number nobody acts on mid-conversation, and unread
   // floor traffic has its own arrival behaviour — an urgent message takes the
   // whole frame rather than waiting politely in row five.
+  //
+  // Which is also the argument for making points a preference rather than a
+  // decision taken for everybody: it is the row with the weakest claim, on the
+  // scarcest rows in the product.
   return [
     railName(g.name),
     g.tier || "",
     sizes.tops ? `TOP ${sizes.tops}` : "",
     sizes.bottoms ? `BTM ${sizes.bottoms}` : "",
-    typeof g.points === "number" ? `${g.points} PTS` : "",
+    prefs.railPoints && typeof g.points === "number" ? `${g.points} PTS` : "",
     // Unread floor traffic, as a sixth rail row. The rail is a single list
     // container with six slots, so this is free: no new container, no
     // page-shape change, no rebuild. That is the whole reason the priority
@@ -544,6 +621,8 @@ async function showIdle() {
   lastDisplay = null;
   railFacts = [];
   forgetSession();
+  // The engagement is over, so a zone change that was waiting for it can go.
+  flushZoneRegistration();
   await renderCue({
     ...IDLE_CUE,
     lines: ["CUESEA READY", TENANT_LABEL, "AWAITING GUEST SIGNAL"],
@@ -555,7 +634,16 @@ async function showIdle() {
     // nobody discovers by accident — was what fell off the end. The version
     // stays because an install that silently did not roll over has cost more
     // evenings than any single bug.
-    meta: [`V${__APP_VERSION__.replace(/\./g, "·")}`, "PRESS TO ASK", "2X EXIT"],
+    //
+    // "PRESS TO ASK" only when a press does ask. With voice switched off the
+    // hint is a lie, and the glass naming a gesture that does nothing is worse
+    // than the glass saying less — the strip is where an associate learns the
+    // two gestures nobody discovers by accident.
+    meta: [
+      `V${__APP_VERSION__.replace(/\./g, "·")}`,
+      ...(prefs.voice ? ["PRESS TO ASK"] : []),
+      "2X EXIT",
+    ],
   });
   ui.sessionInfo.textContent = "No active session";
 }
@@ -711,6 +799,9 @@ function onGesture(g: DecodedGesture) {
       }
       // Nothing engaged: press is how you ask a question from the idle screen,
       // because double-press is spoken for there. See onRootPage() below.
+      // Unless voice is switched off, in which case a press at idle does
+      // nothing at all — the idle strip has already stopped offering it.
+      if (!prefs.voice) return;
       void voice.toggle({ tenant: TENANT, guestId: null, focusSku: null });
       return;
 
@@ -737,6 +828,11 @@ function onGesture(g: DecodedGesture) {
         void bridge.shutDownPageContainer(1);
         return;
       }
+      // With voice off there is nothing left for a double press to mean here.
+      // It must not fall through to the exit dialog: this is not the root page,
+      // and quitting the app in front of a customer because the mic is off
+      // would be the worst possible reading of the gesture.
+      if (!prefs.voice) return;
       void voice.toggle({ tenant: TENANT, guestId: engagedGuestId, focusSku });
       return;
 
@@ -814,6 +910,304 @@ function pushInspector(g: DecodedGesture | undefined, raw?: unknown) {
   )}`;
   ui.inspector.prepend(row);
   while (ui.inspector.childElementCount > 25) ui.inspector.lastElementChild?.remove();
+}
+
+// ---------------------------------------------------------------------------
+// Preferences — the associate's half of this page.
+// ---------------------------------------------------------------------------
+
+/**
+ * Put a changed preference into effect.
+ *
+ * Called only after the write succeeded. A setting that is in force but not
+ * stored would be back to its old value on the next foreground transition, and
+ * an associate who watched the glass change has no reason to check again.
+ */
+function applyPrefEffect(key: PrefKey) {
+  switch (key) {
+    case "zone":
+      applyZone();
+      return;
+    case "railPoints":
+      refreshRail();
+      return;
+    case "voice":
+      // Switching voice off closes anything the mic already had open, rather
+      // than leaving a level meter on the glass that no gesture can now clear.
+      if (!prefs.voice) voice.dismiss();
+      updateVoicePill();
+      // The idle strip names the gestures, and one of them just stopped
+      // existing. Only redraw when idle owns the frame.
+      if (!engaged && !onUrgent && !onRequest && menuIndex < 0 && !onRuler
+          && voice.current === "idle" && vision.current === "idle") {
+        void showIdle();
+      }
+      return;
+    case "floorComms":
+      // Nothing to redraw: it decides what the *next* message does. Anything
+      // already on the glass was put there under the old setting and an
+      // associate reading an urgent message does not want it pulled away.
+      return;
+  }
+}
+
+/**
+ * The zone reaches the server on `register`, and nowhere else that is safe to
+ * repeat. See `zoneRegisterPending` — mid-engagement the re-register waits,
+ * because rebuilding the associate record would report a busy associate as
+ * available on the manager dashboard.
+ */
+function applyZone() {
+  if (!socket?.connected) return;   // the connect handler sends the current zone
+  if (engaged) {
+    zoneRegisterPending = true;
+    log(`zone → ${prefs.zone} (registering when this engagement ends)`);
+    return;
+  }
+  registerAssociate();
+  log(`zone → ${prefs.zone}`);
+}
+
+function flushZoneRegistration() {
+  if (!zoneRegisterPending) return;
+  zoneRegisterPending = false;
+  if (socket?.connected) {
+    registerAssociate();
+    log(`zone → ${prefs.zone}`);
+  }
+}
+
+/** Rebuild the rail from the guest we are on, and repaint whatever the
+ *  associate is currently looking at — not the cue, if they scrolled away. */
+function refreshRail() {
+  if (!engaged || !lastDisplay) return;
+  railFacts = railFor(lastDisplay);
+  rebuildNext();
+  if (onUrgent || onRequest || menuIndex >= 0 || onRuler) return;
+  if (voice.current !== "idle" || vision.current !== "idle") return;
+  void restoreView();
+}
+
+function updateVoicePill() {
+  if (voice?.current !== "idle" || vision?.current !== "idle") return;
+  ui.voiceStatus.textContent = prefs.voice ? "voice ready" : "voice off";
+  ui.voiceStatus.className = "pill";
+}
+
+/** What the machine says about the last write. Mono, because it is the machine
+ *  speaking, and `role="status"` so it is announced without stealing focus. */
+function prefStatus(message: string, failed = false) {
+  const el = document.getElementById("prefs-state");
+  if (!el) return;
+  el.textContent = message;
+  el.className = failed ? "pref-state failed" : "pref-state";
+}
+
+/**
+ * Write one preference and, only if the phone took it, put it into effect.
+ *
+ * `setLocalStorage` answers a boolean and this is where it is honoured. On a
+ * refusal the control is put back where it was and the card says so: a toggle
+ * that stays flipped after a failed write is a setting an associate believes
+ * they have, and they will not find out otherwise until the shift where the
+ * glasses behave the way they thought they had changed.
+ */
+async function setPref<K extends PrefKey>(
+  key: K, value: Prefs[K], label: string, revert: () => void,
+): Promise<boolean> {
+  prefStatus(`SAVING ${label}`);
+  const ok = await savePref(bridge, key, value);
+  if (!ok) {
+    revert();
+    prefStatus(`NOT SAVED · ${label} · THE PHONE REFUSED THE WRITE`, true);
+    log(`preference ${key} was refused by the phone — not saved, not applied`);
+    return false;
+  }
+  (stored as any)[key] = value;
+  prefs = effectivePrefs(stored, capabilities, TENANT);
+  applyPrefEffect(key);
+  prefStatus(`SAVED · ${label}`);
+  log(`preference ${key} = ${String(value)}`);
+  return true;
+}
+
+/** Label above a control, and the sentence under it. Sans: a person wrote it. */
+function prefRow(title: string, note: string): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "pref";
+  const h = document.createElement("div");
+  h.className = "pref-label";
+  h.textContent = title;
+  const p = document.createElement("p");
+  p.className = "pref-note";
+  p.textContent = note;
+  row.append(h, p);
+  return row;
+}
+
+/** A two-state control. `role="switch"` rather than a checkbox: the state word
+ *  is read out and is visible, which a styled checkbox loses. */
+function switchControl(
+  key: "voice" | "railPoints", label: string, initial: boolean,
+): HTMLElement {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "pref-switch";
+  b.setAttribute("role", "switch");
+  const paint = (on: boolean) => {
+    b.setAttribute("aria-checked", String(on));
+    b.dataset.on = on ? "1" : "0";
+    b.textContent = on ? "ON" : "OFF";
+  };
+  paint(initial);
+  b.addEventListener("click", () => {
+    const was = b.dataset.on === "1";
+    const next = !was;
+    paint(next);                       // flip now; put back if the write fails
+    void setPref(key, next, label, () => paint(was));
+  });
+  return b;
+}
+
+/** Three exclusive options, as one row of 44px targets. */
+function segmentedControl(
+  options: { value: FloorComms; label: string }[], initial: FloorComms, label: string,
+): HTMLElement {
+  const group = document.createElement("div");
+  group.className = "pref-seg";
+  group.setAttribute("role", "radiogroup");
+  group.setAttribute("aria-label", label);
+  const buttons: HTMLButtonElement[] = [];
+  const paint = (value: FloorComms) => {
+    buttons.forEach((b) => {
+      const on = b.dataset.value === value;
+      b.setAttribute("aria-checked", String(on));
+      b.dataset.on = on ? "1" : "0";
+    });
+  };
+  options.forEach((o) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pref-seg-item";
+    b.setAttribute("role", "radio");
+    b.dataset.value = o.value;
+    b.textContent = o.label;
+    b.addEventListener("click", () => {
+      const was = (buttons.find((x) => x.dataset.on === "1")?.dataset.value
+        || "everything") as FloorComms;
+      if (was === o.value) return;
+      paint(o.value);
+      void setPref("floorComms", o.value, label, () => paint(was));
+    });
+    buttons.push(b);
+    group.appendChild(b);
+  });
+  paint(initial);
+  return group;
+}
+
+/**
+ * The preferences card.
+ *
+ * Built rather than written into `index.html` for the same reason the capture
+ * card is: which controls exist is a question about what the store permits, and
+ * a control that exists in the document is a control a stylesheet failure can
+ * reveal. `visiblePrefs` answers it, and a preference whose capability is false
+ * is simply never constructed.
+ *
+ * Mounted once the capability answer is in, like the capture card, so nothing
+ * moves under a finger a second after the page opens.
+ */
+function mountPrefsCard(caps: Capabilities) {
+  const mount = document.getElementById("prefs-mount");
+  if (!mount) return;
+  mount.replaceChildren();
+
+  const card = document.createElement("section");
+  card.className = "card prefs";
+  const title = document.createElement("h3");
+  title.textContent = "Your settings";
+  card.appendChild(title);
+
+  const visible = visiblePrefs(caps);
+
+  if (visible.includes("zone")) {
+    const row = prefRow("Zone", "The part of the floor you're working. It rides with every guest you're cued on.");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "pref-input";
+    input.id = "pref-zone";
+    input.value = stored.zone;
+    input.maxLength = MAX_ZONE_CHARS;
+    input.autocomplete = "off";
+    input.setAttribute("aria-label", "Zone");
+    let last = stored.zone;
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    const commit = () => {
+      if (debounce) { clearTimeout(debounce); debounce = null; }
+      const next = normaliseZone(input.value, TENANT);
+      // Normalising can rewrite what they typed — an empty box is the tenant
+      // default, not an empty zone, and the server would read "" as "Floor".
+      if (input.value !== next) input.value = next;
+      if (next === last) return;
+      const was = last;
+      last = next;
+      void setPref("zone", next, "ZONE", () => {
+        last = was;
+        input.value = was;
+      });
+    };
+    // No Save button anywhere on this card. Typing saves once the associate
+    // stops — a phone keyboard has no reliable "done", and a zone that needed
+    // one is a zone half the floor would be wrong about.
+    input.addEventListener("input", () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(commit, 700);
+    });
+    input.addEventListener("change", commit);
+    input.addEventListener("blur", commit);
+    row.appendChild(input);
+    card.appendChild(row);
+  }
+
+  if (visible.includes("floorComms")) {
+    const row = prefRow("Floor messages",
+      "Urgent messages always take the glass. Everything else waits behind the unread count — nothing is dropped.");
+    row.appendChild(segmentedControl(
+      [
+        { value: "everything", label: "Everything" },
+        { value: "urgent", label: "Urgent only" },
+        { value: "off", label: "Off" },
+      ],
+      stored.floorComms,
+      "FLOOR MESSAGES",
+    ));
+    card.appendChild(row);
+  }
+
+  if (visible.includes("voice")) {
+    const row = prefRow("Voice", "A press opens the mic so you can ask a question hands-free.");
+    row.appendChild(switchControl("voice", "VOICE", stored.voice));
+    row.classList.add("pref-inline");
+    card.appendChild(row);
+  }
+
+  if (visible.includes("railPoints")) {
+    const row = prefRow("Points on the rail",
+      "The loyalty points row on the left of the glass. Turn it off to free a row for a size.");
+    row.appendChild(switchControl("railPoints", "POINTS", stored.railPoints));
+    row.classList.add("pref-inline");
+    card.appendChild(row);
+  }
+
+  const state = document.createElement("div");
+  state.className = "pref-state";
+  state.id = "prefs-state";
+  state.setAttribute("role", "status");
+  state.textContent = "SAVED ON THIS PHONE AS YOU CHANGE THEM";
+  card.appendChild(state);
+
+  mount.appendChild(card);
 }
 
 /**
@@ -922,6 +1316,15 @@ async function main() {
   // still works — it just lands unattributed, and the console says so.
   const device = (await bridge.getDeviceInfo()) ?? {};
 
+  // Preferences before the socket, so the very first `register` carries this
+  // associate's zone rather than the tenant's default and then corrects itself.
+  // A store that cannot be read is an associate on defaults — the page they had
+  // before any of this existed.
+  stored = await loadPrefs(bridge, TENANT);
+  prefs = effectivePrefs(stored, null, TENANT);
+  log(`preferences: zone=${prefs.zone} comms=${prefs.floorComms} ` +
+      `voice=${prefs.voice ? "on" : "off"} points=${prefs.railPoints ? "on" : "off"}`);
+
   voice = new VoiceController({
     bridge,
     emit: (event, payload) => socket?.emit(event, payload),
@@ -929,7 +1332,7 @@ async function main() {
     log,
     onState: (state: VoiceState) => {
       ui.voiceStatus.textContent =
-        state === "idle" ? "voice ready" : `voice: ${state}`;
+        state !== "idle" ? `voice: ${state}` : prefs.voice ? "voice ready" : "voice off";
       ui.voiceStatus.className =
         state === "listening" ? "pill live" : state === "idle" ? "pill" : "pill dev";
     },
@@ -957,7 +1360,7 @@ async function main() {
       captureState(state);
       if (state === "idle") {
         if (voice.current !== "idle") return;
-        ui.voiceStatus.textContent = "voice ready";
+        ui.voiceStatus.textContent = prefs.voice ? "voice ready" : "voice off";
         ui.voiceStatus.className = "pill";
         return;
       }
@@ -980,9 +1383,10 @@ async function main() {
   });
 
   socket = io(SERVER_URL);
-  socket.on("connect", () => {
-    ui.serverStatus.textContent = "Realtime linked";
-    ui.serverStatus.className = "pill ok";
+  // Extracted so a zone change can send it again. `register` is the only
+  // message that carries the zone to the roster, and the server rebuilds the
+  // associate record from it — see `applyZone`.
+  registerAssociate = () => {
     socket.emit("register", {
       role: "associate",
       appVersion: __APP_VERSION__,
@@ -991,10 +1395,18 @@ async function main() {
       // guest. An associate who never engages anyone still belongs to a store.
       tenant: TENANT,
       name: `${(user as any).name || "G2 Associate"} [${TENANT}]`,
-      zone: ZONE,
+      zone: prefs.zone,
       deviceSerial: (device as any).sn || null,
       deviceModel: (device as any).model || null,
     });
+  };
+  socket.on("connect", () => {
+    ui.serverStatus.textContent = "Realtime linked";
+    ui.serverStatus.className = "pill ok";
+    // A reconnect re-registers with whatever the zone is *now*, not with the
+    // one this page booted on.
+    registerAssociate();
+    zoneRegisterPending = false;
   });
   socket.on("disconnect", () => {
     ui.serverStatus.textContent = "Server offline";
@@ -1033,7 +1445,11 @@ async function main() {
     if (m.fromId && m.fromId === socket.id) return;
     log(`radio ← ${m.from}: ${m.message}${m.priority === "urgent" ? " (urgent)" : ""}`);
 
-    if (m.priority === "urgent") {
+    // How much of this is allowed to interrupt is the associate's to decide.
+    // What is never theirs to lose is the message itself: every priority at
+    // every setting still lands in the inbox, so "do not interrupt me" cannot
+    // quietly become "do not tell me somebody needs backup".
+    if (m.priority === "urgent" && prefs.floorComms !== "off") {
       // Takes the frame, engaged or not. This is the tier's whole purpose:
       // "need backup in fitting rooms" that waits until someone next looks at
       // a menu is a message that did not arrive.
@@ -1046,10 +1462,14 @@ async function main() {
     if (engaged) {
       // Do not touch the frame. The rail picks up the unread count on its
       // next render, and the associate reads it when they choose.
-      if (lastDisplay) { railFacts = railFor(lastDisplay); void renderCue(cueOf(lastDisplay)); }
-    } else {
+      if (lastDisplay) { railFacts = railFor(lastDisplay); rebuildNext(); void renderCue(cueOf(lastDisplay)); }
+    } else if (prefs.floorComms === "everything") {
       void showFloorMenu();
     }
+    // At "urgent only" and "off" an ordinary message never opens anything. It
+    // waits behind the unread count — on the rail while engaged, in the menu
+    // title when the associate scrolls down to it, which they can do at any
+    // time. That is the whole difference between queueing and losing.
   });
 
   await showIdle();
@@ -1061,6 +1481,19 @@ async function main() {
   log(`capabilities: camera=${capabilities.camera_capture ? "on" : "off"} ` +
       `voice=${capabilities.voice} floor=${capabilities.floor_comms}`);
   mountCaptureCard(capabilities);
+
+  // Now that the store has answered, anything it does not permit falls back to
+  // its default and its control is never built. The two unenforced capabilities
+  // are why this resolves to the *default* rather than to off: see prefs.ts.
+  const wasVoice = prefs.voice;
+  prefs = effectivePrefs(stored, capabilities, TENANT);
+  mountPrefsCard(capabilities);
+  updateVoicePill();
+  // A stored preference the store does not permit was in force for the length
+  // of the capability fetch, so the glass may be offering a gesture that has
+  // just stopped existing. Voice is the only one of the two that shows on the
+  // glass, and idle is the only screen that names it.
+  if (wasVoice !== prefs.voice && !engaged) await showIdle();
 
   // Tenant badge on the phone page
   const badge = document.getElementById("tenant-badge");
@@ -1083,7 +1516,7 @@ async function main() {
         const b = document.createElement("button");
         b.textContent = `${g.name} · ${g.loyalty_tier}`;
         b.addEventListener("click", () => {
-          socket.emit("beacon:guest-enter", { guestId: g.guest_id, zone: ZONE, tenant: TENANT });
+          socket.emit("beacon:guest-enter", { guestId: g.guest_id, zone: prefs.zone, tenant: TENANT });
           log(`beacon → ${g.name}`);
         });
         rosterEl.appendChild(b);

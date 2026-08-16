@@ -90,6 +90,13 @@ async function open() {
   const p = await ctx.newPage();
   p.on("pageerror", (e) => pageErrors.push(String(e)));
   await p.goto(URL, { waitUntil: "domcontentloaded" });
+  // The virtual lens, the roster and the gesture simulator are behind a
+  // disclosure now — the associate's cards are the page, and the console is
+  // collapsed under them. Everything this suite reads lives in there, and a
+  // collapsed element is not a visible one, so open it before asserting.
+  // The capture card is deliberately *not* in there: it is asserted where an
+  // associate finds it.
+  await p.evaluate(() => document.getElementById("diagnostics")?.setAttribute("open", ""));
   await p.waitForSelector("#virtual-lens .lens-text");
   // The capability fetch is awaited after the first frame, on purpose — the
   // HUD does not wait on a store's network. Give it a moment to land.

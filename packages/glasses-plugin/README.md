@@ -16,6 +16,17 @@ UI to the G2 over BLE.
 - `src/main.ts` — socket.io client to the GapVision realtime server. Beacon →
   `glasses:display` → containers. Temple press ends a session; double-press
   is the reserved hook for voice inventory queries (mic via `audioControl`).
+- `src/prefs.ts` — the associate's preferences (zone, floor messages, voice,
+  points on the rail), stored through the SDK's `setLocalStorage` /
+  `getLocalStorage`. Even gives a plugin no settings panel, so the phone page
+  is the settings surface. Capability and preference are different things and
+  that file is where the line is drawn: a preference whose tenant capability
+  is false is not on the page at all.
+
+The phone page leads with what an associate needs — the capture card, then
+their settings. The developer console (status pills, virtual lens, beacon
+roster, gesture simulator, event inspector, event log) is all still there,
+collapsed behind the **Diagnostics** disclosure at the bottom.
 
 ## Run (dev, no hardware)
 
@@ -24,7 +35,8 @@ UI to the G2 over BLE.
 npm run dev --workspace=packages/glasses-plugin   # http://localhost:5180
 ```
 
-Tap a beacon button: the virtual lens renders exactly what the G2 would show.
+Open **Diagnostics** and tap a beacon button: the virtual lens renders exactly
+what the G2 would show.
 
 ## Run on real glasses
 
@@ -42,7 +54,10 @@ Tap a beacon button: the virtual lens renders exactly what the G2 would show.
   same shapes so dev exercises the real decoder.
 - ~~Voice query~~ — **done and live**. Deepgram nova-2 for speech, Grok for
   open-ended judgement; 505 ms measured through the production socket path.
-- Associate login / zone assignment (currently hardcoded "Denim Wall").
+- ~~Zone assignment~~ — **done**. The zone is a preference on the phone page,
+  defaulting to the tenant's own ("Denim Wall" for gap, "Front Table" for
+  shopify) and stored on the phone. Associate login is still outstanding: the
+  glasses identify themselves by serial, and there is no sign-in.
 - **Fonts are fetched from Google and are not in the manifest whitelist** — see
   "Shipping to Even Hub" below. Decide before submitting.
 

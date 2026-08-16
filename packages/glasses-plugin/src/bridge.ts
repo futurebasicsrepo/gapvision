@@ -160,6 +160,25 @@ export interface GlassesBridge {
    * caller can say which failure happened rather than "something went wrong".
    */
   captureImage(): Promise<CaptureResult>;
+  /**
+   * Persist one string on the phone, through the host.
+   *
+   * This is the only durable store the SDK offers a plugin, and it is what
+   * makes an associate's preferences a real thing rather than a thing that
+   * lasts until the WebView is torn down — which, on this host, is every time
+   * the phone goes in a pocket.
+   *
+   * **The boolean is the whole contract and it must be honoured.** A host that
+   * refuses the write answers `false` and says nothing else; a caller that
+   * ignores it shows a setting as saved that will be gone on the next
+   * foreground transition, which is worse than a setting that refused to
+   * change, because nobody looks twice at a control that appeared to work.
+   */
+  setLocalStorage(key: string, value: string): Promise<boolean>;
+  /** What was stored, or null for "nothing here". The SDK types the host's
+   *  answer as `string`; an absent key comes back empty, and empty is not a
+   *  value anyone stored on purpose, so both collapse to null. */
+  getLocalStorage(key: string): Promise<string | null>;
   onEvenHubEvent(cb: (event: any) => void): () => void;
   getUserInfo(): Promise<{ name?: string } | null>;
   /** Model and serial of the connected glasses.
@@ -215,6 +234,22 @@ function wrapReal(real: any): GlassesBridge {
             : ({ ok: false, reason: "cancelled" } as CaptureResult))
         .catch((e: any) =>
           ({ ok: false, reason: "failed", detail: String(e) }) as CaptureResult);
+    },
+    // Optional-chained like `captureImage`, and read the same way: a host
+    // without the method has not stored anything, so it answers false rather
+    // than throwing. False is a sentence the page can show; a rejected promise
+    // is a preference that looks saved and isn't.
+    setLocalStorage: (key, value) => {
+      const call = real.setLocalStorage?.(key, value);
+      if (!call) return Promise.resolve(false);
+      return call.then((ok: any) => ok === true).catch(() => false);
+    },
+    getLocalStorage: (key) => {
+      const call = real.getLocalStorage?.(key);
+      if (!call) return Promise.resolve(null);
+      return call
+        .then((v: any) => (typeof v === "string" && v !== "" ? v : null))
+        .catch(() => null);
     },
     onEvenHubEvent: (cb) => real.onEvenHubEvent(cb),
     getUserInfo: () => real.getUserInfo().catch(() => null),
@@ -497,6 +532,45 @@ class MockBridge implements GlassesBridge {
         base64,
       },
     };
+  }
+
+  /**
+   * The host's key-value store, standing in as the browser's own.
+   *
+   * `window.localStorage` is the right stand-in and not a shortcut: it has the
+   * same shape (strings in, strings out), the same lifetime (survives a reload,
+   * survives the page being backgrounded) and the same failure — Safari private
+   * mode throws on `setItem` exactly where a host refuses a write. So the
+   * preferences flow, including the branch where saving fails, is reachable in
+   * a plain browser with no phone and no glasses. That is the whole reason this
+   * mock exists, and a preference that could only be tested on hardware is a
+   * preference nobody would test.
+   *
+   * `window.__cueMockStorage = "fail"` forces the refusal, the same way
+   * `__cueMockCapture` forces a camera that says no.
+   */
+  async setLocalStorage(key: string, value: string): Promise<boolean> {
+    if ((window as any).__cueMockStorage === "fail") {
+      console.log(`[mock] setLocalStorage(${key}) refused`);
+      return false;
+    }
+    try {
+      window.localStorage.setItem(key, value);
+      return true;
+    } catch (e) {
+      console.log(`[mock] setLocalStorage(${key}) threw — ${String(e)}`);
+      return false;
+    }
+  }
+
+  async getLocalStorage(key: string): Promise<string | null> {
+    if ((window as any).__cueMockStorage === "fail") return null;
+    try {
+      const v = window.localStorage.getItem(key);
+      return v === "" ? null : v;
+    } catch {
+      return null;
+    }
   }
 
   onEvenHubEvent(cb: (event: any) => void) {

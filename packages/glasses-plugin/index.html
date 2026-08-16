@@ -82,6 +82,72 @@
     .btn:focus-visible{outline:2px solid var(--sea-300);outline-offset:2px}
     .capture-state{font-family:var(--mono);font-size:10px;text-transform:uppercase;
       letter-spacing:.14em;color:var(--sea-200);margin-top:12px}
+    /* The preferences card. Same rules as the capture card above it, because
+       it is the same reader: an associate holding a phone at arm's length on a
+       shop floor. Mono uppercase for anything the machine says (the saved
+       state, the ON/OFF word), Instrument Sans for anything a person wrote,
+       sea for the chosen option, 44px targets, 16px inputs, a focus ring that
+       is never removed. No green: green is the product's own voice and it
+       lives in the lens. */
+    .pref{padding:12px 0;border-top:1px solid rgba(143,199,240,.12)}
+    .prefs h3 + .pref{border-top:0;padding-top:2px}
+    .pref-label{font-family:var(--sans);font-size:16px;font-weight:600;
+      letter-spacing:-.01em;color:var(--paper);display:block}
+    .pref-note{font-family:var(--sans);font-size:13.5px;line-height:1.45;
+      color:var(--sea-100);margin-top:3px}
+    /* Label and switch on one line — a two-state control needs no more room
+       than its word, and stacking it would put 44px of empty space in a page
+       someone is scrolling one-handed. */
+    .pref-inline{display:grid;grid-template-columns:1fr auto;
+      grid-template-areas:"label control" "note control";
+      column-gap:12px;align-items:center}
+    .pref-inline .pref-label{grid-area:label}
+    .pref-inline .pref-note{grid-area:note}
+    .pref-inline .pref-switch{grid-area:control}
+    .pref-input{display:block;width:100%;margin-top:10px;min-height:44px;
+      font-family:var(--sans);font-size:16px;color:var(--paper);
+      background:var(--sea-900);border:1px solid rgba(143,199,240,.38);
+      border-radius:9px;padding:10px 12px}
+    .pref-switch{min-height:44px;min-width:72px;margin:0;
+      font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.14em;
+      border-radius:9px;padding:10px 14px;cursor:pointer;
+      background:transparent;border:1px solid rgba(143,199,240,.38);
+      color:var(--sea-100)}
+    .pref-switch[data-on="1"]{background:var(--sea-500);border-color:var(--sea-500);
+      color:var(--paper)}
+    .pref-seg{display:flex;gap:8px;margin-top:10px}
+    /* 14px, not 15: at 390px three segments give each label about 92px to sit
+       in, and "Urgent only" wrapped at 15 — which made all three buttons two
+       rows tall to hold one two-word label. */
+    .pref-seg-item{flex:1;min-height:44px;margin:0;
+      font-family:var(--sans);font-size:14px;font-weight:600;letter-spacing:-.01em;
+      border-radius:9px;padding:10px 4px;cursor:pointer;
+      background:transparent;border:1px solid rgba(143,199,240,.38);
+      color:var(--sea-100)}
+    .pref-seg-item[data-on="1"]{background:var(--sea-500);border-color:var(--sea-500);
+      color:var(--paper)}
+    /* What the machine did with the last change. Flame when it refused — a
+       preference that failed to persist must not look like one that saved. */
+    .pref-state{font-family:var(--mono);font-size:10px;text-transform:uppercase;
+      letter-spacing:.14em;line-height:1.5;color:var(--sea-200);margin-top:14px}
+    .pref-state.failed{color:var(--flame-300)}
+    .pref-input:focus-visible,.pref-switch:focus-visible,.pref-seg-item:focus-visible,
+    summary:focus-visible{outline:2px solid var(--sea-300);outline-offset:2px}
+    /* Everything below is the developer console this page used to be. It is
+       still how anyone debugs the plugin on a real phone, so it is collapsed
+       rather than deleted — and collapsed by default, because the associate's
+       two cards are the page now. */
+    #diagnostics{margin-top:4px}
+    #diagnostics > summary{list-style:none;min-height:44px;display:flex;
+      align-items:center;gap:8px;cursor:pointer;
+      font-family:var(--mono);font-size:10px;text-transform:uppercase;
+      letter-spacing:.14em;color:var(--sea-200);
+      border-top:1px solid rgba(143,199,240,.14);
+      border-bottom:1px solid rgba(143,199,240,.14);margin-bottom:12px}
+    #diagnostics > summary::-webkit-details-marker{display:none}
+    #diagnostics > summary::after{content:"+";font-size:14px;line-height:1;
+      margin-left:auto;color:var(--sea-300)}
+    #diagnostics[open] > summary::after{content:"–"}
     #session-info{font-size:13px;color:var(--paper);margin-bottom:6px}
     #event-log{font-family:var(--mono);font-size:10.5px;color:var(--sea-200);
       max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
@@ -106,6 +172,21 @@
        gate has to hold when the fetch times out as firmly as when the store
        says no. Empty is the correct rendering of "we do not know yet". -->
   <div id="capture-mount"></div>
+
+  <!-- Preferences, built by `mountPrefsCard` in main.ts and for the same
+       reason the capture card is built rather than written here: which
+       controls exist depends on what the tenant permits, and a control that
+       exists in the document is a control a stylesheet failure can reveal.
+       Even gives a plugin no settings panel, so this is the settings surface;
+       the SDK's setLocalStorage/getLocalStorage is where the answers live. -->
+  <div id="prefs-mount"></div>
+
+  <!-- The developer console. Everything from here down predates the design
+       pass and is not what an associate opened this page for — but it is how
+       the plugin gets debugged on a real phone with no laptop attached, and
+       the handoff refers to it. Collapsed, not deleted. -->
+  <details id="diagnostics">
+    <summary>Diagnostics</summary>
 
   <div class="card">
     <span id="bridge-status" class="pill">bridge…</span>
@@ -155,6 +236,8 @@
     <h3>Event log</h3>
     <div id="event-log"></div>
   </div>
+
+  </details>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

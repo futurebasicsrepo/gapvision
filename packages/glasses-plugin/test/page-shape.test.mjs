@@ -31,7 +31,9 @@ const shapeOf = (cue) => {
   const p = buildCue(cue);
   return [
     ...p.textObject.map((c) => `t${c.containerID}`),
-    ...(p.listObject || []).map((c) => `l${c.containerID}`),
+    ...(p.listObject || []).map(
+      (c) => `l${c.containerID}:${(c.itemContainer?.itemName || []).join("|")}`,
+    ),
     ...(p.imageObject || []).map((c) => `i${c.containerID}`),
   ].join(",");
 };
@@ -284,5 +286,45 @@ check("the mark and the wordmark are different shapes",
 }
 
 const failed = results.filter((r) => !r).length;
+
+// --- the bug this key exists to prevent -----------------------------------
+//
+// Found while building the preferences card, in code that had already
+// shipped. The key used to be container ids only, and the cheap path sends
+// `textContainerUpgrade` per *text* container — there is no list equivalent
+// in the SDK. So a rail whose rows changed while its id did not never
+// reached the glass.
+//
+// Two guests both with full rails produced an identical key, which means the
+// second customer was shown the first one's name, tier and sizes. That is the
+// worst thing this product can do: the whole promise is that the sentence in
+// the glass is about the person standing in front of you.
+
+const GUEST_A = {
+  lines: ["IN CART SLIM JEAN", "OFFER IT IN SIZE M", ""],
+  facts: ["MAYA OKAFOR", "ICON", "TOP M", "BTM 28X30"],
+  meta: ["DENIM WALL"], moduleCount: 0,
+};
+const GUEST_B = {
+  ...GUEST_A,
+  facts: ["DEVIN YATES", "CORE", "TOP L", "BTM 32X32"],
+};
+
+check("two different guests are not the same shape",
+  shapeOf(GUEST_A) !== shapeOf(GUEST_B),
+  `A=${shapeOf(GUEST_A)}  B=${shapeOf(GUEST_B)}`);
+
+check("an unread count arriving changes the shape",
+  shapeOf(GUEST_A) !== shapeOf({ ...GUEST_A, facts: [...GUEST_A.facts, "2 MSG"] }),
+  "the unread count lives in the rail and only ever appeared on a rebuild");
+
+check("the same guest twice is still the cheap path",
+  shapeOf(GUEST_A) === shapeOf({ ...GUEST_A }),
+  "an unchanged rail must not force a rebuild");
+
+check("cue lines changing under an unchanged rail is the cheap path",
+  shapeOf(GUEST_A) === shapeOf({ ...GUEST_A, lines: ["SHOW THE CREW", "AT KNITWEAR", ""] }),
+  "this is the hot path — every card scroll and every voice answer");
+
 console.log(`\n${results.length - failed}/${results.length} passed`);
 process.exit(failed ? 1 : 0);
