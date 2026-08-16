@@ -159,10 +159,32 @@
       background:rgba(21,96,184,.10)}
     #event-inspector .insp.unknown{color:var(--flame-300);border-left-color:var(--flame);
       background:rgba(255,107,44,.09)}
+
+    /* Who the glasses think you are. Mono for the machine's answer, and a
+       flame state for "nobody" — an unassigned pair records activity that
+       never reaches the leaderboard, and the person wearing it should be able
+       to see that before the shift rather than after. */
+    .whoami { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
+              margin: -6px 0 18px; }
+    .whoami-name { font-family: var(--mono, "IBM Plex Mono", monospace);
+                   font-size: 13px; letter-spacing: .06em; text-transform: uppercase;
+                   color: var(--slate-100, #F6F6F4); }
+    .whoami-meta { font-family: var(--mono, "IBM Plex Mono", monospace);
+                   font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+                   color: var(--slate-300, #899199); }
+    .whoami-name.unknown, .whoami-meta.unknown { color: var(--flame-300, #FFB08A); }
   </style>
 </head>
 <body>
   <h1><span>cue</span><span class="sea">sea</span> &nbsp;·&nbsp; Lens</h1>
+  <!-- Who the glasses think you are. It was fetched for `register` and shown
+       nowhere, so an associate had no way to tell whether their activity was
+       landing on their own name or on nobody's. Attribution is the point of
+       the leaderboard; it should be legible to the person being attributed. -->
+  <div id="whoami" class="whoami">
+    <span id="whoami-name" class="whoami-name">…</span>
+    <span id="whoami-meta" class="whoami-meta"></span>
+  </div>
   <div class="sub">Even Hub plugin · associate phone page</div>
 
   <!-- The capture card is built into here by `mountCaptureCard` in main.ts, and

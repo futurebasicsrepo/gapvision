@@ -239,17 +239,42 @@ function wrapReal(real: any): GlassesBridge {
     // without the method has not stored anything, so it answers false rather
     // than throwing. False is a sentence the page can show; a rejected promise
     // is a preference that looks saved and isn't.
-    setLocalStorage: (key, value) => {
-      const call = real.setLocalStorage?.(key, value);
-      if (!call) return Promise.resolve(false);
-      return call.then((ok: any) => ok === true).catch(() => false);
+    // Host store first, the WebView's own localStorage second.
+    //
+    // This shipped host-only, and on a real phone every preference flipped,
+    // said NOT SAVED and reverted: the Even App build in use does not expose
+    // setLocalStorage, so the optional chain resolved false every time and
+    // the card honestly reported a refusal. Honest and useless — the settings
+    // page did not work at all.
+    //
+    // A WebView has persistent per-origin storage of its own, and a
+    // preference living there is worth far more than a preference that cannot
+    // be set. The host store is still preferred where it exists, because it
+    // is the one Even manages and it survives things a WebView's storage may
+    // not. False now means *both* refused, which is a real failure worth a
+    // sentence, rather than "this Even App build is older than the SDK types".
+    setLocalStorage: async (key, value) => {
+      try {
+        if (await real.setLocalStorage?.(key, value) === true) return true;
+      } catch { /* fall through to the WebView's own store */ }
+      try {
+        window.localStorage.setItem(key, value);
+        return true;
+      } catch {
+        return false;   // private mode, or a quota — genuinely not saved
+      }
     },
-    getLocalStorage: (key) => {
-      const call = real.getLocalStorage?.(key);
-      if (!call) return Promise.resolve(null);
-      return call
-        .then((v: any) => (typeof v === "string" && v !== "" ? v : null))
-        .catch(() => null);
+    getLocalStorage: async (key) => {
+      try {
+        const v = await real.getLocalStorage?.(key);
+        if (typeof v === "string" && v !== "") return v;
+      } catch { /* fall through */ }
+      try {
+        const v = window.localStorage.getItem(key);
+        return v && v !== "" ? v : null;
+      } catch {
+        return null;
+      }
     },
     onEvenHubEvent: (cb) => real.onEvenHubEvent(cb),
     getUserInfo: () => real.getUserInfo().catch(() => null),

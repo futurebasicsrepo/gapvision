@@ -79,6 +79,8 @@ const ui = {
   sessionInfo: document.getElementById("session-info")!,
   log: document.getElementById("event-log")!,
   inspector: document.getElementById("event-inspector"),
+  whoName: document.getElementById("whoami-name"),
+  whoMeta: document.getElementById("whoami-meta"),
 };
 
 function log(msg: string) {
@@ -1315,6 +1317,24 @@ async function main() {
   // Attribution rides on this. If the Even App won't tell us, everything
   // still works — it just lands unattributed, and the console says so.
   const device = (await bridge.getDeviceInfo()) ?? {};
+
+  // Say who the glasses think this is, and on what hardware.
+  //
+  // Both were already fetched for `register` and displayed nowhere. An
+  // associate had no way to tell whether their shift was landing on their own
+  // name or on nobody's — and an unassigned pair records activity that never
+  // reaches the leaderboard, which is exactly the confusion the Health panel
+  // flags for managers and the floor could never see for itself.
+  if (ui.whoName) {
+    ui.whoName.textContent = user.name || "NOT SIGNED IN";
+    ui.whoName.className = user.name ? "whoami-name" : "whoami-name unknown";
+  }
+  if (ui.whoMeta) {
+    ui.whoMeta.textContent = device.sn
+      ? `${device.model || "GLASSES"} · ${device.sn}`
+      : "NO GLASSES PAIRED";
+    ui.whoMeta.className = device.sn ? "whoami-meta" : "whoami-meta unknown";
+  }
 
   // Preferences before the socket, so the very first `register` carries this
   // associate's zone rather than the tenant's default and then corrects itself.
