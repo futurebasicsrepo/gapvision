@@ -27,6 +27,8 @@ import { cardsFor, cueOf, money, type Card, type DisplayPayload,
          type Recommendation } from "./cards";
 import { markBytes } from "./mark";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
+import { fetchCapabilities, NO_CAPABILITIES, VisionController, visionMenuItems,
+         type Capabilities, type VisionKind, type VisionState } from "./vision";
 
 /**
  * Everything goes through the realtime server. The plugin is a static bundle,
@@ -70,6 +72,28 @@ function log(msg: string) {
 let bridge: GlassesBridge;
 let socket: Socket;
 let voice: VoiceController;
+let vision: VisionController;
+
+/**
+ * What this store has turned on, fetched at boot.
+ *
+ * Starts as everything-off and stays that way if the fetch fails, times out or
+ * comes back malformed. That default is the whole design of the gate: the
+ * camera affordance is built from this object, so a tenant that declined the
+ * camera and a server we could not reach produce the same glass — one with no
+ * camera control on it. Failing the other way would put a camera control in
+ * front of an associate whose store said no, which is not a bug you find in
+ * testing, it is one a customer finds.
+ *
+ * Only `camera_capture` is enforced today. `voice` and `floor_comms` are read
+ * and reported so the server side has somewhere to land, but nothing is gated
+ * on them yet: those features shipped before this endpoint existed, and
+ * switching them off on the first failed fetch would break every tenant to
+ * protect a permission none of them have set. The camera is different — it is
+ * new, so there is no working behaviour to lose, and it is the one where the
+ * failure of showing it wrongly is worse than the failure of hiding it.
+ */
+let capabilities: Capabilities = { ...NO_CAPABILITIES };
 /** The set of containers currently built on the glass, as a comparable key.
  *  Not the line count — see `renderCue`. */
 let currentShape = "";
@@ -133,7 +157,12 @@ let onRequest: GuestRequest | null = null;
 let onUrgent: RadioMessage | null = null;
 /** Where the floor menu is, when it is open. -1 = closed. */
 let menuIndex = -1;
-let menuItems: { label: string; send?: string; urgent?: boolean; msg?: RadioMessage }[] = [];
+let menuItems: {
+  label: string; send?: string; urgent?: boolean; msg?: RadioMessage;
+  /** Set on the camera rows: pressing this does not send anything, it opens
+   *  the phone camera. Absent entirely when the store has the camera off. */
+  scan?: VisionKind;
+}[] = [];
 
 /**
  * What an associate can say back, without a keyboard and without speaking.
@@ -434,12 +463,33 @@ async function restoreFrame() {
  * One screen for both, because they are the same gesture — someone who has
  * just read "need backup in fitting rooms" wants to answer without navigating
  * anywhere. Unread first, newest at the top, then the phrases.
+ *
+ * **And the camera, which lives here rather than on a gesture — a finding, not
+ * a preference.**
+ *
+ * The G2's whole gesture vocabulary is four events — CLICK, DOUBLE_CLICK,
+ * SCROLL_TOP, SCROLL_BOTTOM (`OsEventTypeList`; the rest are lifecycle and
+ * IMU). There is no long press and no triple tap. All four already carry
+ * meaning on every page, root double-press is spoken for by Even's own exit
+ * requirement, and branching on ring-versus-temple is ruled out by design —
+ * both devices drive the same actions on purpose. So there is no free gesture
+ * to give the camera, and taking one would mean an associate opening a camera
+ * by accident mid-conversation, which is the worst outcome this feature has.
+ *
+ * A menu row costs no gesture at all: scroll down opens the floor menu, press
+ * acts on the cursor, and both of those are already learned. It is also the
+ * only shape in which the capability gate can be honest — a row that isn't in
+ * the list is not greyed out, not refused on press, not there.
+ *
+ * It goes after the waiting messages and before the phrases, because unread
+ * traffic staying at the top is a rule this menu already had.
  */
 function buildMenuItems() {
   menuItems = [
     ...[...inbox].reverse().map((m) => ({
       label: `${m.from} ${m.message}`, send: "ON MY WAY", msg: m,
     })),
+    ...visionMenuItems(capabilities).map((v) => ({ label: v.label, scan: v.kind })),
     ...PHRASES.map((p) => ({ label: p.label, send: p.label, urgent: p.urgent })),
   ];
 }
@@ -449,21 +499,32 @@ async function showFloorMenu(index = 0) {
   menuIndex = Math.max(0, Math.min(index, menuItems.length - 1));
   onRuler = false;
   const unread = inbox.length;
+  const cursor = menuItems[menuIndex];
   const page = buildMenu(
     unread ? `FLOOR · ${unread} WAITING` : "FLOOR",
     menuItems.map((i) => i.label),
     menuIndex,
-    { logo: useMark, footer: menuItems[menuIndex]?.msg
-        ? "PRESS TO REPLY ON MY WAY · 2X BACK"
-        : "PRESS TO SEND · 2X BACK" },
+    { logo: useMark, footer: cursor?.scan
+        ? "PRESS TO SCAN · 2X BACK"
+        : cursor?.msg
+          ? "PRESS TO REPLY ON MY WAY · 2X BACK"
+          : "PRESS TO SEND · 2X BACK" },
   );
   await paint(page);
 }
 
-/** Send whatever the menu cursor is on, then leave. */
-async function sendFromMenu() {
+/** Act on whatever the menu cursor is on, then leave. Mostly that is sending a
+ *  phrase; on a camera row it is opening the phone camera instead. */
+async function actOnMenu() {
   const item = menuItems[menuIndex];
   if (!item) return void showIdle();
+  if (item.scan) {
+    // Leave the menu first. The capture takes over the phone and the glass
+    // needs to be showing the scan's own progress, not a list nobody is on.
+    menuIndex = -1;
+    await vision.scan(item.scan);
+    return;
+  }
   socket?.emit("radio:send", {
     message: item.send ?? item.label,
     priority: item.urgent ? "urgent" : "normal",
@@ -601,7 +662,11 @@ function onRootPage(): boolean {
   // Getting this wrong is how double-tap once closed CueSea instead of stopping
   // the mic — and a request is the worst place to get it wrong, because the
   // app would quit while a customer stands in a fitting room waiting.
+  // A scan in flight counts the same way. The camera is open on the phone and
+  // the associate is looking at it; a double press landing on the glass in
+  // that moment must not take the app down underneath the photo.
   return !engaged && !resumable && cardIndex === 0 && voice.current === "idle"
+    && vision.current === "idle"
     && menuIndex < 0 && !onUrgent && !onRequest && !onRuler;
 }
 
@@ -650,13 +715,17 @@ function onGesture(g: DecodedGesture) {
         return;
       }
       // In the floor menu, a press sends what the cursor is on.
-      if (menuIndex >= 0) { void sendFromMenu(); return; }
+      if (menuIndex >= 0) { void actOnMenu(); return; }
       // The ruler is a dead end by design: it eats one press to leave, so
       // nobody can start a voice query from a diagnostic screen by accident.
       if (onRuler) { onRuler = false; void showIdle(); return; }
       // A click first dismisses whatever voice put on the lens; only then does
       // it mean "I'm done with this guest".
       if (voice.dismiss()) return;
+      // Same for a scan's progress or its answer. It cannot recall a camera
+      // the phone has already opened — but it can stop the answer from waiting
+      // out its dwell, which is what a press means everywhere else.
+      if (vision.dismiss()) return;
       // Kyle's rule: press takes you home from anywhere, and only ends the
       // engagement once you are already home. Learnable in a shift, and it
       // means you can never end a live session by accident from card seven —
@@ -799,6 +868,35 @@ async function main() {
     onDone: () => void restoreView(),
   });
 
+  // Started here and awaited after the HUD is up: the capability answer is
+  // only needed by the time somebody opens the floor menu, and blocking the
+  // first frame on a store's network would trade a visible HUD for a flag.
+  const capabilitiesReady = fetchCapabilities(SERVER_URL, TENANT);
+
+  vision = new VisionController({
+    bridge,
+    serverUrl: SERVER_URL,
+    tenant: TENANT,
+    render: (lines, meta) => renderCue({ lines, meta }),
+    log,
+    // Shares the voice pill on the phone page rather than adding a second one:
+    // the two are never in flight at once (the floor menu only opens while
+    // voice is idle), and one row that says what the glasses are doing beats
+    // two rows that each say nothing most of the time. On the way back to idle
+    // it defers to voice rather than asserting "ready" over it.
+    onState: (state: VisionState) => {
+      if (state === "idle") {
+        if (voice.current !== "idle") return;
+        ui.voiceStatus.textContent = "voice ready";
+        ui.voiceStatus.className = "pill";
+        return;
+      }
+      ui.voiceStatus.textContent = `scan: ${state}`;
+      ui.voiceStatus.className = "pill dev";
+    },
+    onDone: () => void restoreView(),
+  });
+
   bridge.onEvenHubEvent((event: any) => {
     if (event?.audioEvent) return voice.onAudioChunk(event.audioEvent.audioPcm);
 
@@ -885,6 +983,13 @@ async function main() {
   });
 
   await showIdle();
+
+  capabilities = await capabilitiesReady;
+  // Logged as what it is — a gate, and which way it fell. When the camera row
+  // is missing from the floor menu this line is the only thing that says
+  // whether the store turned it off or the fetch never answered.
+  log(`capabilities: camera=${capabilities.camera_capture ? "on" : "off"} ` +
+      `voice=${capabilities.voice} floor=${capabilities.floor_comms}`);
 
   // Tenant badge on the phone page
   const badge = document.getElementById("tenant-badge");

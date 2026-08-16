@@ -5,6 +5,9 @@ and voice queries. Multi-tenant: the `tenant` parameter selects the CRM world
 ("gap" demo dataset or "shopify" live store). LLM and STT are pluggable via
 GAPVISION_LLM / CUE_STT. Identification is opt-in signal only.
 
+The phone camera path (`/api/vision/analyze`) photographs objects — a SKU tag,
+a part — and never people, is off per tenant by default, and stores no image.
+
 Data endpoints require a service key — see app/auth.py. Browser clients do
 not hold the key; they call the realtime server, which proxies.
 """
@@ -16,7 +19,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import db, mailer, retention, secrets_box
+from . import capabilities, db, mailer, retention, secrets_box, vision
 from .auth import KeyHeader, guard, startup_check
 from .crm_provider import TenantNotConfigured, get_crm_for, tenant_status
 from .llm import get_provider
@@ -308,6 +311,71 @@ def voice_query(req: VoiceQueryRequest, request: Request, x_gapvision_key: str |
         "audio_seconds": duration,
     })
     return result
+
+
+@app.get("/api/tenant/capabilities")
+def tenant_capabilities(request: Request, tenant: str = "gap",
+                        x_gapvision_key: str | None = KeyHeader):
+    """What a plugin may offer this associate. Booleans only.
+
+    A plugin asking this is asking an operational question — do I draw the
+    camera button, do I open the mic — and gets switches it can branch on.
+    It does not get the tenant's privacy internals: retention windows and
+    transcript policy live in the same jsonb column and none of it belongs in
+    a static bundle on a phone.
+
+    The client's copy of `camera_capture` decides what to draw and nothing
+    else. `/api/vision/analyze` re-reads the flag server-side on every call,
+    because a bundle running on somebody's phone is not a place to enforce a
+    privacy decision.
+    """
+    guard(request, tenant, x_gapvision_key)
+    return capabilities.for_tenant(tenant)
+
+
+class VisionAnalyzeRequest(BaseModel):
+    """One photograph of an object, from the phone the plugin runs on.
+
+    The G2 has no camera. This is the paired phone's, opened by the associate,
+    pointed at a SKU tag or a broken part — never at a person. See `vision.py`.
+    """
+    tenant: str | None = "gap"
+    kind: str = "sku"          # 'sku' | 'part'
+    image_base64: str
+    mime: str = "image/jpeg"
+    note: str | None = None    # what they said while taking it
+
+
+@app.post("/api/vision/analyze")
+def vision_analyze(req: VisionAnalyzeRequest, request: Request,
+                   x_gapvision_key: str | None = KeyHeader):
+    """Photograph in, cue out. The image is never stored — see `vision.py`.
+
+    Two gates before anything is read, in this order: the service key, then the
+    tenant's own `privacy.camera_capture`. The second is checked here rather
+    than trusted from the client, because the client is a static bundle and the
+    flag is the retailer's consent.
+    """
+    guard(request, req.tenant, x_gapvision_key)
+
+    slug = (req.tenant or "gap").lower()
+    if not capabilities.camera_capture(slug):
+        raise HTTPException(
+            status_code=403,
+            detail=(f"Camera capture is off for tenant '{slug}' "
+                    f"(privacy.{capabilities.CAMERA_CAPTURE}). It is off by "
+                    f"default; a tenant admin turns it on in Console → "
+                    f"Tenants. Photographs of objects only — this capability "
+                    f"is never used to identify people."),
+        )
+
+    try:
+        return vision.analyze(
+            tenant=slug, kind=req.kind, image_base64=req.image_base64,
+            mime=req.mime, note=req.note, crm=_crm(slug),
+        )
+    except vision.VisionRefused as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
 
 
 def _voice_failure(message: str, stt_name: str, duration: float | None,

@@ -85,6 +85,38 @@ export interface PageSpec {
   imageObject?: ImageContainer[];
 }
 
+/**
+ * A photo the *phone* took. Mirrors the SDK's `AppImageAsset` field for field
+ * (path, name, mimeType, size, base64) rather than importing it, the same way
+ * the container shapes above are declared here rather than pulled from the SDK
+ * — this module is the one place that knows what the host's types look like.
+ *
+ * The G2 has no camera and that does not change. `path` is a phone-side file
+ * reference; nothing in this plugin opens it, stores it or passes it on.
+ */
+export interface AppImageAsset {
+  path: string;
+  name: string;
+  mimeType: string;
+  /** Bytes of the encoded image, before base64. */
+  size: number;
+  base64: string;
+}
+
+/**
+ * What a capture attempt came back as.
+ *
+ * `captureImageFromCamera()` answers `AppImageAsset | null` and null means two
+ * completely different things: the associate backed out of the camera, or the
+ * Even App on this phone has no camera method at all. Those want different
+ * sentences on the glass — "no photo taken" is nothing to do about, "update
+ * the Even App" is. The bridge is where that distinction still exists, so it
+ * is drawn here rather than guessed at a layer that can no longer tell.
+ */
+export type CaptureResult =
+  | { ok: true; asset: AppImageAsset }
+  | { ok: false; reason: "cancelled" | "unsupported" | "failed"; detail?: string };
+
 /** What the host reports back from `updateImageRawData`. `success` is the only
  *  one that means a pixel reached the glass. */
 export type ImageResult =
@@ -116,6 +148,18 @@ export interface GlassesBridge {
    *  and an extra confirmation is a far cheaper mistake than a silent exit. */
   shutDownPageContainer(exitMode?: number): Promise<unknown>;
   audioControl(isOpen: boolean, source?: unknown): Promise<boolean>;
+  /**
+   * Open the **phone's** camera and hand back the photo.
+   *
+   * The glasses have no camera. This is the phone in the associate's pocket,
+   * pointed at a product tag or a broken part, so the answer can land in the
+   * glass. It photographs things, never people — see `vision.ts` for the whole
+   * statement of that boundary.
+   *
+   * Never rejects: every host outcome comes back as a `CaptureResult` so the
+   * caller can say which failure happened rather than "something went wrong".
+   */
+  captureImage(): Promise<CaptureResult>;
   onEvenHubEvent(cb: (event: any) => void): () => void;
   getUserInfo(): Promise<{ name?: string } | null>;
   /** Model and serial of the connected glasses.
@@ -155,6 +199,23 @@ function wrapReal(real: any): GlassesBridge {
         .catch((e: any) => `imageException: ${e}`) ?? Promise.resolve("unsupported"),
     shutDownPageContainer: (m = 1) => real.shutDownPageContainer(m),
     audioControl: (o, s) => real.audioControl(o, s),
+    // Optional-chained like `getDeviceInfo`, and for a sharper reason: the
+    // camera API arrived in a later Even App than the one some phones on a
+    // shop floor are running, and `captureImageFromCamera` is simply absent
+    // there. Absent is "unsupported"; a null return from a method that does
+    // exist is the associate backing out. Only the host can tell them apart,
+    // so the distinction is made here and never again.
+    captureImage: () => {
+      const call = real.captureImageFromCamera?.();
+      if (!call) return Promise.resolve<CaptureResult>({ ok: false, reason: "unsupported" });
+      return call
+        .then((asset: AppImageAsset | null) =>
+          asset?.base64
+            ? ({ ok: true, asset } as CaptureResult)
+            : ({ ok: false, reason: "cancelled" } as CaptureResult))
+        .catch((e: any) =>
+          ({ ok: false, reason: "failed", detail: String(e) }) as CaptureResult);
+    },
     onEvenHubEvent: (cb) => real.onEvenHubEvent(cb),
     getUserInfo: () => real.getUserInfo().catch(() => null),
     // Optional-chained: an older Even App build may not implement it, and
@@ -169,6 +230,7 @@ class MockBridge implements GlassesBridge {
   readonly kind = "mock" as const;
   private listeners = new Set<(event: any) => void>();
   private containers = new Map<number, TextContainer>();
+  private lists = new Map<number, ListContainer>();
   private images = new Map<number, ImageContainer & { src?: string }>();
   private audioTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -234,6 +296,29 @@ class MockBridge implements GlassesBridge {
         el.textContent = c.content;
         lens.appendChild(el);
       });
+    // List containers — the fact rail and the floor menu.
+    //
+    // These used to be dropped on the floor here, which meant the browser demo
+    // silently showed neither: the rail was invisible and the floor menu was a
+    // title and a footer with nothing between them. That is exactly the class
+    // of "renders nothing and says nothing" the glass itself is prone to, and
+    // having the mock share the fault removes the only place it could have
+    // been caught without hardware. Rows are laid out from the container's own
+    // `height`, the same way the host divides a list.
+    this.lists.forEach((c) => {
+      const rows = c.itemContainer.itemName;
+      const rowH = rows.length ? c.height / rows.length : c.height;
+      rows.forEach((label, i) => {
+        const el = document.createElement("div");
+        el.className = "lens-item";
+        el.style.left = `${c.xPosition * sx}px`;
+        el.style.top = `${(c.yPosition + i * rowH) * sy}px`;
+        el.style.width = `${c.width * sx}px`;
+        el.style.height = `${rowH * sy}px`;
+        el.textContent = label;
+        lens.appendChild(el);
+      });
+    });
     // Images last: an image container the host never received pixels for is
     // an empty box on the glass, and the browser should show the same empty
     // box rather than quietly drawing nothing.
@@ -253,8 +338,10 @@ class MockBridge implements GlassesBridge {
 
   async createStartUpPageContainer(page: PageSpec) {
     this.containers.clear();
+    this.lists.clear();
     this.images.clear();
     page.textObject.forEach((c) => this.containers.set(c.containerID, { ...c }));
+    (page.listObject || []).forEach((c) => this.lists.set(c.containerID, { ...c }));
     (page.imageObject || []).forEach((c) => this.images.set(c.containerID, { ...c }));
     this.paint();
     return "success";
@@ -285,6 +372,7 @@ class MockBridge implements GlassesBridge {
     // reviewers check, so the browser test needs to be able to read it back.
     (window as any).__cueExitMode = exitMode;
     this.containers.clear();
+    this.lists.clear();
     this.images.clear();
     this.paint();
     const lens = document.getElementById("virtual-lens");
@@ -368,6 +456,49 @@ class MockBridge implements GlassesBridge {
     }, FRAME_MS);
     return true;
   }
+  /**
+   * A canned photograph, so the capture flow runs end to end with no phone.
+   *
+   * The MockBridge is the reason this plugin is demoable at all, and the
+   * camera path would otherwise be the one flow you could not reach without
+   * hardware — which is how a flow stops being exercised and starts rotting.
+   * A 16x16 checker is enough: nothing on this side looks at the pixels, the
+   * service does, and a real backend answering "nothing recognised" for a
+   * checkerboard is the honest answer rather than a broken demo.
+   *
+   * `window.__cueMockCapture` forces the failure branches ("cancel" for the
+   * associate backing out, "unsupported" for an Even App without the camera
+   * API), because each of those has its own sentence on the glass and a
+   * sentence nobody can reach is a sentence nobody has read.
+   */
+  private static readonly CANNED_PNG_B64 =
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAAAAAA6mKC9AAAAG0lEQVR42mP4DwQKQACj" +
+    "GcgQQOaAaHIEBok7AEGEj4Gjm0KtAAAAAElFTkSuQmCC";
+
+  async captureImage(): Promise<CaptureResult> {
+    const forced = (window as any).__cueMockCapture;
+    if (forced === "cancel") return { ok: false, reason: "cancelled" };
+    if (forced === "unsupported") return { ok: false, reason: "unsupported" };
+    if (forced === "failed") return { ok: false, reason: "failed", detail: "mock" };
+    const base64 = MockBridge.CANNED_PNG_B64;
+    console.log("[mock] captureImageFromCamera → canned 16x16 png");
+    return {
+      ok: true,
+      asset: {
+        // Deliberately not a real path: nothing may read it, and a path that
+        // resolves invites something to try.
+        path: "mock://camera/tag.png",
+        name: "tag.png",
+        mimeType: "image/png",
+        // Bytes of the decoded PNG, which is what the host reports — not the
+        // length of the base64, which is a third larger and would make the
+        // oversize check disagree with the phone.
+        size: Math.floor((base64.length * 3) / 4),
+        base64,
+      },
+    };
+  }
+
   onEvenHubEvent(cb: (event: any) => void) {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);

@@ -2,17 +2,21 @@
   "package_id": "ai.cuesea.lens",
   "edition": "202601",
   "name": "CueSea Lens",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "min_app_version": "2.0.0",
   "min_sdk_version": "0.0.13",
   "entrypoint": "index.html",
   "permissions": [
     {
       "name": "network",
-      "desc": "Fetches the guest card and answers a floor associate's spoken questions about stock, size and price. All requests go to cuesea's own service.",
+      "desc": "Fetches the guest card, answers a floor associate's spoken questions about stock, size and price, and looks up a photographed product tag or part. All requests go to cuesea's own service.",
       "whitelist": [
         "https://realtime-production-80f4.up.railway.app"
       ]
+    },
+    {
+      "name": "camera",
+      "desc": "Photographs a product tag or a broken part with the phone camera, so the answer can appear in the glasses. It photographs things, never people: CueSea does no face detection and no person matching, and the photo is used once and not stored."
     },
     {
       "name": "g2-microphone",

@@ -18,6 +18,12 @@ dashboard; the glass stays deterministic.
 the records we hold and told to answer from them or decline. That is the
 standing decision — voice answers are grounded in records we hold, never a
 model's guess about stock — expressed as a prompt and enforced by a test.
+
+`read_image` extends the same rule to the phone camera: the model reads the
+characters off a tag, and `vision.py` looks that code up in inventory we hold.
+A price or a stock count the model "saw" is not an answer. And the subject of
+a photograph is an object — a tag, a label, a part — never a person: no face
+detection, no matching an image to a customer, not as a follow-up either.
 """
 import json
 import os
@@ -28,11 +34,43 @@ import urllib.request
 from . import cue as cue_format
 
 
+class VisionUnsupported(RuntimeError):
+    """This provider cannot look at an image.
+
+    Its own class so a caller can tell "nobody wired a vision model" (an
+    operator fixes it with an env var) apart from "the model call failed" (an
+    outage, which degrades to a cue on the glass instead).
+    """
+
+
 class BaseProvider:
     name = "base"
 
     def generate_script(self, guest: dict, recommendations: list[dict]) -> dict:
         raise NotImplementedError
+
+    def read_image(self, image_base64: str, mime: str, question: str) -> str:
+        """Look at one photograph and answer one question about it.
+
+        Returns the model's plain-text reading. The caller decides what to do
+        with it, and for anything the associate will act on the caller checks
+        it against records we hold — see `vision.py`. A reading is evidence
+        that a model saw some characters; it is never a fact about stock.
+
+        **Objects, never people.** The image reaching this method is a SKU tag,
+        a label, a part. Providers implement it with a prompt that refuses a
+        photograph of a person, and nothing in this layer does face detection
+        or matches an image to a customer.
+
+        Providers with no vision model raise `VisionUnsupported` rather than
+        returning something plausible, because the failure has to be visible to
+        the operator who chose the provider.
+        """
+        raise VisionUnsupported(
+            f"The '{self.name}' provider has no vision support. Set "
+            f"GAPVISION_LLM=grok (with XAI_API_KEY) to read images, or leave "
+            f"tenants' camera_capture off."
+        )
 
 
 class MockProvider(BaseProvider):
@@ -85,6 +123,19 @@ class MockProvider(BaseProvider):
             "cue": cue,
             "glasses_lines": cue_format.flatten(cue),
         }
+
+    #: What the mock "reads" off any image: nothing.
+    #:
+    #: Every other mock output is a plausible-looking stand-in, and this one
+    #: deliberately is not. A mock that returned "GAP-DNM-0498" would hand the
+    #: SKU path a code it never saw, the code would match a real inventory
+    #: record, and the lens would print a price and a stock count as though a
+    #: tag had been read — a fabricated fact wearing the grounded path's
+    #: clothes. The honest stub reads no identifier, and the caller says so.
+    NO_READING = "NONE"
+
+    def read_image(self, image_base64: str, mime: str, question: str) -> str:
+        return self.NO_READING
 
 
 class GrokProvider(BaseProvider):
@@ -255,6 +306,88 @@ class GrokProvider(BaseProvider):
             self.ANSWER_SYSTEM, json.dumps(records, default=str), max_tokens=160
         )
         return {"answer": answer}
+
+    # --- reading a photograph -------------------------------------------------
+    #
+    # Config:
+    #     CUE_VISION_MODEL=<a model id that accepts image input>
+    #
+    # Its own env var rather than reusing CUE_LLM_MODEL: the text model is
+    # chosen for latency (see the class docstring) and the vision model is
+    # chosen for whether it can read six-point type on a swing tag. Tying them
+    # together means one of the two is always the wrong choice.
+    #
+    # **The default is the text model, deliberately, and it may be wrong.**
+    # This shipped for a moment with `grok-4.20-0309-vision`, a model id
+    # constructed by analogy with the text one and never verified against the
+    # vendor. An invented id fails on the first real capture with a vendor
+    # error nobody expected; falling back to the model we already run at least
+    # fails as "this model does not accept images", which is a sentence that
+    # tells you what to do. Several current Grok models are multimodal, so it
+    # may simply work.
+    #
+    # Set CUE_VISION_MODEL explicitly once somebody has read the model list
+    # with the account's own key. xAI's documented image limits — 20 MiB, and
+    # jpg/jpeg or png only — are what the service's 3 MB cap and its 415 on
+    # other types are sized against.
+    DEFAULT_VISION_MODEL = os.environ.get("CUE_LLM_MODEL", "grok-4.20-0309-non-reasoning")
+    #: Longer than TIMEOUT. An image upload is a phone on shop wifi, and the
+    #: associate is standing at a shelf rather than walking toward a customer.
+    VISION_TIMEOUT = 20
+
+    VISION_SYSTEM = textwrap.dedent("""\
+        You look at one photograph taken by a retail or field-service worker
+        and answer one question about it.
+
+        Hard rules:
+        · The subject is an object — a price tag, a barcode, a label, a part.
+          If the photograph is mainly of a person, or the question asks you to
+          say anything about a person in it, reply with exactly NO_SUBJECT and
+          nothing else. You do not identify, describe or match people.
+        · Report only what is visible. You have no access to inventory, prices,
+          stock levels or customer records, and you must not state any. If you
+          can read a code, return the code; the system looks the code up.
+        · If you cannot read what was asked for, reply with exactly NONE.
+        · Plain text. No markdown, no preamble, no hedging sentences.
+    """)
+
+    def _vision_chat(self, question: str, image_base64: str, mime: str,
+                     *, max_tokens: int = 120) -> str:
+        """One image, one question, one line back.
+
+        The image goes into the request body as a data URL and is never
+        written anywhere else — not logged, not cached, not persisted. See the
+        `vision.py` docstring: an image that is never written cannot leak.
+        """
+        body = json.dumps({
+            "model": os.environ.get("CUE_VISION_MODEL", self.DEFAULT_VISION_MODEL),
+            "messages": [
+                {"role": "system", "content": self.VISION_SYSTEM},
+                {"role": "user", "content": [
+                    {"type": "text", "text": question},
+                    {"type": "image_url",
+                     "image_url": {"url": f"data:{mime};base64,{image_base64}",
+                                   "detail": "high"}},
+                ]},
+            ],
+            "max_tokens": max_tokens,
+            # Reading characters off a tag is not a task with a creative
+            # component. Anything above zero is a chance of a different digit.
+            "temperature": 0,
+        }).encode()
+        req = urllib.request.Request(
+            self.URL, data=body, method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._key()}",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=self.VISION_TIMEOUT) as resp:
+            out = json.loads(resp.read())
+        return (out["choices"][0]["message"]["content"] or "").strip()
+
+    def read_image(self, image_base64: str, mime: str, question: str) -> str:
+        return self._vision_chat(question, image_base64, mime)
 
 
 class AnthropicProvider(BaseProvider):

@@ -9,7 +9,7 @@ import express from "express";
 import http from "http";
 import cors from "cors";
 import { Server } from "socket.io";
-import { aiHeaders, createAiProxy } from "./proxy.js";
+import { aiHeaders, createAiProxy, VISION_PATH } from "./proxy.js";
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 const AI_API_KEY = process.env.GAPVISION_API_KEY;
@@ -17,7 +17,16 @@ const PORT = process.env.PORT || 4000;
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+
+// Everything here is small JSON except one route, whose body is a photograph.
+// `express.json()` defaults to a 100kb limit, so leaving the camera route to it
+// means every capture fails at the parser with a 413 that explains nothing.
+// The route brings its own parser with its own limit (see proxy.js), and the
+// AI service enforces the real image ceiling with a sentence the associate can
+// act on — so the only thing needed here is to stand aside for that one path.
+const parseJson = express.json();
+app.use((req, res, next) =>
+  req.path === VISION_PATH ? next() : parseJson(req, res, next));
 
 // Static clients (plugin, dashboard) cannot hold the AI service key, so they
 // call us and we attach it server-side. Mounted before the socket wiring.

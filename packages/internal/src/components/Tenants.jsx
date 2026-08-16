@@ -582,6 +582,19 @@ function TenantDetail({ tenant, onChanged }) {
               ))}
             </select>
           </label>
+          {/* Same helper, and it matters here for the same reason: `privacy` is
+              one jsonb column, so a bare PATCH of {camera_capture} would drop
+              retention_days and the opt-in tiers on the way past. */}
+          <label className="field">
+            <span>Phone camera</span>
+            <select
+              value={(tenant.privacy || {}).camera_capture ? "on" : "off"}
+              onChange={(e) => setPrivacy({ camera_capture: e.target.value === "on" })}
+            >
+              <option value="off">off — no capture</option>
+              <option value="on">on — objects only</option>
+            </select>
+          </label>
         </div>
         <p className="meta" style={{ marginBottom: 16, lineHeight: 1.5 }}>
           With this on, the manager dashboard shows the question the floor asked
@@ -590,6 +603,18 @@ function TenantDetail({ tenant, onChanged }) {
           beside it can't be judged.{" "}
           <strong>Retention is not enforced yet</strong>; the number is recorded
           and nothing deletes on it.
+        </p>
+        <p className="meta" style={{ marginBottom: 16, lineHeight: 1.5 }}>
+          The phone camera is off by default. Turned on, an associate can
+          photograph a SKU tag or a broken part with the phone that already runs
+          the Lens, and the answer comes back on the glass. The glasses have no
+          camera and are not getting one.{" "}
+          <strong>This is for objects — a tag, a label, a part — never people.</strong>{" "}
+          There is no face detection and no matching a photograph to a customer,
+          and neither is planned. A scanned code is looked up in the floor
+          records: the camera reads the tag, it does not decide what is in
+          stock. The image is read once and never stored — not on disk, not in
+          the database, not in a log.
         </p>
 
         {devices === null ? (

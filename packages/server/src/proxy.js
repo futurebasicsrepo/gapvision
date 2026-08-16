@@ -17,6 +17,22 @@
  */
 import express from "express";
 
+/**
+ * The one route whose body is an image, and the limit it gets.
+ *
+ * Exported because index.js has to let this path past the global
+ * `express.json()` — that parser is capped at 100kb, which every photograph
+ * exceeds, and its rejection is an opaque 413 from a middleware that has no
+ * idea why the request was large.
+ *
+ * Deliberately above the AI service's own 3 MB image ceiling. The service is
+ * the thing that knows the number and says it in a sentence an associate can
+ * act on ("resize to about 1600px"); this limit exists only to stop an
+ * unbounded body reaching the parser, so it must not fire first.
+ */
+export const VISION_PATH = "/api/vision/analyze";
+export const VISION_BODY_LIMIT = "6mb";
+
 export function createAiProxy({ aiServiceUrl, apiKey, allowRoster = false }) {
   const router = express.Router();
 
@@ -84,6 +100,58 @@ export function createAiProxy({ aiServiceUrl, apiKey, allowRoster = false }) {
       res.status(r.status).type("application/json").send(body);
     } catch (e) {
       console.error(`[proxy] context failed: ${e.message}`);
+      res.status(502).json({ error: "upstream_unavailable" });
+    }
+  });
+
+  /**
+   * What the plugin is allowed to offer.
+   *
+   * Booleans, from the AI service, with our key attached — the plugin is a
+   * static bundle and cannot hold one. It calls this on launch to decide what
+   * to draw: no camera button when the retailer has not enabled capture.
+   *
+   * Drawing is all this decides. The capture endpoint re-reads the flag
+   * server-side, so a bundle that ignores this answer gets a 403 rather than a
+   * capability the retailer never agreed to.
+   */
+  router.get("/api/tenant/capabilities", async (req, res) => {
+    const tenant = String(req.query.tenant ?? "gap").toLowerCase();
+    try {
+      const r = await fetch(
+        `${aiServiceUrl}/api/tenant/capabilities?tenant=${encodeURIComponent(tenant)}`,
+        { headers: headers() }
+      );
+      const body = await r.text();
+      res.status(r.status).type("application/json").send(body);
+    } catch (e) {
+      console.error(`[proxy] capabilities failed: ${e.message}`);
+      res.status(502).json({ error: "upstream_unavailable" });
+    }
+  });
+
+  /**
+   * One photograph of an object, on its way to the AI service.
+   *
+   * Its own JSON parser because the body is an image and the global one is
+   * capped at 100kb. Its own route rather than a passthrough entry because the
+   * passthrough deliberately withholds the service key, and this is a machine
+   * call with no human bearer token behind it.
+   *
+   * The image is relayed and never written here either — no disk, no log line.
+   * `console.error` below prints the transport failure and never the body.
+   */
+  router.post(VISION_PATH, express.json({ limit: VISION_BODY_LIMIT }), async (req, res) => {
+    try {
+      const r = await fetch(`${aiServiceUrl}${VISION_PATH}`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify(req.body ?? {}),
+      });
+      const body = await r.text();
+      res.status(r.status).type("application/json").send(body);
+    } catch (e) {
+      console.error(`[proxy] vision failed: ${e.message}`);
       res.status(502).json({ error: "upstream_unavailable" });
     }
   });

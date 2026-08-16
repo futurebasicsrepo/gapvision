@@ -51,6 +51,12 @@
       line-height:1.25;letter-spacing:.02em;white-space:pre;overflow:hidden;
       text-shadow:0 0 6px rgba(75,255,154,.45)}
     .lens-text.meta{color:var(--hud-300);font-weight:400;font-size:11.5px;letter-spacing:.2em}
+    /* List containers — the fact rail and the floor menu. A separate class,
+       not `.lens-text`, so the browser tests that read the three lines keep
+       reading exactly those. */
+    .lens-item{position:absolute;color:var(--hud-300);font-size:12.5px;font-weight:500;
+      line-height:1.25;letter-spacing:.02em;white-space:pre;overflow:hidden;
+      text-shadow:0 0 6px rgba(75,255,154,.30)}
     .lens-caption{color:var(--sea-200);font-size:10.5px;margin-top:6px;text-align:center}
     button{border:1px solid rgba(143,199,240,.22);background:var(--sea-700);color:var(--paper);
       font:inherit;font-size:12.5px;font-weight:500;padding:8px 12px;border-radius:8px;
