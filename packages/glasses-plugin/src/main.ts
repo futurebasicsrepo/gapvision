@@ -1784,7 +1784,9 @@ function mountFloorCard(caps: Capabilities) {
     // Said immediately, and replaced by the receipt when the server answers.
     // A composer that clears with no acknowledgement at all is one an
     // associate stops trusting after the first message that goes missing.
-    setFloorStatus(floorTarget ? `Sent to ${to}…` : "Sent to the floor.", "");
+    // Deliberately "Sending", not "Sent": this line is written before anything
+    // has been delivered, and only the receipt knows whether it was.
+    setFloorStatus(`Sending to ${to}…`, "");
     input.value = "";
   };
 
@@ -2173,9 +2175,25 @@ async function main() {
   // Both receipts are the sender's own business and stay on the phone: the
   // glass is for what other people said, not for confirmations of what you
   // said. The failure is the one that matters — see `radio:undelivered`.
-  socket.on("radio:delivered", ({ toName }: { toName?: string }) => {
-    setFloorStatus(`Delivered to ${toName || "them"}.`, "ok");
-    log(`radio → delivered to ${toName || "?"}`);
+  socket.on("radio:delivered", ({ toName, reach }: { toName?: string; reach?: number }) => {
+    if (toName) {
+      setFloorStatus(`Delivered to ${toName}.`, "ok");
+      log(`radio → delivered to ${toName}`);
+      return;
+    }
+    // A broadcast, and the count is the answer to the question the sender is
+    // actually asking. Nobody on the floor is the case worth colouring: it
+    // reads as success otherwise, and a message that reached no glasses is
+    // not a success — it is the broadcast version of "they left".
+    if (reach === 0) {
+      setFloorStatus("Nobody else is on the floor — nothing received it.", "warn");
+      log("radio → reached nobody");
+      return;
+    }
+    if (typeof reach === "number") {
+      setFloorStatus(`Sent to ${reach} on the floor.`, "ok");
+      log(`radio → reached ${reach}`);
+    }
   });
 
   socket.on("radio:undelivered", ({ reason, message }: { reason?: string; message?: string }) => {

@@ -31,8 +31,18 @@ export default function FloorMessage({ roster, user }) {
   // lens queues a message behind its unread count, so a "read" receipt would
   // either be a lie or need an acknowledgement instrument nobody asked for.
   useEffect(() => {
-    const onDelivered = ({ toName }) =>
-      setStatus({ tone: "ok", text: `Delivered to ${toName || "them"}.` });
+    const onDelivered = ({ toName, reach }) => {
+      if (toName) return setStatus({ tone: "ok", text: `Delivered to ${toName}.` });
+      // A broadcast's receipt is a count of glasses, and zero is the case that
+      // must not read as success — it is the broadcast version of "they left".
+      if (reach === 0) {
+        return setStatus({ tone: "error", text: "Nobody is on the floor — nothing received it." });
+      }
+      if (typeof reach === "number") {
+        return setStatus({ tone: "ok", text: `Sent to ${reach} on the floor.` });
+      }
+      return setStatus({ tone: "ok", text: "Sent." });
+    };
     const onUndelivered = ({ reason }) =>
       setStatus({
         tone: "error",
@@ -113,9 +123,10 @@ export default function FloorMessage({ roster, user }) {
     }
     socket.emit("radio:send", { message, ...(target ? { to: target } : {}) });
     setText("");
-    if (!target) setStatus({ tone: "ok", text: "Sent to the floor." });
-    // An addressed send says nothing yet: the server's receipt is a moment
-    // away and it is the one that knows whether anybody was there.
+    // "Sending", not "Sent" — this is written before anything has been
+    // delivered. The server's receipt is a moment away and it is the only
+    // thing that knows whether anybody was there to receive it.
+    setStatus({ tone: "", text: targetName ? `Sending to ${targetName}…` : "Sending to the floor…" });
   };
 
   const targetName = roster.find((r) => r.id === target)?.name;

@@ -804,6 +804,17 @@ io.on("connection", (socket) => {
     if (state.radioLog.length > 200) state.radioLog.shift();
     // One store's floor only. This line is the whole reason for the partition.
     io.to(associatesRoom(t)).emit("radio:message", entry);
+    // How many people it actually reached — the sender's own glasses excluded,
+    // because a lens never renders what its wearer just sent.
+    //
+    // "Sent to the floor" is a claim about the future; this is a fact about
+    // what happened. It also makes the empty floor visible: a message to
+    // nobody currently looks identical to a message to everyone, and the
+    // difference is the whole question a sender is asking.
+    socket.emit("radio:delivered", {
+      id: entry.id,
+      reach: state.associates.size - (state.associates.has(socket.id) ? 1 : 0),
+    });
     broadcastDashboard(t);
   });
 
