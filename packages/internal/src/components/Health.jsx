@@ -105,7 +105,7 @@ export default function Health() {
         <div className="card-head">
           <h3>Platform</h3>
           <div className="btn-row">
-            <span className="meta mono">
+            <span className="machine">
               {platform ? `checked ${when(platform.checked_at)}` : busy ? "checking…" : "—"}
             </span>
             <button className="btn small" onClick={load} disabled={busy}>Re-check</button>

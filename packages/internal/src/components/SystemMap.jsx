@@ -24,7 +24,7 @@ const NODE = { w: 148, h: 62, r: 8 };
 function Node({ x, y, name, sub, tone = "core", w = NODE.w, h = NODE.h }) {
   const fill = {
     core: "var(--sea-800)",
-    edge: "rgba(4,18,46,0.55)",
+    edge: "rgba(20,25,32,0.55)",
     ext: "transparent",
   }[tone];
   const stroke = {

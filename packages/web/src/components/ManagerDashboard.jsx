@@ -4,8 +4,11 @@ import { api, clock, compact, duration, money } from "../api.js";
 import Waiting from "./Waiting.jsx";
 import { Empty, Legend, ScoreBar, SERIES, StatTile } from "./Charts.jsx";
 
-/** Outcome → pill tone. Green is reserved for a genuinely good end state;
- *  an abandoned engagement reading as success is worse than no colour. */
+/** Outcome → pill tone. Nothing here is green: hud green is what CueSea itself
+ *  says, in the glass, and a status word wearing it would train everyone to
+ *  stop reading statuses. A sale is the brighter slate; an abandoned
+ *  engagement is an ordinary outcome and stays neutral, because reading as
+ *  success is worse than reading as nothing. */
 const OUTCOME_TONE = {
   sale: "available",
   no_sale: "neutral",
@@ -174,7 +177,7 @@ export default function ManagerDashboard({ user }) {
           ))}
         </div>
         <span className="meta">
-          {tenant || "—"} · signed in as {user.name}
+          {tenant || <span className="unknown">—</span>} · signed in as {user.name}
           {isCueStaff && (
             <button className="linkish" style={{ marginLeft: 10 }}
                     onClick={() => setTenant(null)}>switch store</button>
@@ -346,7 +349,9 @@ export default function ManagerDashboard({ user }) {
         </div>
       </div>
 
-      <div className="card span-12 footnote meta">
+      {/* A sentence, so the sans — even though every value in it is machine
+          output. `.meta` would have put the whole line in tracked caps. */}
+      <div className="card span-12 footnote">
         Average engagement {duration(s.avg_engagement_seconds)} ·
         {" "}{s.voice.stt_seconds.toFixed(1)}s of audio transcribed in this period
       </div>

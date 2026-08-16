@@ -31,6 +31,17 @@ export default function App() {
   const [invite, setInvite] = useState(invitedToken);
   const [view, setView] = useState("floor");
   const [connected, setConnected] = useState(socket.connected);
+  // The bar boots before it becomes glass: one scan sweep, then the blur and
+  // the lift fade in. Reduced motion skips straight to the settled state.
+  const [booting, setBooting] = useState(true);
+
+  useEffect(() => {
+    let reduce = false;
+    try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { /* no matchMedia */ }
+    if (reduce) { setBooting(false); return; }
+    const t = setTimeout(() => setBooting(false), 1150);
+    return () => clearTimeout(t);
+  }, []);
 
   // A stored token may have been revoked or expired since the tab was open;
   // confirm it before rendering a dashboard that would 401 on every panel.
@@ -97,7 +108,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <div className="topbar">
+      <div className={booting ? "topbar booting" : "topbar"}>
         <div className="brand">
           <Wordmark size={20} />
           <span className="brand-sub">

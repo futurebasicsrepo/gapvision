@@ -43,7 +43,7 @@ export default function Brand() {
       <div className="card span-12">
         <div className="card-head">
           <h3>Brand & identity · v{tokens.version}</h3>
-          <span className="meta mono">
+          <span className="meta">
             {copied ? <span className="copied">copied {copied}</span> : "click any swatch to copy"}
           </span>
         </div>

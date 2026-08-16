@@ -1,4 +1,5 @@
 import { duration } from "../api.js";
+import Decode from "./Decode.jsx";
 
 /**
  * What is waiting on the floor.
@@ -28,7 +29,11 @@ export default function Waiting({ rows = [], demand = [] }) {
     <>
       <div className="card span-12">
         <div className="card-head">
-          <h2>Waiting on the floor</h2>
+          {/* The dashboard's heading, and one of the two places Studio
+              decodes at all: it resolves once on first paint and never
+              again, because nothing here is worth re-animating for a
+              manager who has had the screen open since ten. */}
+          <h2><Decode text="Waiting on the floor" /></h2>
           <span className="meta">{rows.length === 0 ? "nothing waiting" :
             `${rows.length} open · ${open} unclaimed`}</span>
         </div>
@@ -70,7 +75,7 @@ export default function Waiting({ rows = [], demand = [] }) {
 
       {demand.length > 0 && (
         <div className="card span-12">
-          <div className="card-head"><h2>What the floor gets asked for</h2></div>
+          <div className="card-head"><h2><Decode text="What the floor gets asked for" /></h2></div>
           <p className="card-note">
             Kept when the retention sweep runs, deliberately: what people ask
             for and how long they wait is a question about a shop, not about a
@@ -87,13 +92,16 @@ export default function Waiting({ rows = [], demand = [] }) {
             <tbody>
               {demand.slice(0, 12).map((d, i) => (
                 <tr key={`${d.sku || d.product}-${d.size}-${i}`}>
-                  <td>{[d.product, d.size].filter(Boolean).join(" · ") || "—"}</td>
+                  {/* Unknown is slate and dashed, never a blank and never a
+                      value — a row that names nothing has to look like one. */}
+                  <td>{[d.product, d.size].filter(Boolean).join(" · ")
+                        || <span className="unknown">—</span>}</td>
                   <td><span className="meta">{d.need}</span></td>
                   <td className="num">{d.asks}</td>
                   <td className="num">{d.fulfilled}</td>
                   <td className="num">
                     {d.avg_claim_seconds == null
-                      ? <span className="meta">—</span>
+                      ? <span className="unknown">—</span>
                       : duration(Number(d.avg_claim_seconds))}
                   </td>
                 </tr>

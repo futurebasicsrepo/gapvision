@@ -240,7 +240,11 @@ function ConnectShopify({ tenant }) {
             <button className="btn small ghost" onClick={() => setEditing(true)}>
               Replace credentials
             </button>
-            <button className="btn small ghost" onClick={disconnect} disabled={busy}>
+            {/* The one irreversible control in this card: it deletes the
+                token and drops the store back to demo data. Outlined in
+                flame, never filled — it is a warning about what the button
+                does, not an invitation to press it. */}
+            <button className="btn small danger" onClick={disconnect} disabled={busy}>
               Disconnect
             </button>
           </div>
@@ -275,7 +279,7 @@ function ConnectShopify({ tenant }) {
               status={cred.last_test_ok === false ? "fail"
                 : cred.last_test_ok == null ? "unknown"
                 : missing.length ? "warn" : "ok"}
-              label={cred.store_domain}
+              label={<span className="machine">{cred.store_domain}</span>}
               detail={
                 cred.last_test_ok == null
                   ? "connected but never tested"
@@ -289,7 +293,7 @@ function ConnectShopify({ tenant }) {
                   (cred.scopes || []).includes(s.handle) ? "ok"
                     : s.required ? "fail" : "warn"
                 }
-                label={s.handle}
+                label={<span className="machine">{s.handle}</span>}
                 detail={(cred.scopes || []).includes(s.handle)
                   ? "granted"
                   : s.required ? `required — ${s.why}` : `absent — ${s.why} won't work`}
@@ -298,8 +302,8 @@ function ConnectShopify({ tenant }) {
           </div>
 
           <p className="meta" style={{ lineHeight: 1.6 }}>
-            Token {cred.fingerprint} · sealed with key{" "}
-            <span className="mono">{cred.key_id}</span> ·{" "}
+            Token <span className="ident">{cred.fingerprint}</span> · sealed with key{" "}
+            <span className="ident">{cred.key_id}</span> ·{" "}
             {cred.auth_kind === "admin_token"
               ? "static Admin API token"
               : "client credentials (re-minted every 24h)"}
@@ -635,7 +639,7 @@ function TenantDetail({ tenant, onChanged }) {
                           ))}
                         </select>
                       </td>
-                      <td className="meta mono">{when(d.last_seen_at)}</td>
+                      <td><span className="machine">{when(d.last_seen_at)}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -728,7 +732,7 @@ export default function Tenants() {
                     <td><span className="pill muted">{t.billing_plan}</span></td>
                     <td>
                       {t.status === "active"
-                        ? <span className="meta">active</span>
+                        ? <span className="machine">active</span>
                         : <span className="pill flame">{t.status}</span>}
                     </td>
                     <td className="num">{compact(t.users)}</td>
@@ -837,9 +841,9 @@ export function PersonRow({ user, onChange, onError }) {
       <td>
         {disabled
           ? <span className="pill flame">disabled</span>
-          : <span className="meta">active</span>}
+          : <span className="machine">active</span>}
       </td>
-      <td className="meta mono">{when(user.last_login_at)}</td>
+      <td><span className="machine">{when(user.last_login_at)}</span></td>
       <td className="right">
         <div className="btn-row" style={{ justifyContent: "flex-end", gap: 6 }}>
           {!user.last_login_at && !disabled && (

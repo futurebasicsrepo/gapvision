@@ -107,17 +107,17 @@ export default function Plates() {
                 const hot = !dead && busy.has(p.token);
                 return (
                   <tr key={p.token} className={dead ? "row-muted" : ""}>
-                    <td>{p.zone}{p.label ? <span className="meta"> · {p.label}</span> : null}</td>
+                    <td>{p.zone}{p.label ? <span className="machine"> · {p.label}</span> : null}</td>
                     <td><span className="pill muted">{p.source}</span></td>
                     <td className="ident">{p.token}</td>
                     <td className={"num" + (hot ? " hot" : "")}>{p.hits_last_hour || 0}</td>
                     <td className="num">{p.refused_today || 0}</td>
                     <td>
                       {dead
-                        ? <span className="meta">revoked {when(p.revoked_at)}</span>
+                        ? <span className="machine">revoked {when(p.revoked_at)}</span>
                         : hot
                           ? <span className="pill hot">busy</span>
-                          : <span className="meta">live</span>}
+                          : <span className="machine">live</span>}
                     </td>
                     <td className="right">
                       {!dead && (

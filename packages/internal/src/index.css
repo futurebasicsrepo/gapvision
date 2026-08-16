@@ -17,13 +17,66 @@
 
 body {
   font-family: var(--sans);
-  background: var(--slate-800);
+  /* Three planes and a line. The gradient is fixed and attached so it belongs
+     to the window rather than to the scroll — the ground does not move under
+     the reading. */
+  background:
+    linear-gradient(178deg, #232A36 0%, var(--slate-800) 52%, var(--slate-900) 100%)
+    fixed;
   color: var(--slate-100);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 
+/* Ambient field. Two blooms where the site has three, and quieter: a marketing
+   page is read for forty seconds and a dashboard for twenty minutes, so this
+   is depth rather than atmosphere. Fixed, behind everything, never animated. */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(680px 480px at 88% -6%, rgba(62, 155, 232, 0.055), transparent 68%),
+    radial-gradient(760px 560px at 6% 104%, rgba(15, 63, 128, 0.075), transparent 70%);
+}
+
 .console { max-width: 1240px; margin: 0 auto; padding: 22px 24px 64px; }
+
+/* ---------- Machine voice ----------
+   The rule that does the most work in this app: the machine and the person do
+   not speak in the same typeface. Anything the system is stating — a column
+   header, a field label, a status word, an identifier, a timestamp, a count, a
+   slug, a key id, a fingerprint, an address in a metadata position — is set
+   here. Anything somebody wrote stays in Instrument Sans.
+
+   --slate-300 is the floor for this, measured on --slate-700 (4.63:1), because
+   a card is the worst ground in the app and machine chrome lands on cards
+   constantly. */
+.machine {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--slate-300);
+  line-height: 1.4;
+}
+/* Figures keep their size — a count is still the machine talking, but a 30px
+   number set at 10px is not a rule, it is a mistake. */
+.machine.num, .machine-num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ---------- Decode ----------
+   Characters are grouped by word so a title never breaks mid-word; the spaces
+   between words are the only wrap opportunities the line has. */
+.decode-word { display: inline-block; white-space: nowrap; }
+.decode-char { display: inline-block; transition: color 220ms linear; }
+/* The landing flash. Sea, because it is the only accent this app is allowed —
+   hud green belongs to a rendered lens and nowhere else. */
+.decode-char.lit { color: var(--sea-200); transition: none; }
 
 /* ---------- Shell: fixed left rail, scrolling content ----------
    The rail is a destination list, not a tab strip — billing, audit and
@@ -31,45 +84,115 @@ body {
    about six. */
 .shell { display: flex; min-height: 100vh; }
 
+/* ---------- The rail, and the only glass in this app ----------
+   Exactly one blurred surface here. Repeated rows, cards and tables stay
+   solid: blur on a scrolling list is what janks a mid-range phone, and the
+   floor runs on mid-range phones.
+
+   The blur arrives *after* boot — `.rail:not(.booting)` — so the sequence is
+   scan, resolve, settle into glass, and not all three at once. The base tint
+   is deliberately dark (slate-900 at .82 under a .05 → .016 white gradient):
+   glass lightens the surface under the type, and --slate-300 has to clear
+   4.5:1 at the top of the rail where the plane is lightest. */
 .rail {
   width: 236px; flex: none; position: sticky; top: 0; align-self: flex-start;
   height: 100vh; display: flex; flex-direction: column;
   background: var(--slate-700); border-right: 1px solid rgba(255, 255, 255, 0.077);
   padding: 20px 0 16px;
+  overflow: hidden;
 }
+.rail:not(.booting) {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.050), rgba(255, 255, 255, 0.016)),
+    rgba(20, 25, 32, 0.82);
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  backdrop-filter: blur(30px) saturate(200%);
+  border-right-color: rgba(255, 255, 255, 0.11);
+  /* The inset top highlight is what makes it read as an edge of glass rather
+     than as a translucent panel. */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 16px 48px rgba(0, 0, 0, 0.32);
+}
+
+/* The specular bloom, and over it the sheen — 19s, and the only thing in this
+   app that loops. A permanent animation on a dashboard someone leaves open on
+   a second monitor is a distraction and a battery cost; a sheen this slow is
+   under the threshold where the eye starts tracking it. */
+.rail:not(.booting)::before {
+  content: "";
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(420px 220px at 22% -8%, rgba(255, 255, 255, 0.075), transparent 70%);
+}
+.rail:not(.booting)::after {
+  content: "";
+  position: absolute; top: -40%; bottom: -40%; left: -60%; width: 42%;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg, transparent, rgba(255, 255, 255, 0.055) 46%, rgba(255, 255, 255, 0.075) 52%, transparent);
+  animation: rail-sheen 19s linear infinite;
+}
+/* Transform, not `left`: the sheen must not lay out the rail 60 times a second
+   on a machine that is doing something else. */
+@keyframes rail-sheen {
+  0%   { transform: translateX(0) skewX(-14deg); }
+  38%  { transform: translateX(480%) skewX(-14deg); }
+  100% { transform: translateX(480%) skewX(-14deg); }
+}
+
+/* The scan, once. It lives on `.booting`, and the shell drops that class when
+   the boot sequence ends — so the element that carries it stops existing and
+   there is no path by which this can run twice. */
+.rail.booting::after {
+  content: "";
+  position: absolute; left: 0; right: 0; height: 128px; top: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg, transparent, rgba(62, 155, 232, 0.16) 62%, rgba(143, 199, 240, 0.34) 92%, transparent);
+  animation: rail-scan 900ms cubic-bezier(0.2, 0.7, 0.3, 1) 1 forwards;
+}
+@keyframes rail-scan {
+  from { transform: translateY(-128px); opacity: 0; }
+  12%  { opacity: 1; }
+  to   { transform: translateY(100vh); opacity: 0; }
+}
+
+/* Rail contents sit above the glass chrome. */
+.rail-brand, .rail-role, .rail-nav, .rail-foot { position: relative; z-index: 1; }
+
 /* No flame edge here, tempting as it was. The rail is one screen region and
-   the budget is one flame: it goes on the active item, where it does work.
-   "CUE CONSOLE · STAFF" is what keeps a screenshot of this from being
-   mistaken for a customer's CueSea Studio. */
+   the budget is one flame: it goes on "CONSOLE · STAFF", which is what keeps a
+   screenshot of this from being mistaken for a customer's CueSea Studio. The
+   active item is therefore sea — a selection is not a warning, and two flames
+   in one region is one too many. */
 .rail-brand { padding: 0 20px 12px; }
 .rail-role {
   display: flex; align-items: center; gap: 7px; padding: 0 20px 20px;
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--flame-300);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em;
+  font-weight: 500; text-transform: uppercase; color: var(--flame-300);
 }
 
 .rail-nav { flex: 1; overflow-y: auto; padding: 0 10px; }
 .rail-section + .rail-section { margin-top: 22px; }
 .rail-section-label {
-  font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--sea-300);
-  padding: 0 10px 8px; opacity: 0.75;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em;
+  font-weight: 500; text-transform: uppercase; color: var(--slate-300);
+  padding: 0 10px 8px;
 }
 .rail-item {
   display: block; width: 100%; text-align: left; border: 0; cursor: pointer;
   background: transparent; color: var(--slate-200); font: inherit;
   padding: 9px 10px; border-radius: 8px; margin-bottom: 2px;
-  border-left: 2px solid transparent;
+  border-left: 2px solid transparent; min-height: 44px;
 }
 .rail-item:hover { background: rgba(255, 255, 255, 0.033); color: var(--slate-100); }
 .rail-item.active {
-  background: rgba(255, 255, 255, 0.055); border-left-color: var(--flame);
+  background: rgba(255, 255, 255, 0.055); border-left-color: var(--sea-300);
   color: var(--slate-100);
 }
 .rail-item-name { display: block; font-size: 13.5px; font-weight: 500; }
 .rail-item.active .rail-item-name { font-weight: 600; }
+/* The hint is a person explaining the destination, so it stays in the sans. */
 .rail-item-hint {
-  display: block; font-size: 11px; color: var(--sea-300); margin-top: 2px;
+  display: block; font-size: 11px; color: var(--slate-300); margin-top: 2px;
   line-height: 1.3;
 }
 
@@ -78,8 +201,10 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.066);
   display: flex; flex-direction: column; gap: 5px; align-items: flex-start;
 }
+/* An address in a metadata position — machine, not correspondence. */
 .rail-user {
-  font-family: var(--mono); font-size: 11px; color: var(--slate-300);
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--slate-300);
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -108,15 +233,15 @@ body {
   .nav-open .rail { transform: translateX(0); }
   .nav-open .rail-scrim {
     display: block; position: fixed; inset: 0; z-index: 20;
-    background: rgba(4, 18, 46, 0.72);
+    background: rgba(20, 25, 32, 0.72);
   }
   .nav-toggle { display: block; }
   .main { padding: 20px 18px 56px; }
 }
 
 .eyebrow {
-  font-family: var(--mono); font-weight: 500; font-size: 11.5px;
-  letter-spacing: 0.16em; text-transform: uppercase; color: var(--sea-300);
+  font-family: var(--mono); font-weight: 500; font-size: 10px;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--slate-300);
 }
 .mono { font-family: var(--mono); }
 
@@ -129,11 +254,14 @@ body {
 .wordmark-text { font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
 .brand { display: flex; align-items: center; gap: 14px; }
 .brand-sub {
-  font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em;
-  color: var(--flame-300); text-transform: uppercase;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.15em; color: var(--flame-300); text-transform: uppercase;
 }
 .topbar-right { display: flex; align-items: center; gap: 14px; }
-.whoami { font-family: var(--mono); font-size: 11.5px; color: var(--slate-300); }
+.whoami {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--slate-300);
+}
 
 .view-switch {
   display: flex; gap: 4px; background: var(--slate-700); padding: 4px;
@@ -161,9 +289,12 @@ body {
   background: var(--slate-700); border: 1px solid rgba(255, 255, 255, 0.077);
   border-radius: var(--radius); padding: 18px;
 }
-.card h3 {
-  font-family: var(--mono); font-size: 11px; text-transform: uppercase;
-  letter-spacing: 0.14em; color: var(--sea-300); margin-bottom: 12px; font-weight: 500;
+/* A panel heading is the machine naming a region, not a person writing a
+   headline — so it takes the mono chrome, and --slate-300 on --slate-700
+   (4.63:1) rather than the accent. */
+.card h3, .card h2 {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.15em; color: var(--slate-300); margin-bottom: 12px; font-weight: 500;
 }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .card-note { color: var(--slate-300); font-size: 12.5px; line-height: 1.6; margin: -4px 0 14px; max-width: 68ch; }
@@ -175,19 +306,33 @@ body {
 
 .stat { display: flex; flex-direction: column; gap: 3px; }
 .stat-label {
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.13em;
-  text-transform: uppercase; color: var(--sea-300); font-weight: 500;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--slate-300); font-weight: 500;
 }
-.stat-value { font-size: 30px; font-weight: 600; line-height: 1.08; letter-spacing: -0.025em; }
-.stat-sub { font-size: 12px; color: var(--slate-300); line-height: 1.45; }
+/* A count is the machine talking, so it is set in the mono — but a figure is
+   not chrome, and shrinking it to 10px to satisfy the letter of the rule would
+   throw away the one thing on the card anybody is looking for. Mono, tabular,
+   at the size the number deserves. */
+.stat-value {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 30px; font-weight: 500; line-height: 1.08; letter-spacing: -0.02em;
+}
+.stat-sub {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--slate-300); line-height: 1.45;
+}
 
 .meta { color: var(--slate-300); font-size: 12px; }
 .empty { color: var(--slate-300); font-size: 12.5px; padding: 8px 0; line-height: 1.5; }
 
+/* Status words and short identifiers. Uppercase mono, because every one of
+   these is a value the system chose — a plan, a role, a model, a state. */
 .pill {
-  font-family: var(--mono); font-size: 10.5px; font-weight: 500; padding: 3px 9px;
+  font-family: var(--mono); font-size: 10px; font-weight: 500; padding: 4px 9px;
   border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.121);
-  color: var(--slate-200); letter-spacing: 0.06em; white-space: nowrap;
+  color: var(--slate-200); letter-spacing: 0.14em; text-transform: uppercase;
+  white-space: nowrap;
 }
 .pill.muted { color: var(--slate-300); border-color: rgba(255, 255, 255, 0.077); }
 .pill.flame { color: var(--flame-300); border-color: rgba(255, 176, 138, 0.5); }
@@ -199,13 +344,18 @@ body {
 .checks { display: flex; flex-direction: column; gap: 7px; }
 .check {
   display: flex; align-items: center; gap: 12px;
-  background: rgba(4, 18, 46, 0.55); border: 1px solid rgba(255, 255, 255, 0.055);
+  background: rgba(20, 25, 32, 0.55); border: 1px solid rgba(255, 255, 255, 0.055);
   border-left-width: 3px; border-radius: 8px; padding: 11px 13px;
 }
 .check-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+/* A check label is what somebody named the assertion — "Speech-to-text",
+   "Language model". That is a person, so it stays in the sans. Where the label
+   is the machine's own string (a store domain, a scope handle) the caller
+   wraps it in `.machine`. */
 .check-label { font-size: 13px; font-weight: 500; }
 .check-detail {
-  font-family: var(--mono); font-size: 11.5px; color: var(--slate-300);
+  font-family: var(--mono); font-size: 11px; color: var(--slate-300);
+  letter-spacing: 0.02em;
   margin-left: auto; text-align: right; padding-left: 12px;
 }
 /* Sea for pass: a wall of green ticks trains you to stop reading them. Flame
@@ -218,20 +368,39 @@ body {
 .check.fail  { border-left-color: var(--flame); background: rgba(255, 107, 44, 0.10); }
 .check.fail  .check-dot { background: var(--flame); }
 .check.fail  .check-label { color: var(--flame-300); }
-.check.unknown { border-left-color: var(--ink-500); }
-.check.unknown .check-dot { background: var(--ink-300); }
+/* Unknown is --slate-300 and dashed — a hollow dot and a broken edge, so it is
+   not mistakable for a pass at a glance or in a photograph of a screen. The ink
+   ramp is the editorial greys and has no business here; the slate ramp is the
+   greys in the product. */
+.check.unknown { border-left-color: var(--slate-300); border-left-style: dashed; }
+.check.unknown .check-dot {
+  background: transparent; box-shadow: inset 0 0 0 1.5px var(--slate-300);
+}
 .check.unknown .check-label { color: var(--slate-300); }
+/* Where the label is the machine's own string — a store domain, a scope
+   handle — it carries `.machine`, and the row's state has to reach through it
+   rather than being cancelled by it. */
+.check.fail .check-label .machine { color: var(--flame-300); }
 
-/* ---------- Tables ---------- */
+/* ---------- Tables ----------
+   Solid, always. Every row here repeats and half of them scroll, and blur on a
+   scrolling list is what janks a mid-range phone.
+
+   This block was written twice — once here and once under "plates" at the foot
+   of the file — and the second copy silently won on source order. Merged, with
+   the values that were actually rendering. */
 .table { width: 100%; border-collapse: collapse; font-size: 13px; }
+/* A column header is the machine naming a column. There is no case where it is
+   anything else, which is why this is the clearest instance of the rule. */
 .table th {
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--sea-300); font-weight: 500;
-  text-align: left; padding: 0 12px 9px; border-bottom: 1px solid rgba(255, 255, 255, 0.077);
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--slate-300); font-weight: 500;
+  text-align: left; padding: 0 12px 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.077);
   white-space: nowrap;
 }
 .table td {
-  padding: 11px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.039);
+  padding: 11px 12px 11px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.044);
   vertical-align: middle;
 }
 .table tr:last-child td { border-bottom: 0; }
@@ -239,49 +408,98 @@ body {
 .table tbody tr.clickable:hover { background: rgba(255, 255, 255, 0.028); }
 .table tbody tr.selected { background: rgba(255, 255, 255, 0.05); }
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.table .num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 12px; }
+.table .right { text-align: right; }
+/* Flame on the figure that is asking to be looked at, and nowhere else in the
+   row — the count is the signal, not the whole line. */
+.table .num.hot { color: var(--flame); }
 /* `.table th` sets text-align: left and outranks `.num` on specificity, which
-   silently left-aligns numeric headers over right-aligned figures. */
-.table th.num { text-align: right; }
-.ident { font-family: var(--mono); font-size: 12.5px; color: var(--slate-200); }
+   silently left-aligns numeric headers over right-aligned figures. The size is
+   restated for the same reason in reverse: `.table .num` outranks `.table th`,
+   so without this a numeric column header sets at the figure's 12px while the
+   header beside it sets at 9.5px. */
+.table th.num { text-align: right; font-size: 9.5px; }
+.row-muted td { opacity: 0.45; }
+/* An identifier: a slug, a serial, a token, a package path. Mono, and never
+   uppercased — half of these are case-sensitive strings somebody will retype. */
+.ident {
+  font-family: var(--mono); font-size: 12px; color: var(--slate-200);
+  letter-spacing: 0.01em;
+}
 .table-wrap { overflow-x: auto; }
 
-/* ---------- Buttons & forms ---------- */
+/* ---------- Buttons & forms ----------
+   Button text is a person telling you what will happen, so it stays in the
+   sans. Primary is sea. There is no flame button and there will not be one:
+   flame is a signal, and a signal you can click is an instruction. */
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .btn {
   background: var(--slate-600); border: 1px solid rgba(255, 255, 255, 0.121);
   color: var(--slate-100); font: inherit; font-size: 13px; font-weight: 500;
   padding: 9px 14px; border-radius: 8px; cursor: pointer;
+  min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .btn:hover:not(:disabled) { background: var(--sea-600); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn.primary { background: var(--sea-600); border-color: var(--sea-500); font-weight: 600; }
 .btn.primary:hover:not(:disabled) { background: var(--sea-500); }
 .btn.ghost { background: transparent; }
-.btn.small { padding: 6px 11px; font-size: 12px; }
+/* Danger is outlined and never filled. A filled flame button is the product
+   shouting at you before you have done anything wrong, and it spends the one
+   flame this region has on a control rather than on a state. */
+.btn.danger {
+  background: transparent; border-color: rgba(255, 140, 87, 0.45);
+  color: var(--flame-300);
+}
+.btn.danger:hover:not(:disabled) {
+  background: rgba(255, 107, 44, 0.10); border-color: var(--flame-400);
+}
+/* Dense controls that live among data rather than among labelled fields. Still
+   44px anywhere a finger is the pointer — see the coarse-pointer block below. */
+.btn.small { padding: 6px 12px; font-size: 12px; min-height: 34px; }
 
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
-.field span { color: var(--slate-200); }
+/* A field label names what the machine will store. Mono chrome, like a column
+   header, because that is exactly what it is. */
+.field > span {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.15em; text-transform: uppercase; color: var(--slate-300);
+}
+/* 16px, not 13.5px. Anything smaller makes iOS zoom the page on focus, and a
+   form that jumps when you tap it feels broken in a way people cannot name. */
 .field input, .field select {
   background: var(--slate-800); border: 1px solid rgba(255, 255, 255, 0.11); color: var(--slate-100);
-  border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 13.5px;
-}
-.field input:focus, .field select:focus {
-  outline: 2px solid var(--sea-400); outline-offset: 1px; border-color: transparent;
+  border-radius: 8px; padding: 11px 12px; font: inherit; font-size: 16px;
+  min-height: 44px;
 }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+
+/* ---------- Focus ----------
+   One ring, always visible, never removed. It is the same ring on every
+   focusable thing in the app so that arriving on one by keyboard tells you the
+   same story wherever you are. */
+:focus-visible {
+  outline: 2px solid var(--sea-300);
+  outline-offset: 2px;
+}
+/* Some of these had their own ring at a different colour and offset. */
+.field input:focus-visible, .field select:focus-visible,
+.assign:focus-visible, .input-inline:focus-visible {
+  outline: 2px solid var(--sea-300); outline-offset: 2px; border-color: transparent;
+}
 
 /* Inline assignment control. Sized to the table row rather than the form
    scale — it lives among data, not among labelled fields. */
 .assign {
-  background: rgba(4, 18, 46, 0.7); border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(20, 25, 32, 0.7); border: 1px solid rgba(255, 255, 255, 0.11);
   color: var(--slate-100); font: inherit; font-size: 12.5px;
   padding: 5px 8px; border-radius: 6px; cursor: pointer; max-width: 190px;
 }
-.assign:focus { outline: 2px solid var(--sea-400); outline-offset: 1px; }
 
 .notice {
   font-size: 13px; border-radius: 8px; padding: 10px 12px; line-height: 1.5;
-  border: 1px solid rgba(255, 255, 255, 0.138); background: rgba(4, 18, 46, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.138); background: rgba(20, 25, 32, 0.5);
   color: var(--slate-200);
 }
 .notice.error {
@@ -302,7 +520,7 @@ body {
 .doc strong { color: var(--slate-100); font-weight: 600; }
 .doc code {
   font-family: var(--mono); font-size: 12px; color: var(--slate-200);
-  background: rgba(4, 18, 46, 0.7); padding: 1px 5px; border-radius: 4px;
+  background: rgba(20, 25, 32, 0.7); padding: 1px 5px; border-radius: 4px;
 }
 .doc ul { margin: 0 0 12px 0; padding-left: 18px; }
 .doc li { font-size: 13.5px; line-height: 1.6; color: var(--slate-200); margin-bottom: 6px; }
@@ -312,14 +530,18 @@ body {
 /* Flow diagram — a row of stages with the hop labelled between them. */
 .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; }
 .flow-node {
-  background: rgba(4, 18, 46, 0.6); border: 1px solid rgba(255, 255, 255, 0.099);
+  background: rgba(20, 25, 32, 0.6); border: 1px solid rgba(255, 255, 255, 0.099);
   border-radius: 8px; padding: 11px 13px; min-width: 132px; flex: 1 1 132px;
 }
 .flow-node .n-name { font-size: 13px; font-weight: 600; }
-.flow-node .n-sub { font-family: var(--mono); font-size: 10.5px; color: var(--sea-300); margin-top: 3px; }
+.flow-node .n-sub {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--slate-300); margin-top: 4px;
+}
 .flow-node .n-note { font-size: 11.5px; color: var(--slate-300); margin-top: 6px; line-height: 1.45; }
 .flow-arrow {
-  align-self: center; padding: 0 9px; color: var(--sea-300);
+  align-self: center; padding: 0 9px; color: var(--slate-300);
   font-family: var(--mono); font-size: 11px; white-space: nowrap;
 }
 
@@ -327,7 +549,7 @@ body {
 .ramp { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; }
 .swatch {
   border-radius: 8px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.088);
-  background: rgba(4, 18, 46, 0.5); text-align: left; cursor: copy;
+  background: rgba(20, 25, 32, 0.5); text-align: left; cursor: copy;
   font: inherit; color: inherit; padding: 0; width: 100%;
   /* Explicit column flex, not block: a <button> centres its content box
      vertically, which floats the chip off the top edge once the grid
@@ -342,14 +564,17 @@ body {
   box-shadow: inset 0 0 0 1px rgba(251, 249, 245, 0.14);
 }
 .swatch-body { display: block; padding: 7px 9px 9px; }
-.swatch-token { font-family: var(--mono); font-size: 10.5px; color: var(--slate-200); }
-.swatch-hex {
-  font-family: var(--mono); font-size: 11.5px; color: var(--slate-100);
-  text-transform: uppercase; letter-spacing: 0.02em;
+.swatch-token {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.13em; text-transform: uppercase; color: var(--slate-300);
 }
-.swatch-note { font-size: 10.5px; color: var(--sea-300); margin-top: 3px; line-height: 1.35; }
+.swatch-hex {
+  font-family: var(--mono); font-size: 12px; color: var(--slate-100);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+/* The line under a swatch is somebody explaining what the step is for. */
+.swatch-note { font-size: 10.5px; color: var(--slate-300); margin-top: 4px; line-height: 1.35; }
 .swatch:hover { border-color: rgba(255, 255, 255, 0.231); }
-.swatch:focus-visible { outline: 2px solid var(--sea-400); outline-offset: 2px; }
 
 .rule-line {
   font-size: 12.5px; color: var(--flame-300); line-height: 1.55;
@@ -358,14 +583,19 @@ body {
 
 .mark-row { display: flex; align-items: flex-end; gap: 26px; flex-wrap: wrap; padding: 6px 0 2px; }
 .mark-spec { text-align: center; }
-.mark-spec .m-size { font-family: var(--mono); font-size: 10.5px; color: var(--sea-300); margin-top: 8px; }
+.mark-spec .m-size {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--slate-300); margin-top: 8px;
+}
 .mark-on-paper {
   background: var(--paper); border-radius: 8px; padding: 14px 18px;
   display: inline-flex; align-items: center; gap: 14px;
 }
 
 .copied {
-  font-family: var(--mono); font-size: 11px; color: var(--sea-300);
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--slate-300);
 }
 
 @media (max-width: 980px) {
@@ -383,7 +613,7 @@ body {
    The SVG carries its own colours from the brand tokens; this is only the
    frame and the key beneath it. */
 .sysmap {
-  background: rgba(4, 18, 46, 0.45);
+  background: rgba(20, 25, 32, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 10px;
   padding: 14px 16px 10px;
@@ -417,13 +647,13 @@ body {
 }
 .dl {
   display: flex; gap: 12px; align-items: center;
-  background: rgba(4, 18, 46, 0.55);
+  background: rgba(20, 25, 32, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 10px; padding: 12px;
 }
 .dl-preview {
   flex: 0 0 76px; height: 76px; border-radius: 8px;
-  background: #6E747C;
+  background: var(--ink-400);
   display: flex; align-items: center; justify-content: center;
 }
 .dl-preview.on-light { background: var(--paper); }
@@ -433,7 +663,8 @@ body {
 .dl-note { line-height: 1.45; margin-bottom: 7px; }
 .dl-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .dl-links a {
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--slate-200); text-decoration: none;
   border: 1px solid rgba(255, 255, 255, 0.121);
   border-radius: 5px; padding: 2px 7px;
@@ -443,7 +674,8 @@ body {
   width: 1px; height: 14px; background: rgba(255, 255, 255, 0.099); margin: 0 2px;
 }
 .dl-all {
-  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--slate-200); text-decoration: none;
   border: 1px solid rgba(255, 255, 255, 0.154);
   border-radius: 6px; padding: 4px 10px;
@@ -473,12 +705,12 @@ body {
 .doc-md .doc-quote {
   margin: 0 0 16px; padding: 10px 14px;
   border-left: 2px solid var(--flame);
-  background: rgba(4, 18, 46, 0.5);
+  background: rgba(20, 25, 32, 0.5);
   border-radius: 0 8px 8px 0;
   line-height: 1.55; color: var(--slate-200);
 }
 .doc-md .doc-pre {
-  background: rgba(4, 18, 46, 0.65);
+  background: rgba(20, 25, 32, 0.65);
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 8px; padding: 12px 14px; overflow-x: auto;
   font-family: var(--mono); font-size: 12px; line-height: 1.5;
@@ -501,23 +733,42 @@ body {
    Busy is flame because it is the one row in this region asking to be looked
    at. It is deliberately not styled as an error: a fitting room is busy on a
    Saturday. Revoked rows recede rather than disappear - a door that used to
-   exist is part of the story of a store. */
-.table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.table th {
-  text-align: left; font-family: var(--mono); font-size: 9.5px;
-  letter-spacing: 0.14em; text-transform: uppercase; color: var(--slate-300);
-  font-weight: 400; padding: 0 12px 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.077);
-}
-.table td { padding: 11px 12px 11px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.044); vertical-align: middle; }
-.table tr:last-child td { border-bottom: 0; }
-.table .num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 12px; }
-.table .right { text-align: right; }
-.table .num.hot { color: var(--flame); }
-.row-muted td { opacity: 0.45; }
+   exist is part of the story of a store.
+
+   The table rules that used to live here were a second copy of the block near
+   the top of this file, and the copy was what actually rendered. They are
+   merged up there now. */
 .pill.hot { color: var(--flame); border-color: rgba(255, 107, 44, 0.5); }
-.btn.small { padding: 6px 12px; font-size: 12px; min-height: 34px; }
 .input-inline {
   background: var(--slate-600); border: 1px solid rgba(255, 255, 255, 0.11);
   color: var(--slate-100); font: inherit; font-size: 12.5px;
   border-radius: 8px; padding: 7px 10px; min-height: 36px;
+}
+
+/* ---------- Touch, and reduced motion ----------
+   Neither of these can be checked in the automation browser: it renders at a
+   fixed desktop viewport with visibilityState hidden, so no coarse pointer and
+   no frames. Kept deliberately simple for that reason.
+
+   Anything a finger lands on clears 44px, and anything a finger types into is
+   16px — below that iOS zooms the page on focus. */
+@media (pointer: coarse) {
+  .btn.small { min-height: 44px; }
+  .assign, .input-inline { min-height: 44px; font-size: 16px; }
+  .linkish { min-height: 44px; display: inline-flex; align-items: center; }
+}
+
+/* Everything resolves to its final state immediately. Not a shorter
+   animation — no animation. The decode component makes the same decision in
+   JavaScript and never starts its loop. */
+@media (prefers-reduced-motion: reduce) {
+  .rail:not(.booting)::after,
+  .rail.booting::after { animation: none; display: none; }
+  .decode-char { transition: none; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -85,7 +85,7 @@ export default function Dashboard() {
                 <span className="rank">{i + 1}</span> {r.name}
                 <span className="meta"> · {r.assists} assists</span>
               </div>
-              <div>${r.sales.toLocaleString()}</div>
+              <div className="amount">${r.sales.toLocaleString()}</div>
             </div>
           ))}
         </div>

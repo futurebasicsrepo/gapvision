@@ -3,71 +3,209 @@
 /**
  * CueSea Studio — the back-office surface.
  *
- * Sea-toned dense UI. Plex Mono carries every identifier (ids, latencies,
- * counts in a column, eyebrows); Instrument Sans does everything else.
- * Instrument Serif is not loaded here on purpose — it is editorial only,
- * never UI, never below 24px.
+ * Slate-grounded dense UI on the site's ground: the fixed 178° gradient, two
+ * quiet blooms, and one blurred surface. Studio is calmer than Console on
+ * purpose — its reader is a store manager with the screen open all day, not
+ * one of us watching a fleet — so the decode lands on the heading and the
+ * stat values and on nothing that refreshes.
+ *
+ * The type rule does most of the work: IBM Plex Mono, uppercase, 9.5–10px,
+ * tracked .14–.16em, --slate-300 for anything the *machine* says — column
+ * headers, labels, timestamps, counts, zones, durations, identifiers.
+ * Instrument Sans for anything a *person* wrote: headings, notes, button
+ * text, an answer. Instrument Serif is not loaded here on purpose — it is
+ * editorial only, never UI, never below 24px.
+ *
+ * Contrast is measured against --slate-700, the card, because that is the
+ * worst ground in the app and muted type lands on cards constantly:
+ * slate-100 13.7:1 · slate-200 6.4:1 · slate-300 4.6:1 · sea-300 5.0:1 ·
+ * flame 5.2:1 · flame-300 8.3:1. The glass bar is the one lighter surface,
+ * so its chrome uses slate-200 (5.7:1) where slate-300 would fall to 4.2:1.
  */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   font-family: var(--sans);
-  background: var(--slate-800);
+  /* The site's ground, attached: three planes and nothing else inventing a
+     background. Falls to slate-900 so the page has a floor rather than a
+     seam when the content is shorter than the viewport. */
+  background: linear-gradient(178deg, #232A36 0%, var(--slate-800) 54%, var(--slate-900) 100%)
+              var(--slate-900) fixed;
   color: var(--slate-100);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
 }
 
-.studio, .app-shell { max-width: 1240px; margin: 0 auto; padding: 20px 24px 48px; }
+/* ---------- Ambient field ----------
+   Two blooms where the site has three, and quieter: a dashboard is read for
+   twenty minutes and a marketing page for forty seconds. Both are sea —
+   flame is a signal in this system and never a wash. Fixed, behind
+   everything, never animated. */
+body::before, body::after {
+  content: ""; position: fixed; pointer-events: none; z-index: 0;
+  border-radius: 50%;
+}
+body::before {
+  top: -22vh; right: -12vw; width: 64vw; height: 64vw;
+  background: radial-gradient(circle, rgba(62, 155, 232, 0.10), transparent 68%);
+}
+body::after {
+  bottom: -26vh; left: -16vw; width: 56vw; height: 56vw;
+  background: radial-gradient(circle, rgba(10, 46, 99, 0.42), transparent 70%);
+}
+
+.studio, .app-shell {
+  position: relative; z-index: 1;
+  max-width: 1240px; margin: 0 auto; padding: 20px 24px 48px;
+}
+
+/* ---------- Focus ----------
+   Always visible, never removed. Offset so the ring reads as a ring and not
+   as a border the control grew. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--sea-300);
+  outline-offset: 2px;
+}
+
+/* ---------- Decode ----------
+   Per-character resolve, grouped into words. `dc-w` is what stops a heading
+   from breaking mid-word at a wrap point — a bare per-character inline-block
+   gives the browser a break opportunity between every letter. */
+.dc { display: inline; }
+.dc-v { display: inline; }
+.dc-w { display: inline-block; white-space: nowrap; }
+.dc-c { display: inline-block; }
+.dc-noise { color: var(--slate-300); }
+.dc-lit { color: var(--slate-100); text-shadow: 0 0 12px rgba(246, 246, 244, 0.45); }
+.dc-c { transition: color 240ms ease, text-shadow 240ms ease; }
+.dc-sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dc-c { transition: none; }
+}
 
 /* ---------- Eyebrow: the one place small caps + tracking belong ---------- */
 .eyebrow {
-  font-family: var(--mono); font-weight: 500; font-size: 11.5px;
-  letter-spacing: 0.16em; text-transform: uppercase; color: var(--sea-300);
+  font-family: var(--mono); font-weight: 500; font-size: 10px;
+  letter-spacing: 0.15em; text-transform: uppercase; color: var(--sea-300);
 }
 
-/* ---------- Top bar ---------- */
+/* ---------- Top bar — the one blurred surface ----------
+   Exactly one, per the direction: cards, rows, tables and the leaderboard
+   stay solid, because blur on a scrolling list is what janks a mid-range
+   phone and the floor runs on mid-range phones.
+
+   The glass arrives *after* boot. While `.booting` is on, the bar is bare and
+   a single scan sweep crosses it; when the class comes off, the blur and the
+   lift fade in and the sheen starts. The sheen is the only loop in the app,
+   at 18s. */
 .topbar {
+  position: sticky; top: 8px; z-index: 30;
   display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; padding: 14px 0 20px;
+  gap: 16px; padding: 12px 16px; margin: 0 0 18px;
+  border-radius: var(--r-pane, 20px);
+  border: 1px solid var(--pane-edge);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.022)),
+    rgba(20, 25, 32, 0.62);
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  backdrop-filter: blur(30px) saturate(200%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 16px 48px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+  isolation: isolate;
+  transition: background 460ms ease, box-shadow 460ms ease, border-color 460ms ease;
 }
+/* The specular bloom — a lens has a highlight where the light enters. Static;
+   it is a material property, not an animation. */
+.topbar::after {
+  content: ""; position: absolute; inset: -60% 50% auto -12%; height: 220%;
+  background: radial-gradient(58% 58% at 22% 0%, rgba(255, 255, 255, 0.09), transparent 72%);
+  pointer-events: none; z-index: -1;
+}
+.topbar::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: -35%; width: 28%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.10), transparent);
+  transform: translateX(0) skewX(-12deg);
+  animation: bar-sheen 18s linear infinite;
+  pointer-events: none; z-index: -1;
+}
+/* Transform, not `left`: one composited element rather than a layout pass
+   every frame for eighteen seconds. */
+@keyframes bar-sheen {
+  0%   { transform: translateX(0) skewX(-12deg); opacity: 0; }
+  6%   { opacity: 1; }
+  26%  { transform: translateX(546%) skewX(-12deg); opacity: 0; }
+  100% { transform: translateX(546%) skewX(-12deg); opacity: 0; }
+}
+
+/* Boot: no glass yet. Scan, resolve, then settle into glass. */
+.topbar.booting {
+  background: transparent; border-color: transparent; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.topbar.booting::after { opacity: 0; }
+.topbar.booting::before {
+  left: -42%; width: 42%;
+  background: linear-gradient(90deg, transparent, rgba(62, 155, 232, 0.30), transparent);
+  transform: translateX(0);
+  animation: bar-scan 1050ms ease-out 1 both;
+}
+@keyframes bar-scan {
+  from { transform: translateX(0); opacity: 0.2; }
+  60%  { opacity: 1; }
+  to   { transform: translateX(338%); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar { transition: none; }
+  .topbar::before { display: none; }
+}
+
 .wordmark { display: inline-flex; align-items: center; }
 .wordmark-text { font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
 .brand { display: flex; align-items: center; gap: 14px; }
+/* Machine chrome, on the one surface where slate-300 does not clear 4.5:1. */
 .brand-sub {
-  font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em;
-  color: var(--slate-300); text-transform: uppercase;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em;
+  color: var(--slate-200); text-transform: uppercase;
 }
 .topbar-right { display: flex; align-items: center; gap: 14px; }
 
 .view-switch {
-  display: flex; gap: 4px; background: var(--slate-700); padding: 4px;
+  display: flex; gap: 4px; background: rgba(20, 25, 32, 0.5); padding: 4px;
   border-radius: 9px; border: 1px solid rgba(255, 255, 255, 0.077);
 }
 .view-switch button {
   border: 0; background: transparent; color: var(--slate-200);
   font: inherit; font-size: 13px; font-weight: 500; padding: 7px 15px;
-  border-radius: 6px; cursor: pointer;
+  min-height: 36px; border-radius: 6px; cursor: pointer;
 }
 .view-switch button:hover { color: var(--slate-100); }
 .view-switch button.active { background: var(--sea-600); color: var(--slate-100); font-weight: 600; }
 
 .conn-dot {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--mono); font-size: 11px; color: var(--slate-300);
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--slate-200);
 }
 /* The live indicator is a sea dot, not a green one — hud green belongs to
-   the glass and would read as a status colour anywhere else. */
+   the glass and would read as a status colour anywhere else. Status ok is
+   sea. Offline is slate, dashed-adjacent: it is an absence, not a pass. */
 .conn-dot::before {
   content: ""; width: 7px; height: 7px; border-radius: 50%;
   background: var(--sea-300); display: inline-block;
 }
-.conn-dot.offline::before { background: var(--ink-300); }
+.conn-dot.offline::before { background: var(--slate-300); }
 
 .linkish {
-  background: none; border: 0; color: var(--slate-300); font: inherit; font-size: 12px;
-  cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+  background: none; border: 0; color: var(--slate-200);
+  font-family: var(--sans); font-size: 12.5px; text-transform: none;
+  letter-spacing: normal; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
 }
 .linkish:hover { color: var(--slate-100); }
 
@@ -78,13 +216,28 @@ body {
   background: var(--slate-700); border: 1px solid rgba(255, 255, 255, 0.077);
   border-radius: var(--radius); padding: 18px;
 }
+/* Panel title — the machine naming a panel. Sea, not slate: it is the one
+   piece of chrome that has to be findable when the eye lands on a card. */
 .card h3 {
-  font-family: var(--mono); font-size: 11px; text-transform: uppercase;
-  letter-spacing: 0.14em; color: var(--sea-300); margin-bottom: 12px; font-weight: 500;
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.15em; color: var(--sea-300); margin-bottom: 12px; font-weight: 500;
+}
+/* A heading a person wrote stays in the sans. */
+.card h2 {
+  font-family: var(--sans); font-size: 16px; font-weight: 600;
+  letter-spacing: -0.015em; color: var(--slate-100); margin-bottom: 2px;
 }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.card-note { color: var(--slate-300); font-size: 12.5px; line-height: 1.55; margin: -2px 0 14px; }
-.footnote { padding: 13px 18px; font-family: var(--mono); font-size: 11.5px; color: var(--slate-300); }
+.card-note { font-family: var(--sans); color: var(--slate-300); font-size: 12.5px; line-height: 1.55; margin: -2px 0 14px; }
+/* A validation note that is telling you something is wrong wears the
+   attention colour — outlined nowhere, just the text. */
+.card-note.error { color: var(--flame-300); }
+/* A sentence under a panel, so: sans. It carries machine values, but it is
+   still somebody talking. */
+.footnote {
+  padding: 13px 18px; font-family: var(--sans); font-size: 12.5px;
+  color: var(--slate-300); line-height: 1.5;
+}
 .span-3 { grid-column: span 3; }
 .span-4 { grid-column: span 4; }
 .span-6 { grid-column: span 6; }
@@ -94,25 +247,47 @@ body {
 /* ---------- Stat tiles ---------- */
 .stat { display: flex; flex-direction: column; gap: 3px; }
 .stat-label {
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.13em;
-  text-transform: uppercase; color: var(--sea-300); font-weight: 500;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--slate-300); font-weight: 500;
 }
-/* Proportional figures: tabular-nums makes a large standalone number look
-   loose. Tabular is reserved for columns that must align. */
-.stat-value { font-size: 30px; font-weight: 600; line-height: 1.08; letter-spacing: -0.025em; }
+/* The value is a measurement, so it is set in the machine's face. Mono is
+   also what makes the decode hold still: every glyph is the same width, so
+   the number does not twitch as it resolves. */
+.stat-value {
+  font-family: var(--mono); font-size: 28px; font-weight: 500; line-height: 1.12;
+  letter-spacing: -0.01em; color: var(--slate-100); font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
 .stat-sub { font-size: 12px; color: var(--slate-300); line-height: 1.45; }
 
 /* ---------- Lists ---------- */
 .row-list { display: flex; flex-direction: column; gap: 7px; }
+/* Inset rows sit one plane below the card. Solid — no blur on anything that
+   repeats or scrolls. */
 .row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  background: rgba(4, 18, 46, 0.55); border: 1px solid rgba(255, 255, 255, 0.055);
+  background: var(--slate-800); border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 8px; padding: 10px 12px; font-size: 13px;
 }
-.row .meta, .meta { color: var(--slate-300); font-size: 12px; }
+/* Metadata: zones, timestamps, counts, latencies, slugs. All of it is the
+   machine talking, and all of it was in the sans. */
+.row .meta, .meta {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--slate-300);
+}
 .row-right { display: flex; align-items: center; gap: 10px; }
-.amount { font-family: var(--mono); font-size: 12.5px; font-weight: 500; }
-.quote { color: var(--slate-100); }
+.amount {
+  font-family: var(--mono); font-size: 12.5px; font-weight: 500;
+  font-variant-numeric: tabular-nums; color: var(--slate-100);
+}
+.quote { font-family: var(--sans); color: var(--slate-100); }
+/* Unknown. Never a pass, never a silent zero — slate, dashed, so it reads as
+   a hole in the data rather than a value. */
+.unknown {
+  color: var(--slate-300);
+  border-bottom: 1px dashed var(--slate-300);
+  padding-bottom: 1px;
+}
 
 /* ---------- What was actually shown and said ----------
    Both of these hang off a row rather than sitting inside it: the row is the
@@ -122,95 +297,146 @@ body {
 .engagement, .qa { display: flex; flex-direction: column; gap: 4px; }
 
 /* The three lines the associate read off the glass, in the glass's own
-   grammar — mono, tracked, uppercase already by the time it reaches here. */
+   grammar — mono, tracked, uppercase already by the time it reaches here.
+   It is not rendered in hud green: this is a quotation on a dashboard, not a
+   lens, and green outside the glass would start reading as a status. */
+/* The one place outside a rendered lens where hud green is correct, and it is
+   correct for the same reason the lens is: this is the cue itself, quoted back
+   — CueSea's own words, not a measurement of them. Everything around it (who
+   was served, how long, what it earned) is sea, because that is measurement.
+   The green is what tells a manager, at a glance, which line the product said
+   and which lines we counted. */
 .cue-said {
   margin: 0 0 0 12px; padding: 7px 11px;
-  border-left: 2px solid rgba(255, 255, 255, 0.121);
+  border-left: 2px solid var(--hud-300);
   font-family: var(--mono); font-size: 11.5px; line-height: 1.55;
-  color: var(--slate-300); letter-spacing: 0.02em;
+  color: var(--hud-400); letter-spacing: 0.06em; text-transform: uppercase;
 }
-.cue-said-lead { color: var(--slate-200); }
+.cue-said-lead { color: var(--hud-500); }
 
 .recs { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 12px; }
 .rec {
-  font-size: 11.5px; color: var(--slate-200);
-  background: rgba(4, 18, 46, 0.55);
+  font-family: var(--sans); font-size: 12px; color: var(--slate-200);
+  background: var(--slate-800);
   border: 1px solid rgba(255, 255, 255, 0.077);
   border-radius: 999px; padding: 3px 10px;
 }
-.rec em { font-style: normal; color: var(--slate-300); }
+/* Price and location — machine facts hanging off a product name. */
+.rec em {
+  font-style: normal; font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--slate-300);
+}
 
 /* The answer, under its question. This is the half that says whether CueSea was
-   any good, so it gets paper-weight text rather than meta grey. */
+   any good, so it gets paper-weight text rather than meta grey — and it is a
+   sentence, so it stays in the sans. */
 .qa-answer {
   margin: 0 0 0 12px; padding: 7px 11px;
   border-left: 2px solid rgba(255, 255, 255, 0.121);
-  font-size: 12.5px; line-height: 1.5; color: var(--slate-200);
+  font-family: var(--sans); font-size: 12.5px; line-height: 1.5; color: var(--slate-200);
 }
 
 .pill {
-  font-family: var(--mono); font-size: 10.5px; font-weight: 500; padding: 3px 9px;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500; padding: 4px 9px;
   border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.121);
-  color: var(--slate-200); letter-spacing: 0.06em; white-space: nowrap;
+  color: var(--slate-200); letter-spacing: 0.14em; text-transform: uppercase;
+  white-space: nowrap;
 }
 /* Flame is scarce on purpose — that scarcity is what makes it read as a cue.
    In CueSea Studio it appears in exactly two places: the assists series on the
    leaderboard (the point that card is making), and a genuinely missed
    question. An engagement that ended without a sale is an ordinary outcome,
    not an alarm, so it stays sea. */
-.pill.engaged { color: var(--slate-200); border-color: rgba(255, 255, 255, 0.248); }
-.pill.available { color: var(--slate-300); }
+.pill.engaged { color: var(--slate-100); border-color: rgba(62, 155, 232, 0.55); }
+.pill.available { color: var(--slate-200); border-color: rgba(255, 255, 255, 0.248); }
 .pill.neutral { color: var(--slate-300); }
 .pill.warnpill { color: var(--flame-300); border-color: rgba(255, 176, 138, 0.5); }
 
-.empty { color: var(--slate-300); font-size: 12.5px; padding: 8px 0; line-height: 1.5; }
+.empty { font-family: var(--sans); color: var(--slate-300); font-size: 12.5px; padding: 8px 0; line-height: 1.5; }
+
+/* ---------- Controls ----------
+   Primary is sea. Ghost is a hairline on transparent. Danger is
+   flame-outlined and never flame-filled — flame is a signal, not an action
+   colour, and a filled flame button is an instruction to press it. */
+.btn {
+  font-family: var(--sans); font-size: 14px; font-weight: 600;
+  padding: 11px 16px; min-height: 44px; border-radius: var(--r-ctl, 12px);
+  border: 1px solid transparent; cursor: pointer;
+  background: transparent; color: var(--slate-100);
+}
+.btn.primary { background: var(--sea-600); border-color: var(--sea-500); color: var(--slate-100); }
+.btn.primary:hover:not(:disabled) { background: var(--sea-500); }
+.btn.ghost { background: transparent; border-color: rgba(255, 255, 255, 0.14); color: var(--slate-200); }
+.btn.ghost:hover:not(:disabled) { color: var(--slate-100); border-color: rgba(255, 255, 255, 0.28); }
+.btn.danger { background: transparent; border-color: var(--flame-400); color: var(--flame-300); }
+.btn.danger:hover:not(:disabled) { border-color: var(--flame); }
+.btn:disabled { opacity: 0.45; cursor: default; }
 
 /* ---------- Sign in ---------- */
-.signin-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.signin-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; position: relative; z-index: 1; }
 .signin { width: 100%; max-width: 390px; display: flex; flex-direction: column; gap: 15px; }
 .signin h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.022em; }
-.signin-sub { color: var(--slate-300); font-size: 13.5px; margin-top: -11px; }
-.signin label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
-.signin label span { color: var(--slate-200); }
+.signin-sub { color: var(--slate-300); font-size: 13.5px; margin-top: -11px; line-height: 1.5; }
+.signin label, .signin .field { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+/* Field labels are the machine naming a field. */
+.signin label span {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--slate-300);
+}
+/* 16px, not 14: anything smaller makes iOS zoom on focus, and a form that
+   jumps when you tap it feels broken in a way people cannot name. */
 .signin input {
   background: var(--slate-800); border: 1px solid rgba(255, 255, 255, 0.11); color: var(--slate-100);
-  border-radius: 8px; padding: 11px 12px; font: inherit; font-size: 14px;
+  border-radius: 8px; padding: 12px; font-family: var(--sans); font-size: 16px; min-height: 44px;
 }
-.signin input:focus { outline: 2px solid var(--sea-400); outline-offset: 1px; border-color: transparent; }
+.signin input:focus-visible { outline: 2px solid var(--sea-300); outline-offset: 2px; }
 .signin button.primary {
   background: var(--sea-600); border: 1px solid var(--sea-500); color: var(--slate-100);
-  font: inherit; font-size: 14px; font-weight: 600; padding: 11px; border-radius: 8px;
-  cursor: pointer; margin-top: 2px;
+  font-family: var(--sans); font-size: 14px; font-weight: 600; padding: 11px;
+  min-height: 44px; border-radius: 8px; cursor: pointer; margin-top: 2px;
 }
 .signin button.primary:hover:not(:disabled) { background: var(--sea-500); }
 .signin button.primary:disabled { opacity: 0.45; cursor: default; }
 /* Errors wear flame-300 on the dark ground — flame is the attention colour in
-   this system, and there is no separate status palette to invent. */
-.signin-error {
+   this system, and there is no separate status palette to invent. Outlined,
+   never filled. */
+.signin-error, .notice.error {
+  font-family: var(--sans);
   color: var(--flame-300); font-size: 13px; border: 1px solid rgba(255, 140, 87, 0.4);
   background: rgba(255, 107, 44, 0.08); border-radius: 8px; padding: 10px 12px; line-height: 1.45;
 }
 
 /* ---------- Ranges ---------- */
-.range-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.range-row .meta { font-family: var(--mono); font-size: 11.5px; }
+.range-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.range-row .meta { font-size: 10px; }
 
 /* ---------- Leaderboard ---------- */
 .legend { display: flex; gap: 14px; flex-wrap: wrap; }
-.legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--slate-200); }
+/* The legend carries the identity, not the hue: sea-200 reads grey under
+   severe colour-vision deficiency, so the written label and the detail line
+   under each bar are what actually name the series. */
+.legend-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--slate-200);
+}
 .legend-item i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 
 .lb-row {
-  background: rgba(4, 18, 46, 0.55); border: 1px solid rgba(255, 255, 255, 0.055);
+  background: var(--slate-800); border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 8px; padding: 10px 12px;
   display: grid; grid-template-columns: 1fr; gap: 7px;
 }
-.lb-name { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; }
+.lb-name { display: flex; align-items: center; gap: 10px; font-family: var(--sans); font-size: 13.5px; font-weight: 600; }
 .lb-rank {
-  font-family: var(--mono); font-size: 11px; color: var(--sea-300);
+  font-family: var(--mono); font-size: 10px; color: var(--sea-300);
   min-width: 16px; text-align: right; font-weight: 500;
+  font-variant-numeric: tabular-nums; letter-spacing: 0.08em;
 }
-.lb-detail { font-family: var(--mono); font-size: 11px; color: var(--slate-300); letter-spacing: 0.02em; }
+.lb-detail {
+  font-family: var(--mono); font-size: 10px; color: var(--slate-300);
+  letter-spacing: 0.14em; text-transform: uppercase;
+}
 .scorebar-row { display: flex; align-items: center; gap: 10px; }
 .scorebar { flex: 1; display: flex; align-items: stretch; height: 9px; }
 .scoreseg { display: block; height: 100%; min-width: 2px; }
@@ -219,16 +445,30 @@ body {
   color: var(--slate-100); min-width: 46px; text-align: right;
 }
 
+/* `.span-12` has to be remapped with the rest. A twelve-wide item in a
+   six-column grid does not clamp — it makes six implicit columns, so the
+   whole dashboard silently became a twelve-track grid of auto-sized columns
+   below 900px and the cards overlapped each other. */
 @media (max-width: 900px) {
   .grid-dashboard { grid-template-columns: repeat(6, 1fr); }
   .span-3, .span-4 { grid-column: span 3; }
-  .span-6, .span-8 { grid-column: span 6; }
+  .span-6, .span-8, .span-12 { grid-column: span 6; }
+}
+/* One column on a phone. Nothing on this screen survives being a third of a
+   390px viewport, and a manager on the floor is reading it one card at a
+   time anyway. */
+@media (max-width: 640px) {
+  .grid-dashboard { grid-template-columns: 1fr; }
+  .span-3, .span-4, .span-6, .span-8, .span-12 { grid-column: 1 / -1; }
+  /* The bar becomes two rows rather than three squeezed columns. */
+  .topbar { flex-wrap: wrap; justify-content: flex-start; gap: 10px 14px; }
+  .brand { flex: 1 1 100%; }
 }
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .tenant-pick {
   background: var(--slate-600); border: 1px solid rgba(255, 255, 255, 0.121);
-  color: var(--slate-100); font: inherit; font-size: 13px; font-weight: 500;
-  padding: 10px 14px; border-radius: 8px; cursor: pointer;
+  color: var(--slate-100); font-family: var(--sans); font-size: 13px; font-weight: 500;
+  padding: 10px 14px; min-height: 44px; border-radius: 8px; cursor: pointer;
 }
 .tenant-pick:hover { background: var(--sea-600); }
 
@@ -246,9 +486,9 @@ body {
 .waiting li.claimed { opacity: 0.62; }
 .w-zone {
   font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
-  text-transform: uppercase; color: var(--sea-300);
+  text-transform: uppercase; color: var(--slate-300);
 }
-.w-need b { display: block; font-weight: 500; font-size: 15px; letter-spacing: -0.02em; }
+.w-need b { display: block; font-family: var(--sans); font-weight: 500; font-size: 15px; letter-spacing: -0.02em; }
 .w-need small { display: block; color: var(--slate-300); font-size: 12.5px; margin-top: 3px; }
 .w-age {
   font-family: var(--mono); font-size: 12px; text-align: right;
@@ -274,6 +514,39 @@ body {
   font-weight: 400; padding: 0 12px 10px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.077);
 }
-.demand td { padding: 10px 12px 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.044); }
+.demand td { font-family: var(--sans); padding: 10px 12px 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.044); }
 .demand tr:last-child td { border-bottom: 0; }
-.demand .num { text-align: right; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.demand .num {
+  text-align: right; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.06em; font-variant-numeric: tabular-nums;
+}
+
+/* --- the demo harness ----------------------------------------------------
+   Behind the Simulator tab. It drives the same backend as Lens, so it gets
+   the same chrome and nothing more. */
+.associate-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 14px; }
+.script-block { display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.55; color: var(--slate-200); }
+.script-block strong { color: var(--slate-100); }
+.radio-log { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.radio-msg { font-size: 13px; color: var(--slate-200); }
+.radio-msg .from {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--slate-300); margin-right: 6px;
+}
+.radio-input { display: flex; gap: 8px; }
+.radio-input input {
+  flex: 1; background: var(--slate-800); border: 1px solid rgba(255, 255, 255, 0.11);
+  color: var(--slate-100); border-radius: 8px; padding: 12px;
+  font-family: var(--sans); font-size: 16px; min-height: 44px;
+}
+.rank {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  color: var(--sea-300); margin-right: 6px; font-variant-numeric: tabular-nums;
+}
+
+/* Touch: 44px is the floor on a finger. The segmented control stays compact
+   on a pointer and grows on a phone. */
+@media (pointer: coarse) {
+  .view-switch button, .linkish { min-height: 44px; }
+  .linkish { padding: 0 6px; }
+}

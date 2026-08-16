@@ -100,19 +100,19 @@ export default function Retention() {
               const backlog = !!t.more_remaining;
               return (
                 <tr key={t.slug}>
-                  <td>{t.name || t.slug}<span className="meta"> · {t.slug}</span></td>
+                  <td>{t.name || t.slug}<span className="machine"> · {t.slug}</span></td>
                   <td className="num">{t.retention_days}d</td>
                   <td>{swept
-                    ? <span className="meta">{when(t.last_run)}</span>
+                    ? <span className="machine">{when(t.last_run)}</span>
                     : <span className="pill hot">never</span>}</td>
                   <td className="num">{swept ? (t.voice_redacted || 0) : "—"}</td>
                   <td className="num">{swept ? (t.engagements_redacted || 0) : "—"}</td>
                   <td className="num">{swept ? (t.assists_redacted || 0) : "—"}</td>
                   <td className="num">{swept ? (t.requests_redacted || 0) : "—"}</td>
                   <td>
-                    {!swept ? <span className="meta">unproven</span>
+                    {!swept ? <span className="machine">unproven</span>
                       : backlog ? <span className="pill hot">more to do</span>
-                      : <span className="meta">clear</span>}
+                      : <span className="machine">clear</span>}
                   </td>
                 </tr>
               );
