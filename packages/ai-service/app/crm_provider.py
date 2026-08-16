@@ -53,6 +53,24 @@ class MockCRM:
     def floor_inventory(self):
         return _mock_data.INVENTORY
 
+    def lookup_code(self, code: str):
+        """Same contract as the Shopify adapter: SKU or barcode, exact.
+
+        The demo inventory carries no barcode column, so each item answers to
+        the same derived EAN-13 the seeding script writes to a live store —
+        one generator (`barcode.ean13_for_sku`), both worlds, so a label
+        printed against either resolves in both.
+        """
+        from . import barcode
+        wanted = str(code or "").strip().upper()
+        if not wanted:
+            return None
+        for item in _mock_data.INVENTORY:
+            sku = str(item.get("sku") or "").upper()
+            if wanted in (sku, barcode.ean13_for_sku(sku)):
+                return dict(item)
+        return None
+
 
 class TenantNotConfigured(Exception):
     pass

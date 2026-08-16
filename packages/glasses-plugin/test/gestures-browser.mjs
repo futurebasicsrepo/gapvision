@@ -131,7 +131,7 @@ await settle();
 await ring("click");
 await settle();
 check("back on the idle root page",
-  (await lens()).some((l) => (l || "").includes("CUESEA READY")),
+  (await lens()).some((l) => (l || "").includes("AWAITING GUEST SIGNAL")),
   JSON.stringify((await lens()).slice(0, 2)));
 check("idle names its controls",
   (await lensMeta()).some((l) => /PRESS TO ASK/.test(l || "")),

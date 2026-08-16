@@ -2,7 +2,7 @@
   "name": "cue",
   "private": true,
   "version": "0.5.0",
-  "description": "CueSea — e-commerce level intelligence for retail floor associates, in-lens.",
+  "description": "CueSea \u2014 e-commerce level intelligence for retail floor associates, in-lens.",
   "workspaces": [
     "packages/server",
     "packages/web",
@@ -37,7 +37,7 @@
     "build:internal": "npm run build --workspace=packages/internal",
     "test:console": "node packages/internal/test/console-browser.mjs",
     "test:attribution": "node packages/internal/test/attribution-e2e.mjs",
-    "render:lens": "npx esbuild packages/glasses-plugin/src/layout.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/layout.mjs && python3 packages/glasses-plugin/test/render-lens.py",
+    "render:lens": "npx esbuild packages/glasses-plugin/src/layout.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/layout.mjs && npx esbuild packages/glasses-plugin/src/hero.ts --bundle --format=esm --outfile=packages/glasses-plugin/dist-test/hero.mjs && python3 packages/glasses-plugin/test/render-lens.py",
     "test:bundle": "node packages/glasses-plugin/test/packaged-bundle.test.mjs",
     "brand:assets": "python3 packages/brand/build-assets.py",
     "test:cards": "npx esbuild packages/glasses-plugin/src/cards.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/cards.js && npx esbuild packages/glasses-plugin/src/layout.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/layout.js && node packages/glasses-plugin/test/cards.test.mjs",

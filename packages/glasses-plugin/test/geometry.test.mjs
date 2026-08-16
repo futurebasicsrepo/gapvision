@@ -57,11 +57,15 @@ const OLD = {
   ROW_H: 26, HEADER_H: 26, LINE_H: 26,      // measured on glass: 24 clips, 26 is whole
   RAIL_ROW: 26, META_H: 26,
   LINE_STEP: 32, PAD: 4,
-  LABEL_W: 64, CLOCK_W: 104,                // width: 64 / width: 104 in the header
+  // 176, was 104: the clock container became the status cluster — mic,
+  // unread, low battery, time — and the worst case measures ~150px.
+  LABEL_W: 64, CLOCK_W: 176,
   HEADER_Y: 12, BODY_TOP: 52,               // const HEADER_Y = 12; const BODY_TOP = 52
   FOOT_Y: 254,                              // DISPLAY_H - 34
   MENU_TITLE_Y: 50, MENU_TOP: 84,           // yPosition: 50 / yPosition: 84 in buildMenu
-  FACT_SLOTS: 6,                            // export const FACT_SLOTS = 6
+  // 5, was 6: the guest's name left the rail for its own container, and the
+  // text rail is the hero's fallback, starting a name-row lower (HERO_Y).
+  FACT_SLOTS: 5,
   MENU_ROWS: 6,                             // export const MENU_ROWS = 6
 };
 
@@ -129,10 +133,18 @@ for (const [w, h] of FRAMES) {
     g.BODY_BOTTOM <= g.FOOT_Y,
     `lines end ${g.BODY_BOTTOM}, footer at ${g.FOOT_Y}`);
 
-  const railBottom = g.BODY_TOP + g.FACT_SLOTS * g.RAIL_ROW;
-  check(`${tag}: a full rail clears the footer`,
-    railBottom <= g.FOOT_Y,
+  // The left column: name row, then the rail (hero image or text rows).
+  const railBottom = g.HERO_Y + g.FACT_SLOTS * g.RAIL_ROW;
+  check(`${tag}: a name row and a full rail clear the footer`,
+    g.NAME_Y + g.ROW_H <= g.HERO_Y && railBottom <= g.FOOT_Y,
     `${g.FACT_SLOTS} rows end ${railBottom}, footer at ${g.FOOT_Y}`);
+
+  check(`${tag}: the card frame sits between the header and the footer`,
+    g.CARD_Y >= g.HEADER_Y + g.HEADER_H
+    && g.CARD_Y + g.CARD_H <= g.FOOT_Y
+    && g.CARD_BODY_TOP > g.CARD_Y
+    && g.BODY_BOTTOM < g.CARD_Y + g.CARD_H,
+    `card ${g.CARD_Y}..${g.CARD_Y + g.CARD_H}, footer at ${g.FOOT_Y}`);
 
   check(`${tag}: the footer is on the display`,
     g.FOOT_Y + g.META_H <= h, `footer ends ${g.FOOT_Y + g.META_H} of ${h}`);
@@ -194,9 +206,9 @@ for (const [w, h] of FRAMES) {
   check("the same width gives the same pixel budgets on both",
     short.LINE_PX === tall.LINE_PX && short.FACT_PX === tall.FACT_PX,
     `${short.LINE_PX}/${short.FACT_PX} vs ${tall.LINE_PX}/${tall.FACT_PX}`);
-  // 640 × 200: header 12–38, three lines 52–142, footer 166–192, rail 4 rows
-  // 52–156. The grammar fits; the sixth and fifth facts do not.
-  eq("640x200 holds four rail rows", short.FACT_SLOTS, 4);
+  // 640 × 200: header 12–38, footer 166–192, and the rail starts under the
+  // name row at 86 — three rows fit; the fourth and fifth do not.
+  eq("640x200 holds three rail rows", short.FACT_SLOTS, 3);
   eq("640x200 holds three menu rows", short.MENU_ROWS, 3);
 }
 
@@ -358,21 +370,42 @@ for (const [w, h] of FRAMES) {
     `${JSON.stringify(clockOf("open"))} vs ${JSON.stringify(clockOf("closed"))}`);
 
   check("neither state can be mistaken for a cue — it is one glyph and the time",
-    clockOf("open") === "█ 14·32" && clockOf("closed") === "▒ 14·32",
-    `${clockOf("open")} / ${clockOf("closed")}`);
+    clockOf("open").trim() === "█ 14·32" && clockOf("closed").trim() === "▒ 14·32",
+    `${clockOf("open").trim()} / ${clockOf("closed").trim()}`);
 
   // The property that keeps it from being a distraction: both glyphs are the
-  // same advance, so the time does not move when the mic opens.
+  // same advance, so the time does not move when the mic opens. The cluster
+  // is right-aligned by measured leading spaces, so "does not move" is now a
+  // fact about the *padded* width — asserted to within one space glyph.
   check("the clock does not shift sideways when the mic opens",
-    getTextWidth(clockOf("open")) === getTextWidth(clockOf("closed")),
-    `${getTextWidth(clockOf("open"))}px both`);
+    Math.abs(getTextWidth(clockOf("open")) - getTextWidth(clockOf("closed")))
+      < getTextWidth(" "),
+    `${getTextWidth(clockOf("open"))}px vs ${getTextWidth(clockOf("closed"))}px`);
 
   check("voice switched off draws no state light at all",
-    clockOf("off") === "14·32", JSON.stringify(clockOf("off")));
+    clockOf("off").trim() === "14·32", JSON.stringify(clockOf("off").trim()));
 
   check("the cluster fits the clock box",
     getTextWidth(clockOf("open")) <= D.CLOCK_PX,
     `${getTextWidth(clockOf("open"))}px in ${D.CLOCK_PX}px`);
+
+  // The rest of the cluster: unread and low battery are state lights on the
+  // same rules — drawn when they are information, absent when they are not.
+  const cluster = (cue) =>
+    L.buildCue({ lines: ["A"], clock: "14·32", ...cue }).textObject
+      .find((c) => c.containerName === "cue-clock").content.trim();
+  check("an unread message is a dot and a count ahead of the clock",
+    cluster({ mic: "closed", unread: 2 }) === "▒ •2 14·32",
+    JSON.stringify(cluster({ mic: "closed", unread: 2 })));
+  check("a battery at or under 20 shows itself as a percentage",
+    cluster({ mic: "off", battery: 18 }) === "18% 14·32",
+    JSON.stringify(cluster({ mic: "off", battery: 18 })));
+  check("a healthy battery and an empty inbox draw nothing",
+    cluster({ mic: "off", battery: 80, unread: 0 }) === "14·32",
+    JSON.stringify(cluster({ mic: "off", battery: 80, unread: 0 })));
+  check("the whole cluster lit still fits the box",
+    getTextWidth(cluster({ mic: "open", unread: 9, battery: 18 })) <= D.CLOCK_PX,
+    `${getTextWidth(cluster({ mic: "open", unread: 9, battery: 18 }))}px in ${D.CLOCK_PX}px`);
 
   // The state light lives in the container the cheap path can update, so the
   // mic opening is a text upgrade rather than a page rebuild.
@@ -382,63 +415,68 @@ for (const [w, h] of FRAMES) {
     shape("open") === shape("closed") && shape("closed") === shape("off"));
 }
 
-// --- 9. the structural rule --------------------------------------------------
+// --- 9. the card frame -------------------------------------------------------
+//
+// The structural rule is gone; the card frame replaced it. The module region
+// is a visibly contained card now — one bordered container whose content is
+// the title row, with the three lines inside it. The frame's border is the
+// focus state: 1 browsing the deck, 3 clicked in.
 {
-  const railed = L.buildCue({ lines: ["A"], facts: ["MAYA OKAFOR", "ICON"],
-                              meta: ["DENIM WALL"], moduleCount: 4 });
-  const rule = railed.textObject.find((c) => c.containerName === "cue-rule");
-  check("a railed cue draws a rule above the footer", rule !== undefined,
-    rule ? JSON.stringify(rule.content) : "missing");
+  const railed = L.buildCue({ lines: ["A"], name: "MAYA OKAFOR",
+                              facts: ["ICON", "TOP M"],
+                              meta: ["DENIM WALL"], moduleCount: 4,
+                              moduleName: "CUE", moduleIndex: 0 });
+  const frame = railed.textObject.find((c) => c.containerName === "cue-card");
+  check("a cue draws the card frame", frame !== undefined,
+    frame ? JSON.stringify(frame.content) : "missing");
 
-  check("the rule ends where the footer starts",
-    rule.yPosition + rule.height === D.FOOT_Y,
-    `${rule.yPosition}+${rule.height} vs ${D.FOOT_Y}`);
+  check("the frame is a border, not a panel of text",
+    frame.borderWidth === 1 && frame.borderRadius > 0,
+    `border ${frame.borderWidth}, radius ${frame.borderRadius}`);
 
-  check("the rule clears the cue lines and a full rail",
-    rule.yPosition >= D.BODY_BOTTOM
-    && rule.yPosition >= D.BODY_TOP + D.FACT_SLOTS * D.RAIL_ROW,
-    `rule at ${rule.yPosition}, body ends ${D.BODY_BOTTOM}`);
+  check("the frame carries the card title and the deck position",
+    frame.content === "CUE · 1/4", JSON.stringify(frame.content));
 
-  check("the rule carries a junction where the rail column ends",
-    rule.content.includes("┴") && rule.content.split("┴").length === 2,
-    JSON.stringify(rule.content));
+  check("the frame sits on the geometry's card stops",
+    frame.yPosition === D.CARD_Y && frame.height === D.CARD_H,
+    `${frame.yPosition}+${frame.height} vs ${D.CARD_Y}+${D.CARD_H}`);
 
-  // The tick has to land in the gutter, not through a column of text.
-  const tickPx = D.X + D.PAD + getTextWidth(rule.content.slice(0, rule.content.indexOf("┴")));
-  check("the junction lands in the gutter between the two columns",
-    tickPx >= D.X + D.RAIL_W - 10 && tickPx <= D.MODULE_X + 10,
-    `tick at ${tickPx}, gutter ${D.X + D.RAIL_W}..${D.MODULE_X}`);
+  // The lines live inside the frame, under the title.
+  const lines = railed.textObject.filter((c) => /^cue-line/.test(c.containerName));
+  check("the three lines sit inside the frame, under its title",
+    lines.every((c) => c.yPosition >= D.CARD_BODY_TOP
+      && c.yPosition + c.height <= D.CARD_Y + D.CARD_H
+      && c.xPosition >= frame.xPosition),
+    lines.map((c) => `${c.containerName}@${c.yPosition}`).join(","));
 
-  const plain = L.buildCue({ lines: ["A"], meta: ["V0·1·15"] });
-  const plainRule = plain.textObject.find((c) => c.containerName === "cue-rule");
-  check("a cue with no rail draws a rule with no junction",
-    plainRule !== undefined && !plainRule.content.includes("┴"),
-    JSON.stringify(plainRule?.content));
+  check("clicking in thickens the border",
+    L.buildCue({ lines: ["A"], focused: true }).textObject
+      .find((c) => c.containerName === "cue-card").borderWidth === 3);
 
-  check("the rule fits the frame's content width",
-    getTextWidth(rule.content) <= D.LINE_PX,
-    `${getTextWidth(rule.content)}px in ${D.LINE_PX}px`);
+  check("the name row sits above the rail in its own container",
+    railed.textObject.some((c) => c.containerName === "cue-name"
+      && c.yPosition === D.NAME_Y && c.content === "MAYA OKAFOR"));
 
-  // The rail's border is gone: `borderWidth` is one scalar with a radius, so
-  // it draws a rounded panel around the whole rail rather than the hairline
-  // the comment claimed. A panel is chrome; a rule is structure.
+  // One frame on this display: the rail stays borderless.
   check("the rail no longer asks for a border box",
     (railed.listObject[0].borderWidth ?? 0) === 0
     && railed.listObject[0].borderRadius === undefined,
     `border ${railed.listObject[0].borderWidth}`);
 
-  // A short surface gives up the rule the same way it gives up rail rows.
+  // A short surface gives up the card's title row the way it gives up rail
+  // rows — the lines are the cue; the title is furniture.
   const short = L.createGeometry(640, 200);
-  check("a 200px frame has no room for a rule and does not draw one",
-    short.RULE_Y === null, `${short.RULE_Y}`);
-  check("the 576x288 frame does", D.RULE_Y === 254 - 26, `${D.RULE_Y}`);
+  check("a 200px frame drops the title row and keeps three whole lines",
+    short.CARD_TITLED === false && short.CARD_BODY_TOP === short.BODY_TOP
+    && short.CARD_Y + short.CARD_H <= short.FOOT_Y,
+    `card ${short.CARD_Y}..${short.CARD_Y + short.CARD_H}, footer ${short.FOOT_Y}`);
+  check("the 576x288 frame affords the title", D.CARD_TITLED === true);
 
-  // The floor menu deliberately has none — six rows of list reach 240 and the
-  // footer starts at 254, so a rule would cost a row of floor comms.
+  // The floor menu deliberately has no frame — a list of equal rows is
+  // already structure, and a frame would cost a row of floor comms.
   const menu = L.buildMenu("FLOOR", ["ON MY WAY"], 0, {});
-  check("the floor menu spends the space on a row instead of a rule",
-    !menu.textObject.some((c) => c.containerName === "menu-rule")
-    && D.MENU_ROWS === 6);
+  check("the floor menu spends the space on rows instead of a frame",
+    !menu.textObject.some((c) => c.borderWidth) && D.MENU_ROWS === 6);
 }
 
 // --- 10. the menu cursor, measured ------------------------------------------

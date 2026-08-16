@@ -356,6 +356,8 @@ class VisionAnalyzeRequest(BaseModel):
     image_base64: str
     mime: str = "image/jpeg"
     note: str | None = None    # what they said while taking it
+    zone: str | None = None    # where the associate is standing, for the
+                               # direction line — never stored, never matched
 
 
 @app.post("/api/vision/analyze")
@@ -385,6 +387,7 @@ def vision_analyze(req: VisionAnalyzeRequest, request: Request,
         return vision.analyze(
             tenant=slug, kind=req.kind, image_base64=req.image_base64,
             mime=req.mime, note=req.note, crm=_crm(slug),
+            zone=(req.zone or "").strip()[:40] or None,
         )
     except vision.VisionRefused as e:
         raise HTTPException(status_code=e.status, detail=e.detail)

@@ -44,7 +44,20 @@ export type Card = {
   meta?: string[];
   /** Set on PICK cards: scrolling to one makes it what "these" refers to. */
   sku?: string;
+  /**
+   * The card's whole content, for the focused view. `lines` is the glance —
+   * three rows, what the deck shows. `all` is the read: every cart item,
+   * every past order, reachable by clicking into the card and scrolling.
+   * Absent means the glance already is the whole content.
+   */
+  all?: string[];
 };
+
+/** What the focused view scrolls through: the full content when there is
+ *  more, the glance when the glance is everything. */
+export function allLines(card: Card): string[] {
+  return card.all?.length ? card.all : card.lines.filter(Boolean);
+}
 
 export function cueOf(payload: DisplayPayload): Cue {
   if (payload.cue?.lines?.length) return payload.cue;
@@ -155,6 +168,10 @@ export function cardsFor(payload: DisplayPayload): Card[] {
     out.push({
       kind: "CART",
       lines: cart.slice(0, 3).map((i: any) => i.name),
+      // The whole cart, price beside each item. Truncation used to be the
+      // only answer to a fourth item; a scrollable card makes it a window.
+      all: cart.map((i: any) =>
+        [i.name, money(i.price)].filter(Boolean).join(" ")),
       meta: [money(cart.reduce((t: number, i: any) => t + (i.price || 0), 0)),
              "ONLINE"].filter(Boolean),
     });
@@ -166,6 +183,7 @@ export function cardsFor(payload: DisplayPayload): Card[] {
     out.push({
       kind: "HISTORY",
       lines: bought.slice(0, 3).map((i: any) => i.name),
+      all: bought.map((i: any) => i.name),
       meta: [
         orders.count ? `${orders.count} ORDERS` : "",
         orders.last_at ? `LAST ${orders.last_at}` : "",

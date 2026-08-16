@@ -56,8 +56,12 @@ FACT_CHARS = 40        # a meta fact is a fact, not a sentence
 CUE_LINES = 3
 META_FACTS = 3
 
-#: Everything that isn't a letter, digit, space, or the interpunct.
-_PUNCT = re.compile(r"[^A-Z0-9 ·%$£€/+-]")
+#: Everything that isn't a letter, digit, space, the interpunct — or the
+#: arrow. `→` is in the G2's font (20px advance, verified in the plugin's
+#: derived charset) and it is the direction line's whole grammar: `FITTING
+#: ROOMS → DENIM WALL`. This literal was written before that was known, and
+#: it silently ate the arrow on its way to the glass.
+_PUNCT = re.compile(r"[^A-Z0-9 ·%$£€/+→-]")
 _SPACES = re.compile(r"\s+")
 _MONEY = re.compile(r"([$£€])\s?(\d+(?:\.\d{1,2})?)")
 

@@ -58,17 +58,43 @@ for name, page in pages.items():
     img = Image.new("RGB", (W * SCALE, H * SCALE), (6, 8, 14))
     d = ImageDraw.Draw(img)
 
+    BRIGHT = (186, 255, 208)
+    DIM = (108, 172, 134)
+    FRAME = (75, 200, 128)
+
     def cell(x, y, w, h, text, dim=False, box=False):
-        f = font_for(h)
-        fill = (150, 168, 190) if dim else (232, 244, 255)
+        f = font_for(min(h, 26))
+        fill = DIM if dim else BRIGHT
         if box:
             d.rounded_rectangle([x * SCALE, y * SCALE, (x + w) * SCALE, (y + h) * SCALE],
                                 radius=2 * SCALE, outline=(90, 105, 125), width=1)
-        d.text((x * SCALE + 4 * SCALE, (y + h / 2) * SCALE), text, font=f, fill=fill,
-               anchor="lm")
+        d.text((x * SCALE + 4 * SCALE, (y + min(h, 26) / 2) * SCALE), text, font=f,
+               fill=fill, anchor="lm")
 
     for c in page["textObject"]:
         dim = c["containerName"] in ("cue-label", "cue-clock", "cue-meta", "cue-modules")
+        # The cluster right-aligns on the glass by measured space-padding.
+        # DejaVu's spaces are not the G2's spaces, so the preview aligns it
+        # the honest way instead: to the box's right edge, content trimmed.
+        if c["containerName"] == "cue-clock":
+            f = font_for(c["height"])
+            d.text(((c["xPosition"] + c["width"] - 4) * SCALE,
+                    (c["yPosition"] + c["height"] / 2) * SCALE),
+                   c["content"].strip(), font=f, fill=DIM, anchor="rm")
+            continue
+        # The card frame: the border draws the card, the content is its title
+        # row at the top — not a full-height cell of centred text.
+        if c.get("borderWidth", 0):
+            d.rounded_rectangle(
+                [c["xPosition"] * SCALE, c["yPosition"] * SCALE,
+                 (c["xPosition"] + c["width"]) * SCALE,
+                 (c["yPosition"] + c["height"]) * SCALE],
+                radius=c.get("borderRadius", 0) * SCALE, outline=FRAME,
+                width=c["borderWidth"] * SCALE // 2 + 1)
+            pad = c.get("paddingLength", 4)
+            cell(c["xPosition"] + pad, c["yPosition"] + pad,
+                 c["width"] - pad * 2, 26, c["content"], dim=True)
+            continue
         cell(c["xPosition"], c["yPosition"], c["width"], c["height"], c["content"], dim)
 
     for c in page.get("listObject", []):
@@ -91,12 +117,20 @@ for name, page in pages.items():
                  c["width"] - 12, row_h, row, dim=(i > 0))
 
     for c in page.get("imageObject", []):
-        m = mark.resize((c["width"] * SCALE, c["height"] * SCALE), Image.LANCZOS)
+        # The hero rail's pixels come from the dump — rendered by the same
+        # heroRail the phone runs — and everything else is the mark.
+        b64_src = dump.get("images", {}).get(name, {}).get(c["containerName"])
+        src = (Image.open(BytesIO(base64.b64decode(b64_src))).convert("L")
+               if b64_src else mark)
+        m = src.resize((c["width"] * SCALE, c["height"] * SCALE),
+                       Image.NEAREST if b64_src else Image.LANCZOS)
         # Pasted through itself as a mask, because the lens is additive: black
-        # in the mark is unlit, not a black square. Pasting it opaquely draws a
-        # rectangle that does not exist on the glass.
-        img.paste(Image.merge("RGB", (m, m, m)),
-                  (c["xPosition"] * SCALE, c["yPosition"] * SCALE), m)
+        # in the source is unlit, not a black square. Pasting it opaquely draws
+        # a rectangle that does not exist on the glass. Tinted to the lens
+        # green so the preview reads as the display, not as a scan of it.
+        tint = Image.merge("RGB", (m.point(lambda v: int(v * 0.35)), m,
+                                   m.point(lambda v: int(v * 0.62))))
+        img.paste(tint, (c["xPosition"] * SCALE, c["yPosition"] * SCALE), m)
 
     tiles.append((name, img))
 

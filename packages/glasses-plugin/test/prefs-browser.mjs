@@ -281,8 +281,13 @@ const saved = (p) => p.waitForFunction(
   caps = { camera_capture: false, voice: true, floor_comms: false };
   const p = await open();
   const shown = await labels(p);
+  // One .pref-seg remains whatever the store says: the tenant selector,
+  // which is how a phone *reaches* the right store in the first place and
+  // must never be gated behind that store's own capabilities.
   check("floor comms off in the store: the preference is absent, not disabled",
-    !shown.includes("Floor messages") && (await p.$$("#prefs-mount .pref-seg")).length === 0,
+    !shown.includes("Floor messages")
+    && (await p.$$("#prefs-mount .pref-seg")).length === 1
+    && shown.includes("This phone works at"),
     JSON.stringify(shown));
   check("the preferences the store has nothing to say about are still there",
     shown.includes("Zone") && shown.includes("Points on the rail") && shown.includes("Voice"),
@@ -293,7 +298,8 @@ const saved = (p) => p.waitForFunction(
   const q = await open();
   const bare = await labels(q);
   check("voice off in the store: that preference is absent too",
-    !bare.includes("Voice") && bare.join(",") === "Zone,Points on the rail",
+    !bare.includes("Voice")
+    && bare.join(",") === "Zone,Points on the rail,This phone works at",
     JSON.stringify(bare));
   // The unenforced capabilities keep their shipped behaviour. Hiding the
   // control must not become a back door to switching voice off for every
@@ -385,17 +391,33 @@ const saved = (p) => p.waitForFunction(
     wire.sent.filter((s) => s.event === "register").length === during,
     `${wire.sent.filter((s) => s.event === "register").length} vs ${during}`);
 
-  // Points: the row is on the rail, and turning it off takes it off the glass
-  // without waiting for the next guest.
-  check("the rail spends a row on points while they are on",
-    (await railRows(p)).some((r) => /4200 PTS/.test(r)), JSON.stringify(await railRows(p)));
-  await switchIn(p, "Points on the rail").click();
+  // The rail is the hero image now — sizes in dot type — with the name in its
+  // own text row above it. Points live in the *text* fallback, so the check
+  // walks the whole chain: hero on the glass, then a host that refuses
+  // images, then the text rail with and without its points row.
+  check("the rail is the hero image while the host takes images",
+    await p.$$eval("#virtual-lens img.lens-image", (els) => els.length >= 2)
+    && (await railRows(p)).length === 0,
+    `hero+mark images, ${JSON.stringify(await railRows(p))}`);
+  check("the name has its own row above the rail",
+    await p.evaluate(() =>
+      /SARAH CHEN/.test(document.getElementById("virtual-lens")?.textContent || "")));
+
+  // Refuse the next image push, and the latch must fall back to text rows —
+  // the failure mode is the 0.2.0 lens, never an empty box.
+  await p.evaluate(() => { window.__cueMockImage = "fail"; });
+  await switchIn(p, "Points on the rail").click();   // off — forces a repaint
   await saved(p);
-  await p.waitForTimeout(300);
+  await p.waitForTimeout(400);
+  check("a refused image falls back to the text rail",
+    (await railRows(p)).length > 0, JSON.stringify(await railRows(p)));
   check("turning points off takes the row off the glass mid-engagement",
     !(await railRows(p)).some((r) => /PTS/.test(r)), JSON.stringify(await railRows(p)));
-  check("and the rest of the rail is untouched",
-    (await railRows(p)).some((r) => /SARAH CHEN/.test(r)) &&
+  await switchIn(p, "Points on the rail").click();   // back on
+  await saved(p);
+  await p.waitForTimeout(400);
+  check("and back on, the text rail spends its row on points",
+    (await railRows(p)).some((r) => /4200 PTS/.test(r)) &&
     (await railRows(p)).some((r) => /BTM 28X30/.test(r)), JSON.stringify(await railRows(p)));
 
   // Ending the engagement is when the deferred zone registration goes.

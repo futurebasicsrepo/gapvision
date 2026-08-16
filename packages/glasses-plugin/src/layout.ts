@@ -44,8 +44,9 @@
  * is the reason several of the comments in this file read as corrections.
  */
 import type { ImageContainer, ListContainer, PageSpec, TextContainer } from "./bridge";
+import { CLOCK_HERO_H, CLOCK_HERO_W, HERO_H, HERO_W } from "./hero";
 import { MARK_H, MARK_W } from "./mark";
-import { NOT_GLASS, fitsPx, repeatToWidth, textWidth, truncatePx } from "./text";
+import { NOT_GLASS, fitsPx, textWidth, truncatePx } from "./text";
 
 /**
  * What the glass may draw, re-exported from where it is measured.
@@ -83,14 +84,14 @@ export const CUE_LINES = 3;
 /**
  * The most rows the fact rail will ever draw, however tall the frame is.
  *
- * Six is what the rail has to *say* — name, unread count, tier, points, and
- * the two sizes. A seventh row fits at 288 and there is no seventh fact, so
- * this is a cap on content, not on space. How many of the six actually fit is
- * a question about the frame, and `createGeometry` answers it: on a short
- * surface `FACT_SLOTS` comes back smaller than this, because a row that would
- * land on the footer is worse than a fact that isn't shown.
+ * Five now, not six: the guest's name left the rail for its own container
+ * (`cue-name`), because the rail's usual form is the hero image and a name
+ * belongs in the proportional text face, not the dot face. What remains for
+ * the *text* rail — the fallback when the host refuses images — is tier,
+ * the two sizes, points and the unread count. This stays a cap on content,
+ * not on space; `FACT_SLOTS` still answers what actually fits.
  */
-const FACT_SLOTS_MAX = 6;
+const FACT_SLOTS_MAX = 5;
 /**
  * Same idea for the floor menu: six rows is the design, fewer if they don't
  * fit. Longer lists window around the selection rather than scrolling the
@@ -279,7 +280,15 @@ const HEADER_Y = 12;
  *  box has 96px to draw in, which is what makes room for the voice indicator
  *  to share this container rather than cost a new one — see `headerStatus`. */
 const LABEL_W = 64;
-const CLOCK_W = 104;
+/**
+ * Was 104, when this container held a mic glyph and the time. It is now the
+ * status cluster — mic, unread count, low battery, clock — and the worst case
+ * (`█ •9 18% 14·32`) measures ~150px. 176 gives it a margin, not an exact
+ * fit. The content is right-aligned by measured space-padding (see
+ * `headerStatus`), so the clock stays flush to the display's right edge and
+ * never moves when a status glyph appears in front of it.
+ */
+const CLOCK_W = 176;
 
 /**
  * The rail's hairline, and the padding inside it.
@@ -292,6 +301,30 @@ const CLOCK_W = 104;
  */
 const RAIL_BORDER = 0;
 const RAIL_PAD = PAD + 2;
+
+/**
+ * The card frame.
+ *
+ * This is the reversal of an earlier ruling, and the ruling is worth keeping
+ * next to its reversal. The rail's `borderWidth` was removed because what the
+ * SDK draws — one scalar, a radius, no per-edge control — is a rounded
+ * rectangle around the whole container: a panel, which on the *rail* is
+ * chrome. On the module it is not chrome, it is the object itself. The right
+ * side of this display is a deck of cards an associate scrolls through and
+ * clicks into, and a card that is not visibly a contained thing is not a
+ * card — it is three floating lines, which is exactly what read weak next to
+ * Chesly and the other Even Hub apps that box their content.
+ *
+ * One drawn rectangle, on the region that moves; the rail stays unboxed. The
+ * frame's border is 1 at rest and 3 when the associate has clicked in — the
+ * community-standard selection idiom on this hardware, because border width
+ * is the only per-container emphasis the SDK has.
+ */
+const CARD_BORDER = 1;
+const CARD_BORDER_FOCUS = 3;
+const CARD_RADIUS = 8;
+/** Air between the frame and the display edge / rail column beside it. */
+const CARD_INSET = 6;
 
 /** Everything `createGeometry` works out for one frame. */
 export interface Geometry {
@@ -326,13 +359,20 @@ export interface Geometry {
   MENU_TITLE_Y: number;
   MENU_TOP: number;
   /**
-   * Where the structural rule sits, or `null` on a frame with no room for it.
-   *
-   * Structure is the first thing a short surface gives up, the same way it
-   * gives up rail rows: a rule drawn over the last line of a cue is worse than
-   * no rule at all.
+   * The card frame: where it starts, how tall it is, and where its body rows
+   * begin. The frame holds its own title row (the frame container's content),
+   * then the three cue lines as separate containers inside it — separate so
+   * the hot path stays a per-line text upgrade.
    */
-  RULE_Y: number | null;
+  CARD_Y: number;
+  CARD_H: number;
+  CARD_BODY_TOP: number;
+  /** Whether this frame affords the card a title row. A 200px surface does
+   *  not — the title is the first thing a short surface gives up. */
+  CARD_TITLED: boolean;
+  /** The left column's stops: the guest's name row, and the hero rail below. */
+  NAME_Y: number;
+  HERO_Y: number;
   /**
    * What each region can hold, **in pixels of drawable width**. These were
    * `LINE_CHARS`, `RAIL_LINE_CHARS` and `FACT_CHARS`, and they were character
@@ -373,11 +413,34 @@ export function createGeometry(width: number, height: number): Geometry {
   const MODULE_W = width - MODULE_X - X;
 
   const BODY_TOP = HEADER_Y + HEADER_H + GUTTER;
-  const BODY_BOTTOM = BODY_TOP + (CUE_LINES - 1) * LINE_STEP + LINE_H;
-  /** The bottom row, split on the same two-column grid as the body: meta under
-   *  the rail, the module indicator under the module. They used to share the
-   *  full width and sat on top of each other whenever a cue had no rail. */
+  /**
+   * The card: title row first, then the three lines. The frame starts a
+   * breath above the title so the border does not sit on the header, and the
+   * body rows start a full row below the title so the two never share pixels.
+   */
+  const CARD_Y = BODY_TOP - CARD_INSET;
+  /** The bottom row. Anchored to the bottom edge, so it is the one position
+   *  that moves with the frame's height. */
   const FOOT_Y = height - ROW_H - ROW_GAP;
+  const bodyBottomFrom = (top: number) => top + (CUE_LINES - 1) * LINE_STEP + LINE_H;
+  /**
+   * The title row is the first thing a short surface gives up — the same
+   * trade the structural rule used to make. At 200px tall, three lines under
+   * a title row run into the footer; the lines are the cue and the title is
+   * furniture, so the title goes and the frame hugs the lines.
+   */
+  let CARD_BODY_TOP = BODY_TOP + ROW_H + CARD_INSET;
+  if (bodyBottomFrom(CARD_BODY_TOP) + CARD_INSET + PAD > FOOT_Y) {
+    CARD_BODY_TOP = BODY_TOP;
+  }
+  const CARD_TITLED = CARD_BODY_TOP !== BODY_TOP;
+  const BODY_BOTTOM = bodyBottomFrom(CARD_BODY_TOP);
+  const CARD_H = BODY_BOTTOM + CARD_INSET + PAD - CARD_Y;
+  /** Name first, then the hero. The hero's own height is fixed by `hero.ts`
+   *  (an image whose size followed its content would change the page shape on
+   *  every guest); what the geometry owns is where it starts. */
+  const NAME_Y = BODY_TOP;
+  const HERO_Y = BODY_TOP + ROW_H + ROW_GAP;
   /** The menu title sits a hair tighter under the header than the cue body
    *  does — 50 against 52. The two pages were tuned separately on glass and
    *  neither complaint was about this, so it is preserved rather than tidied
@@ -388,20 +451,8 @@ export function createGeometry(width: number, height: number): Geometry {
   const rowsBetween = (top: number, bottom: number, cap: number) =>
     Math.max(0, Math.min(cap, Math.floor((bottom - top) / ROW_H)));
 
-  const FACT_SLOTS = rowsBetween(BODY_TOP, FOOT_Y, FACT_SLOTS_MAX);
-
-  /**
-   * The rule sits immediately above the footer, and only if it clears both
-   * columns — the three cue lines on the right and a full rail on the left.
-   *
-   * Measured against `FACT_SLOTS` rather than against whatever rail a
-   * particular cue happens to have, so the answer is a property of the frame
-   * and not of the content: a rule that came and went with the number of facts
-   * would change the page shape on every guest and force a rebuild for a line.
-   */
-  const ruleTop = FOOT_Y - ROW_H;
-  const railBottom = BODY_TOP + FACT_SLOTS * RAIL_ROW;
-  const RULE_Y = ruleTop >= Math.max(BODY_BOTTOM, railBottom) ? ruleTop : null;
+  /** The text rail sits under the name row, where the hero would be. */
+  const FACT_SLOTS = rowsBetween(HERO_Y, FOOT_Y, FACT_SLOTS_MAX);
 
   return {
     DISPLAY_W: width, DISPLAY_H: height,
@@ -409,7 +460,8 @@ export function createGeometry(width: number, height: number): Geometry {
     RAIL_W, GUTTER, MODULE_X, MODULE_W,
     ROW_H, HEADER_H, LINE_H, LINE_STEP, RAIL_ROW, META_H, PAD,
     LABEL_W, CLOCK_W,
-    HEADER_Y, BODY_TOP, BODY_BOTTOM, FOOT_Y, MENU_TITLE_Y, MENU_TOP, RULE_Y,
+    HEADER_Y, BODY_TOP, BODY_BOTTOM, FOOT_Y, MENU_TITLE_Y, MENU_TOP,
+    CARD_Y, CARD_H, CARD_BODY_TOP, CARD_TITLED, NAME_Y, HERO_Y,
     /**
      * What each region can actually draw in, in pixels.
      *
@@ -455,7 +507,8 @@ export const {
 } = DEFAULT_GEOMETRY;
 
 const { W, RAIL_W, MODULE_X, MODULE_W, BODY_TOP, FOOT_Y,
-        MENU_TITLE_Y, MENU_TOP, RULE_Y, META_PX, CLOCK_PX } = DEFAULT_GEOMETRY;
+        MENU_TITLE_Y, MENU_TOP, META_PX, CLOCK_PX,
+        CARD_Y, CARD_H, CARD_BODY_TOP, CARD_TITLED, NAME_Y, HERO_Y } = DEFAULT_GEOMETRY;
 
 export interface Cue {
   lines: string[];
@@ -478,6 +531,41 @@ export interface Cue {
   moduleIndex?: number;
   moduleCount?: number;
   moduleName?: string;
+  /**
+   * The card's title row, drawn inside the frame above the lines. When unset
+   * it is composed from the module fields: `CUE · 1/6`. A focused card says
+   * where its window is instead: `CART · 2-4/9`.
+   */
+  cardTitle?: string;
+  /** The associate has clicked into this card: the frame's border thickens
+   *  and scrolling moves the card's content instead of the deck. */
+  focused?: boolean;
+  /**
+   * The guest's name, in its own row at the top of the left column.
+   *
+   * Out of the rail and into the proportional face on purpose: the dot face
+   * is for values, and a name is the one rail fact that is *read aloud* — it
+   * earns the text face and a fixed position that never moves while the hero
+   * below it changes.
+   */
+  name?: string;
+  /**
+   * Declare the hero rail image container (the pixels arrive separately, like
+   * the mark). False falls back to the text rail built from `facts` — which
+   * is also what `main.ts` re-renders with when the host refuses the image.
+   */
+  hero?: boolean;
+  /**
+   * Draw the clock huge, in dot type, in the card's body — the idle screen's
+   * hero. Only honoured on an unrailed cue: a guest owns that space.
+   * The image's pixels arrive separately, like every image on this display.
+   */
+  heroClock?: boolean;
+  /** Unread floor messages, for the header cluster. */
+  unread?: number;
+  /** Glasses battery percent, or null when the host has not said. Only shows
+   *  in the header at 20% and under — a full battery is not information. */
+  battery?: number | null;
   /** Override the clock, for tests and renders. */
   clock?: string;
   /**
@@ -551,7 +639,7 @@ export function toDisplayText(line: string, maxPx: number = LINE_PX): string {
  *  comment here said otherwise. The interpunct is a brand rule: it is the only
  *  separator the identity system allows, and the charset declines the colon
  *  along with the comma and the full stop. Declined, not missing. */
-function clockLabel(now = new Date()): string {
+export function clockLabel(now = new Date()): string {
   const h = String(now.getHours()).padStart(2, "0");
   const m = String(now.getMinutes()).padStart(2, "0");
   return `${h}·${m}`;
@@ -576,10 +664,42 @@ function clockLabel(now = new Date()): string {
  */
 export const MIC_OPEN = "█";
 export const MIC_CLOSED = "▒";
+/** Unread floor messages: a filled dot and the count. The dot is 9px and in
+ *  the font — it was banned by the hand-written charset for as long as that
+ *  literal existed, which is why nothing used it until now. */
+export const UNREAD_MARK = "•";
 
-export function headerStatus(clock: string, mic: MicState = "off"): string {
-  const glyph = mic === "open" ? MIC_OPEN : mic === "closed" ? MIC_CLOSED : "";
-  return truncatePx(glyph ? `${glyph} ${clock}` : clock, CLOCK_PX);
+/**
+ * The header's right-hand cluster: mic, unread, low battery, then the time.
+ *
+ * Three rules hold it together:
+ *
+ * - **State lights only.** The mic draws when voice exists; the unread count
+ *   draws when something is unread; the battery draws at 20% and under. A
+ *   full battery and an empty inbox draw nothing — the resting header is the
+ *   mark and the clock, exactly as before.
+ * - **The battery is `18%`, not a pictograph.** The font has no battery glyph
+ *   and a half-block reads as a rendering fault; a percentage is read. It
+ *   only ever appears when it is the associate's problem.
+ * - **Right-aligned by measurement.** Text containers draw from the left, so
+ *   the cluster is padded with leading spaces — measured, the space is a 5px
+ *   advance — until the clock sits against the same right edge regardless of
+ *   which lights are on. A clock that moved when the mic opened would be the
+ *   most distracting thing on the display.
+ */
+export function headerStatus(
+  clock: string, mic: MicState = "off", unread = 0, battery: number | null = null,
+): string {
+  const parts = [
+    mic === "open" ? MIC_OPEN : mic === "closed" ? MIC_CLOSED : "",
+    unread > 0 ? `${UNREAD_MARK}${Math.min(unread, 9)}` : "",
+    battery !== null && battery <= 20 ? `${battery}%` : "",
+    clock,
+  ].filter(Boolean);
+  const joined = truncatePx(parts.join(" "), CLOCK_PX);
+  const spacePx = textWidth(" ");
+  const pad = Math.max(0, Math.floor((CLOCK_PX - textWidth(joined)) / spacePx));
+  return " ".repeat(pad) + joined;
 }
 
 /**
@@ -608,37 +728,14 @@ function fit(text: string, maxPx: number, keep = ""): string {
   return truncatePx(keep, maxPx);
 }
 
-/**
- * A structural rule, drawn with the box-drawing glyphs the font turned out to
- * have — and the tick that says where the fixed column ends.
- *
- * This is the answer to "the lens reads weak and unstructured beside other
- * Even Hub apps", and it is one line rather than a frame because the brand
- * rule is no chrome. What it says is a fact about the layout: everything above
- * is the cue and the rail, everything below is the machine's own strip, and
- * the `┴` marks the boundary the two columns were already implying with
- * whitespace.
- *
- * Drawn, rather than the rail container's `borderWidth`. The SDK's border is
- * one scalar with a radius — there is no per-edge control — so what it draws
- * is a rounded rectangle around the whole rail. That is a panel. Nobody has
- * ever seen it on glass to confirm what it looks like, and the comment that
- * called it "a hairline down the rail's edge" was describing an intention. A
- * rule is the thing we actually want, and a rule is what this draws.
- */
-function ruleContent(maxPx: number, railed: boolean, tickAtPx: number): string {
-  const run = repeatToWidth("─", maxPx);
-  if (!railed || !run) return run;
-  // Place the junction on whichever glyph the column boundary falls in. The
-  // rule glyphs are one width, but this measures rather than divides — see
-  // `repeatToWidth` for why that is not pedantry.
-  const unit = textWidth("─");
-  const at = Math.max(0, Math.min(run.length - 1, Math.round(tickAtPx / unit)));
-  return `${"─".repeat(at)}┴${"─".repeat(run.length - at - 1)}`;
-}
-
 export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
-  const railed = (cue.facts || []).length > 0;
+  /**
+   * Railed means the left column exists at all — a name, a hero, or text
+   * facts. The full-frame fallback stays load-bearing: urgent messages, guest
+   * requests and the idle screen all draw with nothing on the left, and their
+   * card takes the whole width.
+   */
+  const railed = Boolean(cue.name) || (cue.facts || []).length > 0 || cue.hero === true;
   // With a rail beside it the sentence has a third less room, so it is fitted
   // to that box here — and "fits" is now the font's answer about this exact
   // string, not a character count that treats `IIIIIIIIIII` and `WWWWWWWWWWW`
@@ -683,15 +780,11 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     xPosition: DISPLAY_W - X - CLOCK_W, yPosition: HEADER_Y, width: CLOCK_W, height: HEADER_H,
     paddingLength: PAD,
     containerID: 2, containerName: "cue-clock", zOrderIndex: 2,
-    // The clock, not the latency. An associate mid-shift wants the time far
-    // more often than a round-trip figure; latency moved to the meta strip
-    // where it stays a visible claim without owning the corner.
-    //
-    // And the mic, in front of it. There was no way to see whether the mic was
-    // open — the level meter said so while it was on the glass, but a voice
-    // answer, a card or a guest cue replaced it and told the associate nothing
-    // about a mic that might still be listening. See `headerStatus`.
-    content: headerStatus(cue.clock ?? clockLabel(), cue.mic),
+    // The status cluster: mic, unread, low battery, clock — state lights the
+    // associate needs and nothing else, right-aligned so the clock never
+    // moves. See `headerStatus` for the three rules that keep it honest.
+    content: headerStatus(cue.clock ?? clockLabel(), cue.mic, cue.unread ?? 0,
+                          cue.battery ?? null),
     // The page's single gesture receiver. It used to be the header, but an
     // image container has no `isEventCapture` field at all — swapping the
     // wordmark for the mark would have taken the page's only receiver with it.
@@ -700,17 +793,35 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     isEventCapture: 1,
   });
 
-  // The module — the three lines, still the only peak-brightness element on
-  // the display. It takes the right-hand region when there is a rail beside
-  // it, and the full frame when there isn't.
+  // The card — the region that moves, now visibly one contained thing.
   //
-  // That fallback is load-bearing, not defensive: the rail is only half built,
-  // and nothing populates `facts` yet. Without this, a build from `main` would
-  // indent the sentence into a column with nothing next to it — a worse lens
-  // than the one shipping today, for a feature that isn't finished.
-  const hasRail = facts.length > 0;
-  const lineX = hasRail ? MODULE_X : X;
-  const lineW = hasRail ? MODULE_W : W;
+  // The frame is a text container of its own: its border draws the rounded
+  // rectangle, its content is the card's title row (`CUE · 1/6`), and the
+  // three lines sit inside it as separate containers so the hot path — every
+  // deck scroll, every voice answer — stays a per-line text upgrade rather
+  // than a rebuild. The border width is the focus state: 1 at rest, 3 when
+  // the associate has clicked in. That change *does* force a rebuild, and it
+  // is the right price — focus changes on a deliberate gesture, not per frame.
+  const lineX = railed ? MODULE_X : X;
+  const lineW = railed ? MODULE_W : W;
+  textObject.push({
+    xPosition: lineX - CARD_INSET, yPosition: CARD_Y,
+    width: lineW + CARD_INSET * 2, height: CARD_H,
+    borderWidth: cue.focused ? CARD_BORDER_FOCUS : CARD_BORDER,
+    // Explicit, because the first photo through the glass showed everything
+    // *except* the frame: on an additive display an unset border colour is
+    // a black border, and a black border is no border. White is max
+    // brightness after the host's gray-4 reduction.
+    borderColor: 0xffffff,
+    borderRadius: CARD_RADIUS,
+    paddingLength: PAD + CARD_INSET,
+    containerID: 6, containerName: "cue-card", zOrderIndex: 3,
+    content: !CARD_TITLED ? "" : toDisplayText(cue.cardTitle
+      ?? (cue.moduleCount && cue.moduleCount > 1
+        ? `${cue.moduleName || "CUE"} · ${(cue.moduleIndex || 0) + 1}/${cue.moduleCount}`
+        : cue.moduleName || ""), textBudget(lineW)),
+    isEventCapture: 0,
+  });
   // Always three line containers, empty ones included. Their *contents* change
   // constantly — every scroll, every answer — and a container that comes and
   // goes changes the page shape, which forces a full rebuild instead of a text
@@ -718,95 +829,68 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
   // every scroll costs a redraw of the whole glass.
   Array.from({ length: CUE_LINES }, (_, i) => lines[i] || "").forEach((content, i) => {
     textObject.push({
-      xPosition: lineX, yPosition: BODY_TOP + i * LINE_STEP,
+      xPosition: lineX, yPosition: CARD_BODY_TOP + i * LINE_STEP,
       width: lineW, height: LINE_H,
       paddingLength: PAD,
-      containerID: 3 + i, containerName: `cue-line-${i + 1}`, zOrderIndex: 3 + i,
+      containerID: 3 + i, containerName: `cue-line-${i + 1}`, zOrderIndex: 4 + i,
       content,
       isEventCapture: 0,
     });
   });
 
-  // The bottom row, on the same two columns as the body: the meta strip under
-  // the rail, the module indicator under the module. They used to be given the
-  // full width each, which is invisible while every cue has a rail and an
-  // exact overlap the moment one doesn't.
-  // Which module the region is showing. Only when there is more than one — a
-  // position indicator for a single page is chrome, and chrome is the thing
-  // this surface spends its budget not having.
-  const showModules = Boolean(cue.moduleCount && cue.moduleCount > 1);
-  // The meta strip takes the whole bottom row when nothing is sharing it.
-  // Idle is that case, and idle is the one screen whose meta strip is load
-  // bearing: it carries the two gestures, one of which quits the app. Held to
-  // a rail's width it fitted the build number and dropped both of them.
-  // The footer's left cell runs to where the module column starts, not to
-  // where the rail's edge does — the gutter above it is dead space, and every
-  // pixel of it is one the strip can draw in. "DENIM WALL" is exactly the fact
-  // that fell off the end of the narrower version.
-  const metaW = hasRail || showModules ? MODULE_X - X : W;
-  const footRight = latencyMs ? `${(latencyMs / 1000).toFixed(1)}S` : "";
-  if (showModules) {
-    // "2/3", not dots. A filled dot is in the charset now — `•` is in the font
-    // and was banned by a hand-written literal — but the fraction stays: at
-    // this size on a monochrome display, counting dots is work, and a fraction
-    // is read rather than counted.
-    const position = `${(cue.moduleIndex || 0) + 1}/${cue.moduleCount}`;
+  // The idle clock hero — a 48px dotted clock centred in the card's body,
+  // where the cue lines would be. The resting screen is the lens's first
+  // impression, and it should read as an instrument, not a terminal.
+  if (!railed && cue.heroClock) {
+    const bodyBottom = CARD_Y + CARD_H - (CARD_INSET + PAD);
+    imageObject.push({
+      xPosition: Math.round((DISPLAY_W - CLOCK_HERO_W) / 2),
+      yPosition: CARD_BODY_TOP
+        + Math.max(0, Math.round((bodyBottom - CARD_BODY_TOP - CLOCK_HERO_H) / 2)),
+      width: CLOCK_HERO_W, height: CLOCK_HERO_H,
+      containerID: 12, containerName: "cue-idle-clock", zOrderIndex: 10,
+    });
+  }
+
+  // The guest's name — the left column's fixed fact, in the text face.
+  if (cue.name) {
     textObject.push({
-      xPosition: lineX, yPosition: FOOT_Y,
-      width: lineW, height: META_H,
+      xPosition: X, yPosition: NAME_Y, width: RAIL_W, height: ROW_H,
       paddingLength: PAD,
-      containerID: 8, containerName: "cue-modules", zOrderIndex: 8,
-      // Latency rides here rather than in the meta strip. It is a claim the
-      // brand wants visible, and this is the wider of the two footer cells —
-      // the meta strip is a rail's width and cannot hold "DENIM WALL · 1.2S"
-      // without losing the S off the end of it.
-      content: fit(`${cue.moduleName || ""} ${position}`, textBudget(lineW), footRight),
+      containerID: 8, containerName: "cue-name", zOrderIndex: 8,
+      content: toDisplayText(cue.name, textBudget(RAIL_W)),
       isEventCapture: 0,
     });
   }
 
-  // The structural rule, immediately above the footer.
-  //
-  // One line, spanning the content width, with a `┴` where the rail column
-  // ends. It is the whole of the answer to "this reads weak and unstructured":
-  // the split between the fixed column and the module, and the boundary
-  // between the cue and the machine's own strip, were both being carried by
-  // whitespace, and whitespace on a 25° monochrome field carries very little.
-  //
-  // It costs one text container, which is why the voice indicator shares the
-  // clock's. On a frame with no room for it — a 200px surface, where the rail
-  // already reaches the footer — `RULE_Y` is null and there is simply no rule.
-  // Structure is the first thing a short surface gives up.
-  if (RULE_Y !== null) {
-    textObject.push({
-      xPosition: X, yPosition: RULE_Y, width: W, height: ROW_H,
-      paddingLength: PAD,
-      containerID: 6, containerName: "cue-rule", zOrderIndex: 6,
-      content: ruleContent(textBudget(W), hasRail, MODULE_X - GUTTER / 2 - (X + PAD)),
-      isEventCapture: 0,
+  // The hero rail: an image container the pixels arrive into separately,
+  // exactly like the mark — and with the same failure discipline. `main.ts`
+  // latches `useHeroRail` off the first time the host refuses, and re-renders
+  // with `hero: false`, which builds the text rail below instead.
+  if (railed && cue.hero) {
+    imageObject.push({
+      xPosition: X, yPosition: HERO_Y,
+      width: HERO_W, height: HERO_H,
+      containerID: 11, containerName: "cue-hero", zOrderIndex: 9,
     });
   }
 
-  // Left rail — facts that stay put while the right side changes.
+  // Text rail — the fallback left column, when the host refuses images or a
+  // payload has facts and no sizes worth a hero.
   //
   // A list container, not four text containers, and not by preference: the
   // host caps `Text_Object` at 8 and the railed guest page needed 11. Over
   // budget, the page does not render *and nothing says so* — which is exactly
-  // how the rail shipped twice and appeared neither time. One list holds all
-  // five rows and costs one container.
+  // how the rail shipped twice and appeared neither time.
   const listObject: ListContainer[] = [];
-  if (facts.length) {
+  if (railed && !cue.hero && facts.length) {
     listObject.push({
-      xPosition: X, yPosition: BODY_TOP,
+      xPosition: X, yPosition: HERO_Y,
       width: RAIL_W, height: RAIL_ROW * facts.length,
       containerID: 9, containerName: "cue-rail", zOrderIndex: 9,
-      // No border. This carried `borderWidth: 1` and a 2px radius, described in
-      // the comment as "a hairline down the rail's edge" — which is not what
-      // the SDK draws. `borderWidth` is a single scalar with no per-edge
-      // control, so it draws a rounded rectangle around the entire rail: a
-      // panel, which is chrome, which the brand bans. The structure it was
-      // reaching for is the drawn rule above the footer, where the `┴` marks
-      // this column's boundary in one line rather than four.
+      // No border: one frame on this display, and it is the card's. Two boxes
+      // side by side stop reading as "the thing you can act on" and start
+      // reading as a table.
       borderWidth: RAIL_BORDER,
       paddingLength: RAIL_PAD,
       isEventCapture: 0,
@@ -820,16 +904,21 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     });
   }
 
-  // Meta strip, bottom left. Interpunct-separated, never four facts, and
-  // dropped from the right rather than clipped: a strip that ends mid-word
-  // reads as broken hardware, and the last fact is the least important one.
+  // Meta strip, the bottom row entire. The module indicator that used to
+  // share it moved into the card's title, so the strip has the full width —
+  // and idle needs it: the strip is where the two gestures nobody discovers
+  // by accident are named, and one of them exits the app.
+  //
+  // Interpunct-separated, dropped from the right rather than clipped: a strip
+  // that ends mid-word reads as broken hardware. Latency is the pinned tail —
+  // the point of showing latency is that it is always there.
+  const footRight = latencyMs ? `${(latencyMs / 1000).toFixed(1)}S` : "";
   textObject.push({
     xPosition: X, yPosition: FOOT_Y,
-    width: metaW, height: META_H,
+    width: W, height: META_H,
     paddingLength: PAD,
     containerID: 7, containerName: "cue-meta", zOrderIndex: 7,
-    // When there is no module row, latency has nowhere else to go.
-    content: fit(meta.join(" · "), textBudget(metaW), showModules ? "" : footRight),
+    content: fit(meta.join(" · "), textBudget(W), footRight),
     isEventCapture: 0,
   });
 

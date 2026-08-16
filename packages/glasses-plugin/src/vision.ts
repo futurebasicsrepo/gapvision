@@ -163,7 +163,11 @@ export interface CaptureControl {
 export function captureControls(caps: Capabilities): CaptureControl[] {
   if (!caps?.camera_capture) return [];
   return [
-    { label: "Scan a tag", kind: "sku" },
+    // One control for both, because the service decides for itself: a
+    // barcode in frame is decoded exactly (no model), anything else falls
+    // through to the tag reader. Asking the associate which they photographed
+    // would be asking them to know how the pipeline works.
+    { label: "Scan a tag or barcode", kind: "sku" },
     { label: "Scan a part", kind: "part" },
   ];
 }
@@ -247,6 +251,10 @@ export interface VisionDeps {
    *  everything else; the plugin cannot hold the service key. */
   serverUrl: string;
   tenant: string;
+  /** Where the associate is standing right now — read at scan time, because
+   *  a zone is a preference that changes mid-shift. Powers the direction
+   *  line in the answer: `KNITWEAR → DENIM WALL`. */
+  zone?: () => string;
   /** Same signature `voice.ts` uses — main.ts owns the page lifecycle, and a
    *  vision answer is a cue like any other. */
   render(lines: string[], meta: string[]): Promise<void>;
@@ -351,6 +359,7 @@ export class VisionController {
           kind,
           image_base64: asset.base64,
           mime: asset.mimeType || "image/jpeg",
+          zone: this.deps.zone?.() || undefined,
         }),
       });
     } catch (e) {
