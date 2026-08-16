@@ -352,17 +352,29 @@ function railFor(payload: DisplayPayload): string[] {
   // type size, and "BOTTOMS 28X30" is thirteen — it clipped to "BOTTOMS 28X",
   // losing the inseam, which is the half of that fact worth having. Abbreviate
   // the label and the value survives.
+  // Ordered by what survives a short frame, not by importance in the abstract.
+  //
+  // `FACT_SLOTS` is a fit capacity now, so on a 640x200 surface the rail holds
+  // four rows and the last two fall off the end. It used to be the sizes that
+  // fell off — which is the half of the rail worth having, and the reason the
+  // rail costs the sentence a third of its width in the first place. A rail
+  // that drops the sizes is a rail that is not paying for itself.
+  //
+  // So: who they are, then what fits them, then the things that are merely
+  // nice. Points are a number nobody acts on mid-conversation, and unread
+  // floor traffic has its own arrival behaviour — an urgent message takes the
+  // whole frame rather than waiting politely in row five.
   return [
     railName(g.name),
-    // Unread floor traffic, as a sixth rail row. The rail is a single list
-    // container with six slots and five in use, so this is free: no new
-    // container, no page-shape change, no rebuild. That is the whole reason
-    // the priority tier fits inside the host's budget at all.
-    inbox.length ? `${inbox.length} MSG` : "",
     g.tier || "",
-    typeof g.points === "number" ? `${g.points} PTS` : "",
     sizes.tops ? `TOP ${sizes.tops}` : "",
     sizes.bottoms ? `BTM ${sizes.bottoms}` : "",
+    typeof g.points === "number" ? `${g.points} PTS` : "",
+    // Unread floor traffic, as a sixth rail row. The rail is a single list
+    // container with six slots, so this is free: no new container, no
+    // page-shape change, no rebuild. That is the whole reason the priority
+    // tier fits inside the host's budget at all.
+    inbox.length ? `${inbox.length} MSG` : "",
   ].filter(Boolean);
 }
 

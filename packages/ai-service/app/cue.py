@@ -26,7 +26,20 @@ from __future__ import annotations
 
 import re
 
-LINE_CHARS = 60
+# Budgets, and they are not chosen — they are what `layout.ts` derives for the
+# 576x288 frame, transcribed. `test_cue_budgets.py` asserts they still agree.
+#
+# `layout.ts` said "cue.py shortens the evidence line to RAIL_LINE_CHARS to
+# suit" and cue.py truncated at 60. A guest cue always has a rail beside it, so
+# every line written here was landing in a box that holds 21 characters and the
+# glass was clipping the difference — nearly two thirds of a full-width line.
+# The comment described an intention nobody had implemented.
+#
+# Written at the worst case on purpose: RAIL_LINE_CHARS, not LINE_CHARS.
+# Being one character optimistic here is a clipped word on a stranger's face.
+LINE_CHARS = 33        # full frame, no rail
+RAIL_LINE_CHARS = 21   # what a guest cue actually gets
+FACT_CHARS = 10        # the rail, and the meta strip that sits under it
 CUE_LINES = 3
 META_FACTS = 3
 
@@ -75,49 +88,87 @@ def money(value) -> str:
         return ""
 
 
-def build(lines: list[str], meta: list[str] | None = None) -> dict:
-    """A cue: exactly three lines and at most three supporting facts.
+def build(lines: list[str], meta: list[str] | None = None,
+          width: int = LINE_CHARS) -> dict:
+    """A cue: at most three lines and at most three supporting facts.
 
     Short cues are allowed — two lines that say the whole thing beat three
     that pad. What is not allowed is a fourth.
+
+    `width` is the caller's, because it is the caller that knows whether a
+    rail is going to be sitting beside this. A full-frame cue gets 33
+    characters; anything with a rail gets 21.
     """
-    shaped = [glassify(l) for l in lines if l and str(l).strip()][:CUE_LINES]
-    facts = [glassify(m, 22) for m in (meta or []) if m and str(m).strip()][:META_FACTS]
+    shaped = [glassify(l, width) for l in lines if l and str(l).strip()][:CUE_LINES]
+    facts = [glassify(m, FACT_CHARS) for m in (meta or [])
+             if m and str(m).strip()][:META_FACTS]
     return {"lines": shaped, "meta": facts}
 
 
 def guest_cue(guest: dict, top: dict | None, cart: list[dict] | None) -> dict:
     """The card that appears when an opted-in guest is identified.
 
-    Name, evidence, reason to speak — the evidence line is whichever fact
-    most earns the associate's next sentence: something left in a cart beats a
+    Evidence, then reason to speak — the evidence line is whichever fact most
+    earns the associate's next sentence: something left in a cart beats a
     recommendation, because it is something the guest already chose.
+
+    **The name is not here.** It used to be the first of the three lines, and
+    it is already pinned to the fact rail on the left, where it stays put while
+    the right side changes. Spending one of three rows on a word that is
+    already on screen is the most expensive duplication available on this
+    display. The left side is who they are; the right side is what to do about
+    it, and it is the only part that moves.
+
+    That freed a row, which the cart branch immediately wanted: it used to
+    compute a recommendation and throw it away whenever a cart existed, so the
+    strongest case — someone who left something behind *and* has something
+    worth showing — was the case that said least.
     """
-    name = guest.get("name", "")
     cart = cart or []
     sizes = guest.get("sizes") or {}
+    lines: list[str] = []
 
     if cart:
         item = cart[0]
         # Front-loaded and short. The fact rail takes a third of the frame, so
-        # the sentence has ~42 characters rather than 60, and "LEFT THE … IN
+        # the sentence has 21 characters rather than 33, and "LEFT THE … IN
         # THEIR CART" spent eighteen of them on grammar before reaching the
         # thing the associate needs to say out loud.
-        evidence = f"IN CART {item['name']}"
-        reason = f"OFFER IT IN SIZE {sizes.get('tops', '')}".strip()
+        lines.append(f"IN CART {item['name']}")
+        lines.append(f"OFFER IT IN SIZE {sizes.get('tops', '')}".strip())
+        if top:
+            lines.append(f"THEN {top['name']}")
     elif top:
-        evidence = f"SHOW THE {top['name']}"
-        reason = f"AT {top.get('location', 'THE FLOOR')}"
+        lines.append(f"SHOW THE {top['name']}")
+        lines.append(f"AT {top.get('location', 'THE FLOOR')}")
     else:
-        evidence = f"{guest.get('loyalty_tier', '')} MEMBER".strip()
-        reason = "ASK WHAT BROUGHT THEM IN"
+        lines.append(f"{guest.get('loyalty_tier', '')} MEMBER".strip())
+        # 19 characters. "ASK WHAT BROUGHT THEM IN" is 24 and truncates to "ASK
+        # WHAT BROUGHT THEM", which ends mid-thought — the words that survive
+        # have to be the whole sentence, not the start of one.
+        lines.append("WHAT BRINGS THEM IN")
 
-    meta = [
-        f"{guest.get('loyalty_tier', '')}",
-        f"{guest.get('loyalty_points', 0)} PTS",
-        f"SIZE {sizes.get('tops', '')} · {sizes.get('bottoms', '')}".strip(" ·"),
-    ]
-    return build([name, evidence, reason], meta)
+    # Deliberately not the tier, the points or the sizes: all three are already
+    # rail rows, and the meta strip sits directly underneath the rail. Repeating
+    # them there would put the same fact twice in one column, which is the same
+    # mistake the name was making across two.
+    meta = [guest.get("zone") or "", _visit_note(guest)]
+    return build(lines, meta, RAIL_LINE_CHARS)
+
+
+def _visit_note(guest: dict) -> str:
+    """One fact about the relationship that the rail does not already carry.
+
+    Falls back to nothing rather than to filler. An empty meta strip is honest;
+    a padded one trains people to stop reading it.
+    """
+    spent = guest.get("lifetime_value")
+    if spent:
+        return f"{money(spent)} LTV"
+    visits = guest.get("visits")
+    if isinstance(visits, int) and visits > 1:
+        return f"{visits} VISITS"
+    return ""
 
 
 def idle_cue(tenant_label: str, zone: str) -> dict:
