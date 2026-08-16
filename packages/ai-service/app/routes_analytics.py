@@ -12,7 +12,7 @@ thing that knows what actually happened on the floor.
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import analytics, db, identity, presence
+from . import analytics, capabilities, db, identity, presence, shifts
 from .auth import KeyHeader, guard
 from .identity import BearerHeader, current_user, require, scope_tenant
 
@@ -84,6 +84,61 @@ def get_usage(days: int = 30, tenant: str | None = None,
     return {"tenant": t["slug"], "usage": analytics.usage(t["id"], _clamp(days, 1, 400))}
 
 
+@router.get("/shifts")
+def get_shifts(days: int = 7, tenant: str | None = None,
+               authorization: str | None = BearerHeader):
+    """Hours worked, and every count divided by them.
+
+    The denominator the rest of this file has never had. Both halves of every
+    rate come back beside it — the count and the hours — because the first
+    question anybody asks a rate is "out of what", and a ratio nobody can
+    decompose is a ratio nobody acts on.
+
+    Answers 200 with `enabled: false` and no rows when the tenant has shift
+    telemetry off, rather than 403. A manager whose store never turned this on
+    is not doing anything wrong, and a panel that can say "your store has this
+    switched off" is worth more than an error a dashboard renders as a crash.
+    """
+    me = current_user(authorization)
+    require(me, "manager")
+    t = _tenant_for(me, tenant)
+    if not (t.get("privacy") or {}).get(capabilities.SHIFT_TELEMETRY):
+        return {
+            "tenant": t["slug"], "window_days": _clamp(days, 1, 365),
+            "enabled": False, "rows": [],
+            "totals": {"hours_worked": 0.0, "shifts": 0, "on_shift_now": 0,
+                       "associates_with_hours": 0, "engagements_per_hour": None},
+            "unassigned_devices": {"shifts": 0, "hours_worked": 0.0, "devices": 0},
+            "gap_minutes": shifts.GAP_MINUTES,
+            "min_hours_for_rate": shifts.MIN_HOURS_FOR_RATE,
+            "detail": ("Shift timing is off for this store. A client_admin turns "
+                       "it on in Console → Tenants. It measures staff, so it is "
+                       "off until somebody says otherwise."),
+        }
+    return {"tenant": t["slug"], **shifts.coverage(t, days=_clamp(days, 1, 365))}
+
+
+@router.get("/fleet")
+def get_fleet(tenant: str | None = None, authorization: str | None = BearerHeader):
+    """Battery and connection, per pair of glasses, worst first.
+
+    A manager looking at somebody's numbers needs to be able to see that their
+    glasses died at three. Same gate as `/shifts` and the same reason for
+    answering 200 with `enabled: false`.
+    """
+    me = current_user(authorization)
+    require(me, "manager")
+    t = _tenant_for(me, tenant)
+    enabled = bool((t.get("privacy") or {}).get(capabilities.SHIFT_TELEMETRY))
+    return {
+        "tenant": t["slug"],
+        "enabled": enabled,
+        "low_battery_percent": shifts.LOW_BATTERY_PERCENT,
+        "devices": shifts.fleet(t["id"]) if enabled else [],
+        "arrivals": shifts.arrivals(t["id"]) if enabled else None,
+    }
+
+
 def _clamp(value: int, low: int, high: int) -> int:
     return max(low, min(high, int(value)))
 
@@ -138,6 +193,56 @@ class PresenceIn(BaseModel):
 class PresenceRevoke(BaseModel):
     tenant: str
     guest_ref: str
+
+
+class ShiftStart(BaseModel):
+    """An associate is on the floor with the product running.
+
+    `occurred_at` is the phone's own clock, and `replayed` says whether this
+    came out of the plugin's offline buffer rather than straight off the wire.
+    Both are recorded and neither is trusted for a duration — see
+    `app/shifts.py`, which is the only place that decides what a client clock
+    may do.
+    """
+    tenant: str
+    associate_email: str | None = None
+    device_serial: str | None = None
+    device_model: str | None = None
+    zone: str | None = None
+    #: A shift the plugin still believes in. The WebView is torn down every
+    #: time the phone goes in a pocket, and one shift must not become nine.
+    resume_shift_id: str | None = None
+    occurred_at: str | None = None
+    replayed: bool = False
+
+
+class ShiftHeartbeat(BaseModel):
+    tenant: str
+    shift_id: str
+
+
+class ShiftEnd(BaseModel):
+    tenant: str
+    shift_id: str
+    #: `signed_out` or `app_closed`. `heartbeat_gap` and `superseded` are the
+    #: server's to write; a client cannot know either and is not asked to.
+    reason: str | None = None
+    occurred_at: str | None = None
+    replayed: bool = False
+
+
+class DeviceHealth(BaseModel):
+    """One `DeviceStatus` from the Even SDK, forwarded by the realtime server."""
+    tenant: str
+    device_serial: str
+    device_model: str | None = None
+    battery_percent: int | None = None
+    charging: bool | None = None
+    in_case: bool | None = None
+    wearing: bool | None = None
+    connection: str | None = None
+    occurred_at: str | None = None
+    replayed: bool = False
 
 
 class AssistRecord(BaseModel):
@@ -263,6 +368,90 @@ def _associate(tenant: dict, *, device_serial: str | None,
         # against the tenant, just without a name on it — an associate
         # mid-conversation must never have a write fail underneath them.
     return _user_in(tenant, email)
+
+
+# --- shifts and hardware (service key + the tenant's own switch) -------------
+#
+# Every route below writes data about an *associate*: when they were working,
+# and what their glasses were doing while they worked. That is performance
+# monitoring, which is a different consent question from anything about a
+# guest — so it carries a second gate on top of the service key, and the gate
+# is read from the database on every call rather than taken from the caller.
+#
+# The plugin holds a copy of the same flag and uses it to decide what to send.
+# That copy decides what is *drawn and emitted*; this is what decides what is
+# *recorded*. A static bundle on a phone is not a place to enforce a consent
+# decision, and the two are kept deliberately separate for that reason.
+
+def _telemetry_tenant(slug: str) -> dict:
+    tenant = _ingest_tenant(slug)
+    if not capabilities.shift_telemetry(tenant["slug"]):
+        raise HTTPException(
+            status_code=403,
+            detail=(f"Shift telemetry is off for tenant '{tenant['slug']}' "
+                    f"(privacy.{capabilities.SHIFT_TELEMETRY}). It is off by "
+                    f"default: this records when staff are working and how "
+                    f"their hardware behaves, which is a decision for the "
+                    f"retailer and their staff, not for us. A client_admin "
+                    f"turns it on in Console → Tenants."),
+        )
+    return tenant
+
+
+@ingest.post("/shift/start", status_code=201)
+def ingest_shift_start(req: ShiftStart, request: Request,
+                       x_gapvision_key: str | None = KeyHeader):
+    guard(request, req.tenant, x_gapvision_key)
+    t = _telemetry_tenant(req.tenant)
+    return shifts.start(
+        t,
+        user_id=_associate(t, device_serial=req.device_serial,
+                           email=req.associate_email, device_model=req.device_model),
+        device_serial=req.device_serial, zone=req.zone,
+        occurred_at=req.occurred_at, resume_shift_id=req.resume_shift_id,
+        replayed=req.replayed,
+    )
+
+
+@ingest.post("/shift/heartbeat")
+def ingest_shift_heartbeat(req: ShiftHeartbeat, request: Request,
+                           x_gapvision_key: str | None = KeyHeader):
+    """Still there.
+
+    Stamped with this machine's clock and carries no client time at all — a
+    heartbeat's only job is to say "now", and a claimed "now" from a phone is
+    exactly the thing this design refuses to believe.
+    """
+    guard(request, req.tenant, x_gapvision_key)
+    t = _telemetry_tenant(req.tenant)
+    return shifts.heartbeat(t, shift_id=req.shift_id)
+
+
+@ingest.post("/shift/end")
+def ingest_shift_end(req: ShiftEnd, request: Request,
+                     x_gapvision_key: str | None = KeyHeader):
+    guard(request, req.tenant, x_gapvision_key)
+    t = _telemetry_tenant(req.tenant)
+    return shifts.end(t, shift_id=req.shift_id, reason=req.reason,
+                      occurred_at=req.occurred_at, replayed=req.replayed)
+
+
+@ingest.post("/device/health", status_code=201)
+def ingest_device_health(req: DeviceHealth, request: Request,
+                         x_gapvision_key: str | None = KeyHeader):
+    guard(request, req.tenant, x_gapvision_key)
+    t = _telemetry_tenant(req.tenant)
+    # Registers an unknown serial the same way an engagement does, so a pair of
+    # glasses that has only ever reported its battery still appears in Console
+    # with a name to assign.
+    _associate(t, device_serial=req.device_serial, email=None,
+               device_model=req.device_model)
+    return shifts.record_health(
+        t, device_serial=req.device_serial, battery_percent=req.battery_percent,
+        charging=req.charging, in_case=req.in_case, wearing=req.wearing,
+        connection=req.connection, occurred_at=req.occurred_at,
+        replayed=req.replayed,
+    )
 
 
 @ingest.post("/engagement/start", status_code=201)

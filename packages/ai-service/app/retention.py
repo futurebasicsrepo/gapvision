@@ -198,7 +198,25 @@ def sweep_all() -> list[dict[str, Any]]:
         return []
     tenants = db.query(
         "SELECT id, slug, privacy FROM tenants WHERE status <> 'archived'")
-    return [sweep(t) for t in tenants]
+    runs = [sweep(t) for t in tenants]
+
+    # Shift and device history, on the same per-tenant window.
+    #
+    # A retention promise that covers the customer's half of this product and
+    # quietly excludes the staff's is the promise somebody will find first. It
+    # rides here rather than in `sweep()` because it reports nothing into
+    # `retention_runs` — those columns are a contract the Console panel and its
+    # tests both read — and because a failure to prune telemetry must not make
+    # a tenant's guest-data sweep look like it did not happen.
+    try:
+        from . import shifts
+        pruned = shifts.prune_expired()
+        if any(pruned.values()):
+            log.info("retention pruned shift telemetry %s", pruned)
+    except Exception as e:
+        log.warning("retention could not prune shift telemetry: %s", e)
+
+    return runs
 
 
 def detail() -> list[dict[str, Any]]:

@@ -29,6 +29,13 @@ from . import db
 #: Named once so the 403 detail, the tests and the Console all agree.
 CAMERA_CAPTURE = "camera_capture"
 
+#: The per-tenant switch for shift boundaries, glasses battery and the offline
+#: replay buffer — everything in `app/shifts.py`. Same blob, same posture, same
+#: reason as the camera: it is data about the associate, not about the guest,
+#: and per-person rate metrics are performance monitoring. Off until a retailer
+#: says otherwise.
+SHIFT_TELEMETRY = "shift_telemetry"
+
 
 def _privacy(slug: str) -> dict | None:
     """This tenant's privacy blob, or None if we could not read one.
@@ -76,6 +83,24 @@ def camera_capture(slug: str | None) -> bool:
     return bool(privacy.get(CAMERA_CAPTURE))
 
 
+def shift_telemetry(slug: str | None) -> bool:
+    """May this tenant's plugin report when somebody started and stopped working?
+
+    Checked server-side on every shift and device-health write, for exactly the
+    reason `camera_capture` is: the client's copy decides what to *send*, and a
+    static bundle on a phone is not a place to enforce a decision a works
+    council may one day ask about.
+
+    Fails closed like everything else here. An associate whose store never
+    switched this on is simply not measured, which is the state every store is
+    in until somebody deliberately changes it.
+    """
+    privacy = _privacy(slug or "")
+    if privacy is None:
+        return False
+    return bool(privacy.get(SHIFT_TELEMETRY))
+
+
 def exists(slug: str | None) -> bool:
     """Is there a tenant with this slug at all?
 
@@ -106,12 +131,18 @@ def for_tenant(slug: str | None) -> dict[str, bool]:
 
     `voice` and `floor_comms` ship enabled for every tenant — they predate the
     control plane and no retailer has asked for them off — so they read as True
-    unless a tenant's `config` says otherwise. `camera_capture` is the opposite
-    posture and reads from `privacy`, where the defaults-off decisions live.
+    unless a tenant's `config` says otherwise. `camera_capture` and
+    `shift_telemetry` are the opposite posture and read from `privacy`, where
+    the defaults-off decisions live.
+
+    Adding a key here is a deliberate act: `tests/test_vision.py` asserts the
+    exact set, so a switch cannot arrive on a client by accident and neither
+    can a privacy internal.
     """
     cfg = _config(slug or "")
     return {
         CAMERA_CAPTURE: camera_capture(slug),
+        SHIFT_TELEMETRY: shift_telemetry(slug),
         "voice": cfg.get("voice") is not False,
         "floor_comms": cfg.get("floor_comms") is not False,
     }

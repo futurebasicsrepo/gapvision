@@ -61,6 +61,13 @@ export interface Capabilities {
    *  with the camera switched off. */
   known: boolean;
   camera_capture: boolean;
+  /** Whether this store records when its staff started and stopped working,
+   *  and what their glasses were doing while they did. Off by default and for
+   *  a different reason from the camera: this is data about the *associate*,
+   *  and per-person rate metrics are performance monitoring. It decides what
+   *  the plugin sends and what the associate's own page says; the service
+   *  re-reads the real flag before anything is recorded. */
+  shift_telemetry: boolean;
   voice: boolean;
   floor_comms: boolean;
 }
@@ -75,6 +82,7 @@ export interface Capabilities {
  */
 export const NO_CAPABILITIES: Capabilities = { known: false,
   camera_capture: false,
+  shift_telemetry: false,
   voice: false,
   floor_comms: false,
 };
@@ -114,6 +122,7 @@ export async function fetchCapabilities(
       // cannot tell us is not evidence the tenant is missing.
       known: body.known === undefined ? true : body.known === true,
       camera_capture: body.camera_capture === true,
+      shift_telemetry: body.shift_telemetry === true,
       voice: body.voice === true,
       floor_comms: body.floor_comms === true,
     };

@@ -122,6 +122,59 @@ export type CaptureResult =
 export type ImageResult =
   | "success" | "imageException" | "imageSizeInvalid" | "imageToGray4Failed" | string;
 
+/**
+ * What the glasses report about themselves.
+ *
+ * Mirrors the SDK's `DeviceStatus` field for field — sn, connectType,
+ * isWearing, batteryLevel, isCharging, isInCase — normalised into the names
+ * the rest of this codebase uses, the same way the container shapes above are
+ * declared here rather than imported. This module is the one place that knows
+ * what the host's types look like.
+ *
+ * It has been in the SDK the whole time and nothing read it. That is a real
+ * cost, not a tidiness complaint: a pair of glasses that goes flat at 3pm every
+ * afternoon currently appears on a leaderboard as an associate who stops
+ * working after lunch, and the person it happens to has no way to prove
+ * otherwise.
+ *
+ * Every field except `serial` is optional because every field except `serial`
+ * is optional in the SDK. An absent battery level is "this build does not
+ * report one", which must stay distinguishable from a battery at zero.
+ */
+export interface GlassesStatus {
+  serial: string;
+  /** `none` | `connecting` | `connected` | `disconnected` | `connectionFailed`,
+   *  straight from `DeviceConnectType`. Passed through as a string rather than
+   *  narrowed to a boolean: `none` means "not initialised" and collapsing it
+   *  into "disconnected" would report a pair we have not heard from as a pair
+   *  that told us it was gone. */
+  connection: string;
+  batteryPercent?: number;
+  charging?: boolean;
+  wearing?: boolean;
+  inCase?: boolean;
+}
+
+/** Normalise one `DeviceStatus` off the host. Exported for the tests, which
+ *  should exercise the real shape rather than a hand-written stand-in. */
+export function toGlassesStatus(raw: any, fallbackSerial?: string | null): GlassesStatus | null {
+  if (!raw || typeof raw !== "object") return null;
+  const serial = String(raw.sn ?? raw.serial ?? fallbackSerial ?? "").trim();
+  if (!serial) return null;   // a status about nothing is not a status
+  const level = Number(raw.batteryLevel);
+  return {
+    serial,
+    connection: typeof raw.connectType === "string" ? raw.connectType : "none",
+    // 0 is a real and important battery level, so the guard is on the range
+    // and on NaN, never on falsiness.
+    batteryPercent: Number.isFinite(level) && level >= 0 && level <= 100
+      ? Math.round(level) : undefined,
+    charging: typeof raw.isCharging === "boolean" ? raw.isCharging : undefined,
+    wearing: typeof raw.isWearing === "boolean" ? raw.isWearing : undefined,
+    inCase: typeof raw.isInCase === "boolean" ? raw.isInCase : undefined,
+  };
+}
+
 export interface GlassesBridge {
   readonly kind: "even-app" | "mock";
   createStartUpPageContainer(page: PageSpec): Promise<unknown>;
@@ -180,6 +233,19 @@ export interface GlassesBridge {
    *  value anyone stored on purpose, so both collapse to null. */
   getLocalStorage(key: string): Promise<string | null>;
   onEvenHubEvent(cb: (event: any) => void): () => void;
+  /**
+   * Battery, charge and connection, pushed whenever the host notices a change.
+   *
+   * Push only — the SDK has `onDeviceStatusChanged` and no getter, so there is
+   * no "what is it right now" to ask. A pair that never changes state is a pair
+   * we never hear about, which is why `shift.ts` treats an absent status as
+   * unknown and never as healthy.
+   *
+   * Returns its own unsubscribe. Optional-chained in the real bridge like
+   * `getDeviceInfo`: an older Even App build simply has no such listener, and
+   * losing battery reporting is not a reason to fail startup.
+   */
+  onDeviceStatus(cb: (status: GlassesStatus) => void): () => void;
   getUserInfo(): Promise<{ name?: string } | null>;
   /** Model and serial of the connected glasses.
    *
@@ -277,6 +343,20 @@ function wrapReal(real: any): GlassesBridge {
       }
     },
     onEvenHubEvent: (cb) => real.onEvenHubEvent(cb),
+    onDeviceStatus: (cb) => {
+      try {
+        const off = real.onDeviceStatusChanged?.((raw: any) => {
+          const status = toGlassesStatus(raw);
+          if (status) cb(status);
+        });
+        return typeof off === "function" ? off : () => {};
+      } catch {
+        // A host without the listener has nothing to unsubscribe from. Handing
+        // back a no-op keeps every caller's teardown identical rather than
+        // making each one check.
+        return () => {};
+      }
+    },
     getUserInfo: () => real.getUserInfo().catch(() => null),
     // Optional-chained: an older Even App build may not implement it, and
     // losing attribution is not a reason to fail startup.
@@ -289,6 +369,7 @@ function wrapReal(real: any): GlassesBridge {
 class MockBridge implements GlassesBridge {
   readonly kind = "mock" as const;
   private listeners = new Set<(event: any) => void>();
+  private statusListeners = new Set<(status: GlassesStatus) => void>();
   private containers = new Map<number, TextContainer>();
   private lists = new Map<number, ListContainer>();
   private images = new Map<number, ImageContainer & { src?: string }>();
@@ -602,6 +683,38 @@ class MockBridge implements GlassesBridge {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
   }
+
+  /**
+   * Device status in a plain browser.
+   *
+   * One status on subscribe, then whatever `window.__cueEmitDeviceStatus(...)`
+   * pushes — the same escape hatch `__cueMockCapture` and `__cueMockStorage`
+   * give the camera and the preference store. Battery is the one signal in
+   * this product that is otherwise unreachable without hardware, and a path
+   * that can only be exercised on a phone is a path that rots.
+   *
+   * The raw SDK shape goes through `toGlassesStatus` here exactly as it does
+   * on the real bridge, so a browser test exercises the real normaliser rather
+   * than a shortcut around it.
+   */
+  onDeviceStatus(cb: (status: GlassesStatus) => void) {
+    this.statusListeners.add(cb);
+    (window as any).__cueEmitDeviceStatus = (raw: any) => {
+      const status = toGlassesStatus({ sn: "MOCK-G2-0001", ...raw });
+      if (status) this.statusListeners.forEach((fn) => fn(status));
+    };
+    // Deferred rather than synchronous: a caller that subscribes and then sets
+    // up its own state would otherwise be handed a status before it is ready.
+    setTimeout(() => {
+      const status = toGlassesStatus({
+        sn: "MOCK-G2-0001", connectType: "connected",
+        batteryLevel: 78, isCharging: false, isWearing: true, isInCase: false,
+      });
+      if (status) this.statusListeners.forEach((fn) => fn(status));
+    }, 0);
+    return () => this.statusListeners.delete(cb);
+  }
+
   async getUserInfo() { return { name: "Dev Associate" }; }
   /** Stable, and obviously fake. The browser tests bind this serial to a
    *  person so they exercise the real attribution path rather than a

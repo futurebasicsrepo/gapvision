@@ -102,6 +102,42 @@ for (const [name, impl] of Object.entries(closed)) {
   check("an absent voice flag does not read as on", caps.voice === false, JSON.stringify(caps));
 }
 
+// --- shift telemetry -------------------------------------------------------
+//
+// The same gate as the camera, guarding a different kind of data: this one is
+// about the *associate*, not the guest. A store that has not switched it on
+// must not have its staff measured because a fetch timed out, and the sentence
+// the associate reads on their own phone page is built from this flag — so a
+// wrong answer here is either surveillance nobody agreed to or a notice that
+// claims something untrue about the person reading it.
+for (const [name, impl] of Object.entries(closed)) {
+  const caps = await V.fetchCapabilities("http://x", "gap", impl);
+  check(`shift telemetry fails closed when ${name}`,
+    caps.shift_telemetry === false, JSON.stringify(caps));
+}
+
+{
+  const caps = await V.fetchCapabilities("http://x", "gap",
+    jsonOk({ camera_capture: true, voice: true, floor_comms: true }));
+  check("a service that reports every other flag but not this one reads as off",
+    caps.shift_telemetry === false, JSON.stringify(caps));
+}
+
+{
+  const caps = await V.fetchCapabilities("http://x", "gap",
+    jsonOk({ shift_telemetry: "true" }));
+  check("a string is not a yes for shift telemetry either",
+    caps.shift_telemetry === false, JSON.stringify(caps));
+}
+
+{
+  const caps = await V.fetchCapabilities("http://x", "gap",
+    jsonOk({ shift_telemetry: true, camera_capture: false, voice: true, floor_comms: true }));
+  check("the two privacy switches are independent — measuring staff is not opening a camera",
+    caps.shift_telemetry === true && caps.camera_capture === false,
+    JSON.stringify(caps));
+}
+
 {
   // The tenant reaches the server as a query parameter, and a slug with a
   // space or a slash in it must not become a different URL.
@@ -114,8 +150,8 @@ for (const [name, impl] of Object.entries(closed)) {
 
 // --- the affordance --------------------------------------------------------
 
-const ON = { camera_capture: true, voice: true, floor_comms: true };
-const OFF = { camera_capture: false, voice: true, floor_comms: true };
+const ON = { camera_capture: true, shift_telemetry: true, voice: true, floor_comms: true };
+const OFF = { camera_capture: false, shift_telemetry: false, voice: true, floor_comms: true };
 
 check("the affordance is present when the flag is true",
   V.captureControls(ON).length === 2 &&

@@ -88,6 +88,7 @@ def camera_on(monkeypatch):
     """
     monkeypatch.setattr(capabilities, "_privacy", lambda slug: {
         "camera_capture": True, "store_transcripts": True,
+        "shift_telemetry": False,
         "retention_days": 365, "opt_in_tiers": ["qr_checkin"],
     })
     monkeypatch.setattr(capabilities, "_config", lambda slug: {})
@@ -106,11 +107,20 @@ def analyze(monkeypatch, provider: FakeVision, *, kind="sku", crm_obj=None,
 def test_capabilities_returns_switches_not_a_privacy_posture(client, auth_headers,
                                                              camera_on):
     """A plugin asks what it may offer. It does not get told how long this
-    retailer keeps data or whether they record what staff said."""
+    retailer keeps data or whether they record what staff said.
+
+    The exact set is asserted rather than a subset. Adding a key here has to be
+    a deliberate act with a diff somebody reads: this response reaches a static
+    bundle on a phone, so anything that lands in it is published. The set grew
+    once, for `shift_telemetry` — the switch that decides whether the plugin
+    reports when its wearer started and stopped working — and that is what a
+    deliberate act looks like.
+    """
     r = client.get("/api/tenant/capabilities?tenant=gap", headers=auth_headers)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert set(body) == {"camera_capture", "voice", "floor_comms", "known"}, (
+    assert set(body) == {"camera_capture", "shift_telemetry", "voice",
+                         "floor_comms", "known"}, (
         f"the capability contract changed: {sorted(body)}")
     assert all(isinstance(v, bool) for v in body.values()), (
         f"a client can only branch on booleans: {body}")

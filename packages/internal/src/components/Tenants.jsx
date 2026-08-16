@@ -595,6 +595,18 @@ function TenantDetail({ tenant, onChanged }) {
               <option value="on">on — objects only</option>
             </select>
           </label>
+          {/* The one switch on this panel that is not about the customer. Same
+              helper for the same reason — `privacy` is one jsonb column. */}
+          <label className="field">
+            <span>Shift timing</span>
+            <select
+              value={(tenant.privacy || {}).shift_telemetry ? "on" : "off"}
+              onChange={(e) => setPrivacy({ shift_telemetry: e.target.value === "on" })}
+            >
+              <option value="off">off — no per-person rates</option>
+              <option value="on">on — hours worked and glasses battery</option>
+            </select>
+          </label>
         </div>
         <p className="meta" style={{ marginBottom: 16, lineHeight: 1.5 }}>
           With this on, the manager dashboard shows the question the floor asked
@@ -615,6 +627,22 @@ function TenantDetail({ tenant, onChanged }) {
           records: the camera reads the tag, it does not decide what is in
           stock. The image is read once and never stored — not on disk, not in
           the database, not in a log.
+        </p>
+        <p className="meta" style={{ marginBottom: 16, lineHeight: 1.5 }}>
+          Shift timing is off by default, and it is the only switch here that is
+          about the <strong>associate</strong> rather than the customer. Turned
+          on, the Lens records when someone started and stopped working and what
+          their glasses' battery was doing — which is what gives every count in
+          the product a denominator, and turns "a pair that dies at 3pm" into a
+          hardware fault instead of a name near the bottom of a leaderboard.{" "}
+          <strong>
+            Per-person rate metrics are performance monitoring, regulated
+            separately from customer privacy in some jurisdictions and bargained
+            separately in most union shops.
+          </strong>{" "}
+          Turning it on is the retailer's decision to make with their own staff,
+          not ours to make for them — and with it on, the associate's own phone
+          page says so on the line beside their name.
         </p>
 
         {devices === null ? (

@@ -132,21 +132,75 @@ function broadcastDashboard(tenant) {
  * renders and the lens still answers. We log it and move on.
  */
 async function ingest(path, body) {
+  const r = await ingestDetailed(path, body);
+  return r.ok ? r.body : null;
+}
+
+/**
+ * The same write, with the outcome kept.
+ *
+ * `ingest` collapses "the retailer has this switched off" and "the network
+ * blinked" into the same null, which is right for fire-and-forget analytics and
+ * wrong for anything a client is supposed to retry. A plugin that re-queues a
+ * 403 forever would hammer a store's own wifi to deliver a record that tenant
+ * has said it does not want, so the status has to survive the call.
+ */
+async function ingestDetailed(path, body) {
   try {
     const res = await fetch(`${AI_SERVICE_URL}/api/ingest/${path}`, {
       method: "POST",
       headers: aiHeaders(AI_API_KEY),
       body: JSON.stringify(body),
     });
-    if (!res.ok) {
-      console.warn(`[cue] ingest ${path} → ${res.status}`);
-      return null;
-    }
-    return await res.json();
+    let parsed = null;
+    try { parsed = await res.json(); } catch { parsed = null; }
+    if (!res.ok) console.warn(`[cue] ingest ${path} → ${res.status}`);
+    return { ok: res.ok, status: res.status, body: parsed };
   } catch (err) {
     console.warn(`[cue] ingest ${path} failed: ${err.message}`);
-    return null;
+    // 0 is "we never reached the service", which is the retryable case.
+    return { ok: false, status: 0, body: null };
   }
+}
+
+/**
+ * Which buffered events a phone may replay, and how many at once.
+ *
+ * An allowlist rather than "whatever the client named": `telemetry:replay`
+ * dispatches through this socket's own handlers, so without it a client could
+ * replay itself into `radio:send` or `request:claim` — messages that reach
+ * other people's glasses — and do it with a timestamp of its choosing.
+ *
+ * Only telemetry is on the list. Everything else on this socket is either
+ * worthless after the fact (a cue for a guest who left twenty minutes ago) or
+ * needs a server round trip to mean anything (an engagement id the phone was
+ * never given, because the write it would have come from is what failed).
+ */
+const REPLAYABLE = new Set(["shift:start", "shift:end", "device:health"]);
+
+/** A day of heartbeats is ~1440 events; a phone that has been off longer than
+ *  that has nothing worth replaying, and one message must not be able to open
+ *  a thousand writes. */
+const MAX_REPLAY_EVENTS = 200;
+
+/**
+ * Why a shift write did not land, in terms the plugin can act on.
+ *
+ * `stop` is the important half. A 403 means the retailer has shift telemetry
+ * switched off, and a client that treats that as a transient failure will
+ * re-queue it forever — hammering a store's wifi to deliver records that
+ * tenant has explicitly declined. Anything else is worth trying again.
+ */
+function shiftFailure(result) {
+  const off = result.status === 403;
+  return {
+    open: false,
+    ok: false,
+    stop: off,
+    retry: !off && result.status !== 404,
+    reason: off ? "telemetry_off" : result.status === 0 ? "unreachable" : "error",
+    detail: result.body?.detail || null,
+  };
 }
 
 // ---- Socket wiring ----------------------------------------------------------
@@ -317,6 +371,143 @@ io.on("connection", (socket) => {
     broadcastDashboard(socket.data.tenant);
   });
 
+  // ---- Shifts and hardware -------------------------------------------------
+  //
+  // `register` fires when the app opens and nothing ever closed it, so every
+  // rate on every dashboard has had no denominator. These four events are the
+  // bottom half of that fraction, plus the reason a pair of glasses stopped
+  // answering.
+  //
+  // Two rules run through all of them:
+  //
+  //   · **The tenant is the socket's, never the payload's.** Same as
+  //     everything else here — a socket bound to retailer A cannot file a
+  //     shift against retailer B by putting a slug in a message.
+  //   · **`occurredAt` is the client's and is passed through untouched.** The
+  //     AI service decides what a phone's clock is allowed to mean; this
+  //     server's job is to carry it, not to correct it. Correcting it here
+  //     would put a second opinion about time in a second codebase.
+
+  /** Clock in. `resumeShiftId` continues a shift the plugin still believes in
+   *  rather than starting a ninth one because the WebView was torn down. */
+  socket.on("shift:start", async ({ occurredAt, resumeShiftId, zone, replayed } = {}) => {
+    const t = socket.data.tenant || DEMO_TENANT;
+    const r = await ingestDetailed("shift/start", {
+      tenant: t,
+      associate_email: socket.data.email,
+      device_serial: socket.data.deviceSerial,
+      device_model: socket.data.deviceModel,
+      zone: zone || stateFor(t).associates.get(socket.id)?.zone || null,
+      resume_shift_id: resumeShiftId || null,
+      occurred_at: occurredAt || null,
+      replayed: replayed === true,
+    });
+    if (r.ok && r.body?.shift_id) {
+      socket.data.shiftId = r.body.shift_id;
+      socket.emit("shift:state", { open: true, ...r.body });
+      return;
+    }
+    socket.data.shiftId = null;
+    socket.emit("shift:state", shiftFailure(r));
+  });
+
+  /** Still here. The only message whose entire content is "now", and the one
+   *  place a claimed "now" from a phone is deliberately not accepted. */
+  socket.on("shift:heartbeat", async () => {
+    if (!socket.data.shiftId) return;
+    const r = await ingestDetailed("shift/heartbeat", {
+      tenant: socket.data.tenant || DEMO_TENANT,
+      shift_id: socket.data.shiftId,
+    });
+    // A shift the service has already closed — the gap sweep got there first,
+    // or another pair of glasses superseded it. Say so rather than beating on
+    // a dead row: the plugin opens a fresh shift, which is the honest record.
+    if (r.ok && r.body?.open === false) {
+      socket.data.shiftId = null;
+      socket.emit("shift:state", { open: false, reason: r.body.reason || "closed" });
+      return;
+    }
+    if (!r.ok) socket.emit("shift:state", shiftFailure(r));
+  });
+
+  socket.on("shift:end", async ({ reason, occurredAt, replayed } = {}) => {
+    const shiftId = socket.data.shiftId;
+    if (!shiftId) return;
+    socket.data.shiftId = null;
+    const r = await ingestDetailed("shift/end", {
+      tenant: socket.data.tenant || DEMO_TENANT,
+      shift_id: shiftId,
+      reason: reason || "app_closed",
+      occurred_at: occurredAt || null,
+      replayed: replayed === true,
+    });
+    socket.emit("shift:state", r.ok ? { open: false, ...r.body } : shiftFailure(r));
+  });
+
+  /**
+   * One `DeviceStatus` from the Even SDK.
+   *
+   * Best-effort and unacknowledged, unlike the shift messages: this is a
+   * sample of a battery level, and the next one is sixty seconds away. Losing
+   * one costs a point on a graph. Losing a shift boundary costs a denominator.
+   */
+  socket.on("device:health", (payload = {}) => {
+    const serial = payload.serial || socket.data.deviceSerial;
+    if (!serial) return;
+    void ingest("device/health", {
+      tenant: socket.data.tenant || DEMO_TENANT,
+      device_serial: serial,
+      device_model: payload.model || socket.data.deviceModel,
+      battery_percent: payload.batteryPercent ?? null,
+      charging: payload.charging ?? null,
+      in_case: payload.inCase ?? null,
+      wearing: payload.wearing ?? null,
+      connection: payload.connection || null,
+      occurred_at: payload.occurredAt || null,
+      replayed: payload.replayed === true,
+    });
+  });
+
+  /**
+   * What the phone buffered while the wifi was gone.
+   *
+   * Shop wifi drops, and until now those events were fired into a closed
+   * socket and lost — after which the dashboard reported something that did not
+   * happen. The plugin keeps them on the phone and replays them here, each one
+   * carrying **the time it occurred**, not the time it was delivered.
+   *
+   * Replayed through the same handlers as live events, deliberately: a second
+   * path for replayed telemetry is a second set of rules about what a client
+   * may assert, and the two would drift. The batch is capped because a phone
+   * that was off for a week must not be able to open a thousand writes in one
+   * message.
+   */
+  socket.on("telemetry:replay", async ({ events } = {}) => {
+    if (!Array.isArray(events)) return;
+    let replayed = 0;
+    for (const e of events.slice(0, MAX_REPLAY_EVENTS)) {
+      const name = String(e?.event || "");
+      if (!REPLAYABLE.has(name)) continue;
+      // `occurredAt` lives *beside* the payload on the phone, not inside it —
+      // it is stamped once when the thing happens and the payload is whatever
+      // the caller passed. So it has to be merged back in here, and forgetting
+      // that is the exact failure this whole feature exists to prevent: every
+      // replayed event would be recorded as having happened at the moment the
+      // wifi came back, which is worse than losing it, because a wrong number
+      // looks like a real one.
+      const payload = { ...(e.payload || {}), replayed: true };
+      if (e.occurredAt) payload.occurredAt = e.occurredAt;
+      // Awaited one at a time, not fired together. These are a phone's own
+      // history and the order is the one thing its clock is trusted for;
+      // dispatching them in parallel would hand the ordering question straight
+      // back to whichever write happened to win.
+      for (const fn of socket.listeners(name)) await fn(payload);
+      replayed += 1;
+    }
+    if (replayed) console.log(`[cue] replayed ${replayed} buffered event(s)`);
+    socket.emit("telemetry:replayed", { accepted: replayed });
+  });
+
   /** An associate helping someone else's guest. Recorded so the leaderboard
    *  can reward it — a sales-only ranking punishes exactly this behaviour. */
   socket.on("assist:record", ({ note } = {}) => {
@@ -465,6 +656,19 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     endVoiceSession(socket);
+    // The shift is deliberately *not* ended here.
+    //
+    // A dropped socket and a finished shift are different things, and shop
+    // wifi cannot tell them apart. Closing on disconnect would turn one
+    // afternoon on a flaky access point into forty two-minute shifts, and
+    // forty shifts is a worse lie than one open one.
+    //
+    // The AI service closes it instead, at the last heartbeat it actually
+    // received, once the gap has passed — so a phone that went flat at 3pm
+    // reports a shift that ended at 3pm rather than one that ran to midnight.
+    // A reconnect inside the gap continues the same shift, because the plugin
+    // hands its shift id back on the next `shift:start`.
+    socket.data.shiftId = null;
     // An associate whose phone died mid-engagement leaves an open row
     // otherwise, and "average engagement length" quietly becomes fiction.
     if (socket.data.engagementId) {

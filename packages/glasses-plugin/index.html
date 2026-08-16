@@ -173,6 +173,18 @@
                    font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
                    color: var(--slate-300, #899199); }
     .whoami-name.unknown, .whoami-meta.unknown { color: var(--flame-300, #FFB08A); }
+    /* What this store is measuring about the person wearing the glasses.
+       Deliberately on the identity line rather than in the collapsed
+       diagnostics: somebody being measured should not have to go looking, and
+       "next to your own name" is the only place that is true of. It takes the
+       full width of the flex row so it reads as a sentence rather than as a
+       third badge, and it is only ever built when the store has it on — the
+       same rule the camera card follows. */
+    .whoami-notice { flex-basis: 100%; font-family: var(--mono, "IBM Plex Mono", monospace);
+                     font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+                     line-height: 1.6; color: var(--sea-200, #8FC7F0);
+                     border-left: 2px solid var(--sea-500, #1560B8);
+                     padding: 2px 0 2px 8px; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -185,6 +197,11 @@
     <span id="whoami-name" class="whoami-name">…</span>
     <span id="whoami-meta" class="whoami-meta"></span>
     <span id="whoami-tenant" class="whoami-meta">…</span>
+    <!-- Filled by `mountTelemetryNotice` in main.ts, and only when the store
+         has shift telemetry on. Empty is the correct rendering of "your store
+         does not measure this" and of "we have not been told yet" — the
+         capability fails closed, so both produce a page that claims nothing. -->
+    <span id="whoami-telemetry"></span>
   </div>
   <div class="sub">Even Hub plugin · associate phone page</div>
 

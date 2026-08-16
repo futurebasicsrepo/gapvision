@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from . import (analytics, crm_credentials, crm_provider, db, identity,
-               mailer, retention, secrets_box)
+               mailer, retention, secrets_box, shifts)
 from .identity import BearerHeader, current_user, require, scope_tenant
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -740,7 +740,20 @@ def _check(key: str, label: str, status: str, detail: str = "") -> dict:
     return {"key": key, "label": label, "status": status, "detail": detail}
 
 
-def _platform_checks() -> list[dict]:
+def fleet_state() -> dict:
+    """Cross-tenant fleet state, or the reason there isn't any.
+
+    Read once per platform call and handed to both the checks and the response
+    body: it runs the stale-shift sweep, and a panel that swept twice per
+    refresh would be doing real work to render the same number.
+    """
+    try:
+        return shifts.platform_fleet()
+    except Exception as e:  # a reporting panel must not take Health down
+        return {"error": str(e)[:200]}
+
+
+def _platform_checks(fleet: dict | None = None) -> list[dict]:
     checks: list[dict] = []
     dbstate = db.health()
 
@@ -874,6 +887,71 @@ def _platform_checks() -> list[dict]:
         checks.append(_check(
             "retention", "Retention enforcement",
             "warn" if stale or ret.get("backlog") else "ok", detail))
+
+    # --- the fleet ------------------------------------------------------------
+    #
+    # Three questions, and every one of them is a thing that currently reads on
+    # a leaderboard as an associate who stopped working. None of them can be
+    # answered for a tenant that has shift telemetry off, and `unknown` is the
+    # honest report of that — never `ok`, which would be a fleet of zero
+    # devices in perfect health.
+    if fleet is None:
+        fleet = fleet_state()
+
+    if "error" in fleet:
+        checks.append(_check("fleet", "Fleet telemetry", "unknown", fleet["error"]))
+    elif not fleet["enabled_tenants"]:
+        checks.append(_check(
+            "fleet", "Glasses battery", "unknown",
+            "no tenant has shift telemetry on — nothing is being reported",
+        ))
+    else:
+        low = fleet["low_battery"]
+        checks.append(_check(
+            "fleet", "Glasses have charge left", "ok" if not low else "warn",
+            f"{len(fleet['enabled_tenants'])} tenant(s) reporting, all above "
+            f"{fleet['low_battery_percent']}%" if not low
+            else "low: " + ", ".join(
+                f"{d['serial']} {d['battery_percent']}% ({d['tenant']})" for d in low[:4]),
+        ))
+
+        drops = fleet["dropping"]
+        if drops:
+            checks.append(_check(
+                "fleet_drops", "Glasses stay connected", "warn",
+                "repeated drops: " + ", ".join(
+                    f"{d['serial']} ×{d['disconnects_24h']} ({d['tenant']})"
+                    for d in drops[:4]),
+            ))
+
+        open_shifts = fleet["open_shifts"]
+        checks.append(_check(
+            "shifts", "Shifts currently open", "ok",
+            f"{open_shifts['count']} across {open_shifts['tenants']} tenant(s)"
+            + (f", oldest since {open_shifts['oldest_started_at']}"
+               if open_shifts["oldest_started_at"] else "")
+            + f" · closed automatically after {open_shifts['gap_minutes']}m silent",
+        ))
+
+        # Lateness. A replayed event is *supposed* to be late — that is what
+        # the offline buffer is for — so only unbuffered lateness and clocks
+        # running ahead are treated as a problem worth a colour.
+        arr = fleet["arrivals"]
+        if not arr["events"]:
+            checks.append(_check("telemetry_lag", "Telemetry arriving on time",
+                                 "unknown", "no timestamped events in 24h"))
+        else:
+            suspect = arr["late_unbuffered"] + arr["clocks_ahead"]
+            detail = (f"{arr['events']} events · {arr['replayed']} replayed from "
+                      f"a phone's buffer · worst {arr['worst_delay_seconds']}s")
+            if suspect:
+                detail = (f"{arr['late_unbuffered']} late without being buffered, "
+                          f"{arr['clocks_ahead']} from a clock ahead of ours · "
+                          + detail)
+            checks.append(_check(
+                "telemetry_lag", "Telemetry arriving on time",
+                "ok" if not suspect else "warn", detail,
+            ))
 
     # Mail. Password resets answer 202 whether or not they sent, by design, so
     # a broken sender is invisible from outside — this is where it becomes
@@ -1018,7 +1096,9 @@ def platform(authorization: str | None = BearerHeader):
     from .stt import get_stt
 
     counts: dict = {}
+    fleet: dict = {}
     if db.health().get("reachable") and db.health().get("status") != "empty":
+        fleet = fleet_state()
         row = db.query_one(
             """
             SELECT (SELECT count(*) FROM tenants WHERE status = 'active') AS tenants_active,
@@ -1050,6 +1130,10 @@ def platform(authorization: str | None = BearerHeader):
         },
         "database": db.health(),
         "counts": counts,
-        "checks": _platform_checks(),
+        # The rows behind the fleet checks. A check can say "two pairs are
+        # low"; only this can say which two and who is wearing them, which is
+        # the difference between a warning and an action.
+        "fleet": fleet,
+        "checks": _platform_checks(fleet or None),
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }

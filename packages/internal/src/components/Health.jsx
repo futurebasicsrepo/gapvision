@@ -110,6 +110,20 @@ export default function Health() {
 
   const counts = platform?.counts || {};
   const svc = platform?.service || {};
+  // Fleet state, and the difference between "nothing is wrong" and "nothing is
+  // being reported". `enabled_tenants` is the whole distinction: with no tenant
+  // measuring, an empty low-battery list is not a healthy fleet, and rendering
+  // it as one is the mistake the first production deploy made about a database
+  // with no schema in it.
+  const fleet = platform?.fleet || {};
+  const enabledTenants = fleet.enabled_tenants || [];
+  const fleetKnown = !fleet.error && enabledTenants.length > 0;
+  const lowBattery = fleet.low_battery || [];
+  const dropping = fleet.dropping || [];
+  const openShifts = fleet.open_shifts || {};
+  const arrivals = fleet.arrivals || {};
+  const suspectArrivals =
+    (arrivals.late_unbuffered || 0) + (arrivals.clocks_ahead || 0) > 0;
   const checks = platform?.checks || [];
   const worst = checks.some((c) => c.status === "fail")
     ? "fail"
@@ -240,6 +254,162 @@ export default function Health() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* --- the glasses themselves ---
+          A pair that goes flat at 3pm every day currently reads on a
+          leaderboard as an associate who stops working after lunch, and the
+          person it happens to has no way to prove otherwise. This is where
+          that becomes visible.
+
+          Serials, percentages and counts are machine values and take the mono
+          face. Nothing here is `fail`: every row is either a pair that wants
+          charging or a pair that keeps dropping, and one region full of flame
+          is a region nobody reads. Unknown stays slate and dashed — a fleet
+          nobody is reporting is not a fleet in perfect health. */}
+      <div className="card span-6">
+        <h3>Glasses</h3>
+        <p className="card-note">
+          Battery and connection, reported by the phone the Lens runs on. Only
+          for stores that have switched shift telemetry on — it measures staff,
+          so it is off until a retailer says otherwise.
+        </p>
+        <div className="checks">
+          {!fleetKnown && (
+            <Check
+              status="unknown"
+              label="Nothing reporting"
+              detail={
+                fleet.error
+                  ? fleet.error
+                  : "no tenant has shift telemetry on — this is not a healthy fleet, it is no fleet"
+              }
+            />
+          )}
+          {fleetKnown && !lowBattery.length && !dropping.length && (
+            <Check
+              status="ok"
+              label="Every pair is charged and connected"
+              detail={
+                <span className="machine">
+                  {enabledTenants.length} tenant(s) · above {fleet.low_battery_percent}%
+                </span>
+              }
+            />
+          )}
+          {lowBattery.map((d) => (
+            <Check
+              key={`battery-${d.tenant}-${d.serial}`}
+              status="warn"
+              label={<span className="machine">{d.serial}</span>}
+              detail={
+                <>
+                  <span className="machine">{d.battery_percent}%</span>
+                  {" · "}
+                  {d.assigned_to || "unassigned"}
+                  {" · "}
+                  <span className="machine">{d.tenant}</span>
+                  {" · "}
+                  {when(d.reported_at)}
+                </>
+              }
+            />
+          ))}
+          {dropping.map((d) => (
+            <Check
+              key={`drops-${d.tenant}-${d.serial}`}
+              status="warn"
+              label={<span className="machine">{d.serial}</span>}
+              detail={
+                <>
+                  dropped{" "}
+                  <span className="machine">{d.disconnects_24h}×</span> in 24h ·{" "}
+                  <span className="machine">{d.tenant}</span>
+                </>
+              }
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* --- shifts and the clocks behind them ---
+          Two questions a manager's numbers depend on and nobody could ask
+          before: is anybody still clocked in, and did today's events actually
+          arrive today. */}
+      <div className="card span-6">
+        <h3>Shifts</h3>
+        <p className="card-note">
+          A shift with no end has no denominator — every per-hour figure in the
+          product divides by these. One that stops sending is closed at its last
+          heartbeat, not at the moment somebody noticed.
+        </p>
+        <div className="checks">
+          {!fleetKnown ? (
+            <Check
+              status="unknown"
+              label="No shifts being recorded"
+              detail={fleet.error || "no tenant has shift telemetry on"}
+            />
+          ) : (
+            <>
+              <Check
+                status="ok"
+                label="Open right now"
+                detail={
+                  <>
+                    <span className="machine">{openShifts.count ?? 0}</span> across{" "}
+                    <span className="machine">{openShifts.tenants ?? 0}</span> tenant(s)
+                    {openShifts.oldest_started_at
+                      ? <> · oldest since {when(openShifts.oldest_started_at)}</>
+                      : null}
+                  </>
+                }
+              />
+              <Check
+                status="ok"
+                label="Closed automatically after"
+                detail={
+                  <span className="machine">{openShifts.gap_minutes ?? "—"}m silent</span>
+                }
+              />
+              {!arrivals.events ? (
+                <Check
+                  status="unknown"
+                  label="Timestamps arriving on time"
+                  detail="no timestamped events in 24h — nothing to judge"
+                />
+              ) : (
+                <Check
+                  status={suspectArrivals ? "warn" : "ok"}
+                  label="Timestamps arriving on time"
+                  detail={
+                    <>
+                      <span className="machine">{arrivals.events}</span> events ·{" "}
+                      <span className="machine">{arrivals.replayed}</span> replayed from a
+                      phone's buffer · worst{" "}
+                      <span className="machine">{arrivals.worst_delay_seconds}s</span>
+                      {suspectArrivals ? (
+                        <>
+                          {" · "}
+                          <span className="machine">{arrivals.late_unbuffered}</span> late
+                          without being buffered,{" "}
+                          <span className="machine">{arrivals.clocks_ahead}</span> from a
+                          clock ahead of ours
+                        </>
+                      ) : null}
+                    </>
+                  }
+                />
+              )}
+            </>
+          )}
+        </div>
+        <p className="card-note" style={{ marginTop: 12 }}>
+          A replayed event is meant to be late — that is what the phone's buffer
+          is for, and counting it as a fault would train everyone to ignore this
+          row. Only lateness with no buffer behind it, and clocks running ahead
+          of ours, are treated as a problem.
+        </p>
       </div>
 
       {/* --- fleet --- */}

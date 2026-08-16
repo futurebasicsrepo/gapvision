@@ -32,6 +32,7 @@ import { captureControls, fetchCapabilities, NO_CAPABILITIES, VisionController,
 import { defaultPrefs, effectivePrefs, loadPrefs, normaliseZone, savePref,
          visiblePrefs, MAX_ZONE_CHARS, type FloorComms, type PrefKey,
          type Prefs } from "./prefs";
+import { ShiftController, TELEMETRY_NOTICE } from "./shift";
 
 /**
  * Everything goes through the realtime server. The plugin is a static bundle,
@@ -82,6 +83,7 @@ const ui = {
   whoName: document.getElementById("whoami-name"),
   whoMeta: document.getElementById("whoami-meta"),
   whoTenant: document.getElementById("whoami-tenant"),
+  whoTelemetry: document.getElementById("whoami-telemetry"),
 };
 
 function log(msg: string) {
@@ -95,6 +97,19 @@ let bridge: GlassesBridge;
 let socket: Socket;
 let voice: VoiceController;
 let vision: VisionController;
+/**
+ * Shift boundaries, glasses battery, and the offline buffer.
+ *
+ * Constructed unconditionally so nothing has to null-check it, and never
+ * *opened* unless the tenant's `shift_telemetry` capability came back true.
+ * A controller that exists but has been told nothing sends nothing — the same
+ * shape as the capture card, where the gate decides whether the thing is ever
+ * asked to do anything rather than whether it exists.
+ */
+let shift: ShiftController;
+/** Whether this store measures its staff. Read once, after the capability
+ *  answer arrives, and used to decide what is sent and what the page says. */
+let telemetryOn = false;
 /** Send the associate record — name, tenant, device and zone — to the server.
  *  Assigned in `main()` once the socket and the user info exist. */
 let registerAssociate: () => void = () => {};
@@ -888,6 +903,10 @@ function onGesture(g: DecodedGesture) {
       // The OS is taking the page away; drop the session cleanly rather than
       // leaving an associate "engaged" on the manager dashboard forever.
       if (engaged) socket.emit("session:end");
+      // And close the shift the same way. If the socket has already gone this
+      // is buffered with the time it happened, so a shift that ended at 17:58
+      // is not recorded as ending whenever the app is next opened.
+      if (telemetryOn) void shift.close("app_closed");
       return;
 
     default:
@@ -1281,6 +1300,27 @@ function mountCaptureCard(caps: Capabilities) {
   mount.appendChild(card);
 }
 
+/**
+ * Tell the associate what their store is measuring about them.
+ *
+ * On the identity line, beside their own name and their serial — not in the
+ * collapsed diagnostics drawer, and not in a settings card they have no
+ * control on. Somebody being measured should not have to read a schema to find
+ * out, and "next to your own name" is the only place on this page that is
+ * reliably true of.
+ *
+ * Built rather than written into `index.html`, exactly like the capture card
+ * and for the same reason in reverse: the sentence must not be able to appear
+ * on a page for a store that has this switched off. `NO_CAPABILITIES` is
+ * everything-off, so a failed fetch renders nothing and claims nothing.
+ */
+function mountTelemetryNotice(caps: Capabilities) {
+  const el = ui.whoTelemetry;
+  if (!el) return;
+  el.textContent = caps.shift_telemetry ? TELEMETRY_NOTICE : "";
+  el.className = caps.shift_telemetry ? "whoami-notice" : "";
+}
+
 /** The stage, said on the phone in the same words the glass is using. */
 const CAPTURE_STATE: Record<VisionState, string> = {
   idle: "READY",
@@ -1306,6 +1346,29 @@ function captureState(state: VisionState) {
 async function startCapture(kind: VisionKind) {
   voice.dismiss();
   await vision.scan(kind);
+}
+
+/**
+ * Begin measuring — only ever reached when the store has said to.
+ *
+ * Three subscriptions, and each one is a way a shift can end honestly:
+ *
+ *   · the socket, which opens the shift and flushes whatever the outage held;
+ *   · `DeviceStatus`, which is the only thing that can say the glasses went
+ *     flat rather than the associate going quiet;
+ *   · `pagehide`, which is this host's real teardown signal — the WebView is
+ *     taken away every time the phone goes in a pocket, and an end fired there
+ *     is usually *buffered* rather than sent, which is exactly why it carries
+ *     the time it happened.
+ *
+ * What is deliberately not here is a `beforeunload`. It does not fire reliably
+ * on mobile WebViews, and a teardown path that works on a laptop and not on
+ * the device this ships to is worse than none: it would look tested.
+ */
+function startTelemetry() {
+  bridge.onDeviceStatus((status) => void shift.onStatus(status));
+  window.addEventListener("pagehide", () => { void shift.close("app_closed"); });
+  if (socket?.connected) void shift.onConnect();
 }
 
 async function main() {
@@ -1403,6 +1466,22 @@ async function main() {
     pushInspector(undefined, event);
   });
 
+  // Built now so the socket handlers below can refer to it, and deliberately
+  // not started: nothing is sent until the store's capability answer arrives
+  // and says this floor measures its staff.
+  shift = new ShiftController({
+    emit: (event, payload) => socket?.emit(event, payload),
+    connected: () => socket?.connected === true,
+    store: {
+      get: (key) => bridge.getLocalStorage(key),
+      set: (key, value) => bridge.setLocalStorage(key, value),
+    },
+    serial: (device as any).sn || null,
+    model: (device as any).model || null,
+    zone: () => prefs.zone,
+    log,
+  });
+
   socket = io(SERVER_URL);
   // Extracted so a zone change can send it again. `register` is the only
   // message that carries the zone to the roster, and the server rebuilds the
@@ -1428,11 +1507,27 @@ async function main() {
     // one this page booted on.
     registerAssociate();
     zoneRegisterPending = false;
+    // Buffered events first, then the shift. A reconnect is the only moment
+    // anything that happened during the outage can be delivered, and the
+    // controller is a no-op until the store has said it wants this.
+    if (telemetryOn) void shift.onConnect();
   });
   socket.on("disconnect", () => {
     ui.serverStatus.textContent = "Server offline";
     ui.serverStatus.className = "pill warn";
+    // Nothing is closed here. A dropped socket and a finished shift are
+    // different things, and the phone cannot tell them apart either — the
+    // server closes the shift at its last heartbeat once the gap passes, and a
+    // reconnect inside the gap continues the same one. What the controller
+    // does from here is buffer, which is the whole reason it exists.
   });
+
+  // The server's answer about which shift this phone is on — or that the store
+  // has this switched off after all, in which case the controller stops rather
+  // than re-queueing records the retailer has declined.
+  socket.on("shift:state", (state: any) => void shift.onState(state));
+  socket.on("telemetry:replayed", ({ accepted }: { accepted?: number }) =>
+    void shift.onReplayed(Number(accepted) || 0));
   socket.on("glasses:display", (payload: DisplayPayload) => void onDisplay(payload));
   socket.on("voice:result", (result: VoiceResult) => void voice.onResult(result));
   socket.on("voice:state", (s: { state: string }) => log(`voice state ← ${s.state}`));
@@ -1514,8 +1609,16 @@ async function main() {
   // card is missing from the page this line is the only thing that says
   // whether the store turned it off or the fetch never answered.
   log(`capabilities: camera=${capabilities.camera_capture ? "on" : "off"} ` +
+      `shift=${capabilities.shift_telemetry ? "on" : "off"} ` +
       `voice=${capabilities.voice} floor=${capabilities.floor_comms}`);
   mountCaptureCard(capabilities);
+  // Said before anything is sent, deliberately. If the first record of a shift
+  // reaches the server before the sentence reaches the page, there is a window
+  // — however short — in which somebody is being measured and their own phone
+  // has not told them.
+  mountTelemetryNotice(capabilities);
+  telemetryOn = capabilities.shift_telemetry === true;
+  if (telemetryOn) startTelemetry();
 
   // Now that the store has answered, anything it does not permit falls back to
   // its default and its control is never built. The two unenforced capabilities
