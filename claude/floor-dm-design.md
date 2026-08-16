@@ -159,7 +159,37 @@ differ; mostly they confirm them and widen the scope.
 
 ## Status
 
-Design decided 16 Aug 2026 (Kyle's rulings above) — not yet implemented. Next
-session: server routing (+tests in packages/server/test), the phone Floor
-card, `→ YOU` meta on the lens, browser test coverage. Estimated one
-session alongside test updates.
+Design decided 16 Aug 2026 (Kyle's rulings above). **Built the same day**, in
+the shape described here.
+
+**What shipped.** `radio:send` takes an optional `to` and routes to that one
+socket plus the sender's echo, skipping both the associates room and the
+dashboard mirror; a `roster:list` request and a `roster:update` push give the
+phone the people it needs to address; the urgent tier is clamped server-side
+to the canned `NEED BACKUP` from an associate socket, so neither a keyboard
+nor a manager can take over a display; `radio:delivered` and
+`radio:undelivered` are the receipts, and the failing one is the load-bearing
+half. The lens marks an addressed message `→ YOU` on the urgent frame, on the
+FLOOR card face and in the floor menu, and a reply to one goes back to its
+sender rather than to the room. The phone gained a Floor card — the roster as
+buttons, a 140-character composer, and the receipt — gated on the tenant's
+`floor_comms` exactly as the capture card is gated on the camera. Studio
+gained the manager's composer, with dictation where the browser has it and
+typing everywhere, sending under the name pinned to the socket at register.
+
+**Tests.** `packages/server/test/floor-dm.mjs` (24 assertions: delivery,
+isolation, the mirror, the clamp, receipts, roster churn) and
+`packages/glasses-plugin/test/floor-dm-browser.mjs` (14, including that `→ YOU`
+survives `toDisplayText` onto the glass and that the card does not exist at all
+for a store with floor comms off). `npm run test:floor-dm` and
+`test:floor-dm-browser`.
+
+**Known cost, accepted.** In the floor menu's list the marker takes about six
+characters off the visible message — there is no meta strip in a list, so the
+mark has to lead. That is why it is `→ YOU` and not longer.
+
+**Not built, from decision 1.** Studio access as a Console-managed permission,
+and glasses auto-pairing to their wearer. Neither blocks messaging: a manager
+sends under their signed-in name today because Studio registers with it. Both
+are a change to the people and device model rather than to the floor channel,
+which is why they are their own piece of work rather than a corner of this one.

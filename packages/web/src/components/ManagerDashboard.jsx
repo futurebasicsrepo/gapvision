@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { socket, currentTenant } from "../socket.js";
 import { api, clock, compact, duration, money } from "../api.js";
 import Waiting from "./Waiting.jsx";
+import FloorMessage from "./FloorMessage.jsx";
 import { Empty, Legend, ScoreBar, SERIES, StatTile } from "./Charts.jsx";
 
 /** Outcome → pill tone. Nothing here is green: hud green is what CueSea itself
@@ -85,7 +86,14 @@ export default function ManagerDashboard({ user }) {
   // a quiet store shouldn't generate traffic, and a busy one updates at once.
   useEffect(() => {
     if (!registered.current) {
-      socket.emit("register", { role: "dashboard", tenant: currentTenant() });
+      // The name goes with the registration, and it is the signed-in user's
+      // rather than anything typed: the server pins it to the socket here and
+      // stamps it on every message this dashboard sends, so what appears on an
+      // associate's glass is who the manager actually is. A per-message name
+      // field would be a string a browser can choose.
+      socket.emit("register", {
+        role: "dashboard", tenant: currentTenant(), name: user?.name || user?.email,
+      });
       registered.current = true;
     }
     const onUpdate = (snap) => {
@@ -94,7 +102,7 @@ export default function ManagerDashboard({ user }) {
     };
     socket.on("dashboard:update", onUpdate);
     return () => socket.off("dashboard:update", onUpdate);
-  }, [load]);
+  }, [load, user]);
 
   const s = data.summary;
   const rows = data.board?.rows || [];
@@ -208,6 +216,23 @@ export default function ManagerDashboard({ user }) {
            Above the roster on purpose: who is on the floor is context, what a
            guest is standing in a fitting room waiting for is the job. */}
       <Waiting rows={data.requests?.waiting || []} demand={data.requests?.demand || []} />
+
+      {/* --- saying something to the floor --------------------------------
+           Beside the roster, because who is on the floor and who you want to
+           reach are the same question asked twice.
+
+           Not for CueSea staff. A cue_admin belongs to no tenant, so their
+           socket registers under `currentTenant()`'s fallback rather than the
+           store they picked from the tenant switcher above — a message sent
+           from here would land on a *different* retailer's glasses, and
+           `bindTenant` pins that for the life of the socket. That is a bug
+           worth fixing on its own, but it is not the reason this is hidden:
+           CueSea staff writing into a retailer's floor channel is the
+           cross-tenant write Kyle ruled out when he said Studio and never
+           Console, and the rule does not stop applying because the surface
+           says Studio at the top. The roster below stays visible — reading a
+           floor to support a customer is what this account is for. */}
+      {!isCueStaff && <FloorMessage roster={roster} user={user} />}
 
       {/* --- floor roster: socket, live ---------------------------------- */}
       <div className="card span-4">

@@ -223,8 +223,57 @@ let onRuler = false;
 type RadioMessage = {
   id?: string; fromId?: string; from: string; message: string;
   priority?: "urgent" | "normal"; at?: string;
+  /** Set when the message was addressed rather than broadcast — the socket id
+   *  it was sent to, and that person's name. */
+  to?: string; toName?: string;
 };
 let inbox: RadioMessage[] = [];
+
+/**
+ * This lens's own roster id, handed back at register.
+ *
+ * Needed to answer one question: was that message sent to *me*, or to the
+ * room? Both arrive on the same event, which is the point of the design —
+ * one channel with addressing — so the distinction has to be drawn here.
+ */
+let myRosterId: string | null = null;
+
+/**
+ * Every id this lens has had, not just the current one.
+ *
+ * A socket id changes on every reconnect, and shop wifi reconnects. Messages
+ * already sitting in the inbox carry the id they were addressed to — so with
+ * only the newest id, a drop mid-shift would quietly un-mark every message
+ * somebody had sent *you*, and a reply to one would go to the whole floor
+ * instead of back to the person who asked. Cheap to keep; the alternative is
+ * a silent wrong answer at the worst moment.
+ */
+const myRosterIds = new Set<string>();
+
+/** Who else is on the floor. Pushed on every membership change; used by the
+ *  phone's composer, never drawn on the glass. */
+let roster: { id: string; name: string; zone?: string }[] = [];
+
+/** Was this message addressed to the person wearing these glasses — under any
+ *  id this lens has held this session? */
+function addressedToMe(m: RadioMessage): boolean {
+  return Boolean(m.to && myRosterIds.has(m.to));
+}
+
+/** Remember an id as ours. Called wherever the server tells us one. */
+function claimRosterId(id: string | null | undefined) {
+  if (!id) return;
+  myRosterId = id;
+  myRosterIds.add(id);
+}
+
+/**
+ * The mark that says a message is for you and not for the room.
+ *
+ * `→` is in the derived glass charset (see text.ts), so this survives
+ * `toDisplayText` rather than being replaced by a space.
+ */
+const ADDRESSED_MARK = "→ YOU";
 
 /**
  * A guest asking for something, from their own phone.
@@ -676,7 +725,11 @@ async function showUrgent(m: RadioMessage) {
   onUrgent = m;
   await renderCue({
     lines: [toDisplayText(m.from), toDisplayText(m.message), "PRESS TO TAKE IT"],
-    facts: [], meta: [], moduleCount: 0,
+    // The one difference between a message to the room and a message to you.
+    // It goes in the meta rather than in a line because all three lines are
+    // already carrying the message itself, and losing a word of "need backup
+    // in fitting rooms" to a marker would be a bad trade.
+    facts: [], meta: addressedToMe(m) ? [ADDRESSED_MARK] : [], moduleCount: 0,
   });
 }
 
@@ -720,8 +773,15 @@ async function restoreFrame() {
  */
 function buildMenuItems() {
   menuItems = [
+    // An addressed message leads with the mark, because in a list of ten
+    // things the room said, the one somebody asked *you* for is the one that
+    // needs answering. A reply to it goes back to that person alone.
     ...[...inbox].reverse().map((m) => ({
-      label: `${m.from} ${m.message}`, send: "ON MY WAY", msg: m,
+      label: addressedToMe(m)
+        ? `${ADDRESSED_MARK} ${m.from} ${m.message}`
+        : `${m.from} ${m.message}`,
+      send: "ON MY WAY",
+      msg: m,
     })),
     ...PHRASES.map((p) => ({ label: p.label, send: p.label, urgent: p.urgent })),
   ];
@@ -747,12 +807,17 @@ async function showFloorMenu(index = 0) {
 async function sendFromMenu() {
   const item = menuItems[menuIndex];
   if (!item) return void showIdle();
+  // Answering a message that was addressed to you goes back to the person who
+  // sent it, not to the room. Anything else — a reply to the room, or a
+  // phrase sent cold — is a broadcast, exactly as before.
+  const replyTo = item.msg && addressedToMe(item.msg) ? item.msg.fromId : undefined;
   socket?.emit("radio:send", {
     message: item.send ?? item.label,
     priority: item.urgent ? "urgent" : "normal",
     tenant: TENANT,
+    ...(replyTo ? { to: replyTo } : {}),
   });
-  log(`radio → ${item.send ?? item.label}`);
+  log(`radio → ${item.send ?? item.label}${replyTo ? ` (to ${item.msg?.from})` : ""}`);
   // Replying to a message clears it: it has been dealt with, and an inbox
   // that keeps what you already answered stops being an inbox.
   if (item.msg) inbox = inbox.filter((m) => m !== item.msg);
@@ -895,11 +960,18 @@ async function showCard(index: number) {
 
   // The floor card's face is live — it says what is waiting *now*, so it is
   // composed at show time rather than frozen into the deck at guest arrival.
+  const newest = inbox[inbox.length - 1];
   const lines = card.kind === "FLOOR"
     ? [inbox.length ? `${inbox.length} WAITING` : "FLOOR QUIET",
-       inbox.length ? toDisplayText(`${inbox[inbox.length - 1].from} ${inbox[inbox.length - 1].message}`) : "",
+       newest ? toDisplayText(`${newest.from} ${newest.message}`) : "",
        "PRESS TO OPEN"]
     : card.lines;
+  // A card face carries no meta of its own, so the addressed mark can use it:
+  // the newest message being *for you* is the reason to open the card now
+  // rather than at the end of the conversation.
+  const cardMeta = card.kind === "FLOOR" && newest && addressedToMe(newest)
+    ? [ADDRESSED_MARK]
+    : card.meta || [];
 
   if (cardFocus && card.kind !== "FLOOR") {
     // Clicked in: the frame thickens and the window scrolls the whole card.
@@ -917,7 +989,7 @@ async function showCard(index: number) {
     });
   } else {
     await renderCue({
-      lines, meta: card.meta || [],
+      lines, meta: cardMeta,
       cardTitle: `${card.kind} · ${index + 1}/${cards.length}`,
     });
   }
@@ -1013,8 +1085,14 @@ function onGesture(g: DecodedGesture) {
       // An urgent message owns the frame until it is acknowledged. Taking it
       // replies and restores whatever was underneath.
       if (onUrgent) {
-        socket?.emit("radio:send", { message: "ON MY WAY", tenant: TENANT });
-        log(`radio → ON MY WAY (to ${onUrgent.from})`);
+        // The log line always said "to <name>" here. Now it can be true: an
+        // urgent call addressed to this person is answered back to them, and
+        // one sent to the room is answered to the room.
+        const backTo = addressedToMe(onUrgent) ? onUrgent.fromId : undefined;
+        socket?.emit("radio:send", {
+          message: "ON MY WAY", tenant: TENANT, ...(backTo ? { to: backTo } : {}),
+        });
+        log(`radio → ON MY WAY (to ${backTo ? onUrgent.from : "the floor"})`);
         onUrgent = null;
         void restoreFrame();
         return;
@@ -1544,6 +1622,185 @@ function mountTenantCard() {
 }
 
 /**
+ * The Floor card — the phone half of floor comms.
+ *
+ * The glass can say seven canned phrases with a ring, and that is right for
+ * "on my way" mid-conversation. It cannot say "the 32s are in the back on the
+ * left of the stockroom door", and a floor that can only speak in seven
+ * sentences routes around the product to a group chat. So the typing lives
+ * here, where there is a keyboard, and the reading stays on the glass, where
+ * an associate can do it without breaking eye contact — the same split the
+ * capture card uses for the camera.
+ *
+ * Selecting a person addresses the message to them; selecting nobody sends it
+ * to the whole floor. One control, because it is one channel.
+ */
+let floorTarget: string | null = null;
+
+function setFloorStatus(text: string, tone: "ok" | "warn" | "" = "") {
+  const el = document.getElementById("floor-status");
+  if (!el) return;
+  el.textContent = text;
+  el.className = tone ? `floor-status ${tone}` : "floor-status";
+}
+
+/** Redraw just the people, on every roster push. Rebuilding the whole card
+ *  would take the keyboard away mid-sentence. */
+function renderFloorRoster() {
+  const list = document.getElementById("floor-roster");
+  if (!list) return;
+  // Never offer yourself: a message to your own glasses is not a thing anyone
+  // means to send, and it would occupy the top of the list on every floor.
+  const others = roster.filter((r) => !myRosterIds.has(r.id));
+  // A target who walked off the floor stops being a target. Without this the
+  // picker shows no selection at all — not even "Everyone" — while the next
+  // send still goes to a socket id that no longer resolves, which the server
+  // correctly refuses and the associate cannot see coming.
+  if (floorTarget && !roster.some((r) => r.id === floorTarget)) floorTarget = null;
+  list.replaceChildren();
+
+  const everyone = document.createElement("button");
+  everyone.type = "button";
+  everyone.className = floorTarget === null ? "floor-pick selected" : "floor-pick";
+  everyone.textContent = "Everyone";
+  everyone.setAttribute("aria-pressed", String(floorTarget === null));
+  everyone.addEventListener("click", () => { floorTarget = null; renderFloorRoster(); });
+  list.appendChild(everyone);
+
+  for (const person of others) {
+    const b = document.createElement("button");
+    b.type = "button";
+    const on = floorTarget === person.id;
+    b.className = on ? "floor-pick selected" : "floor-pick";
+    b.setAttribute("aria-pressed", String(on));
+    b.textContent = person.name;
+    if (person.zone) {
+      const zone = document.createElement("span");
+      zone.className = "meta";
+      zone.textContent = ` · ${person.zone}`;
+      b.appendChild(zone);
+    }
+    // Tapping the selected person clears the address rather than trapping the
+    // composer in a DM — the way back to the room should not need a reload.
+    b.addEventListener("click", () => {
+      floorTarget = on ? null : person.id;
+      renderFloorRoster();
+    });
+    list.appendChild(b);
+  }
+
+  if (others.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "floor-empty";
+    empty.textContent = "Nobody else is on the floor right now.";
+    list.appendChild(empty);
+  }
+}
+
+/**
+ * Built unless the store is *known* to have floor comms off.
+ *
+ * Deliberately not the capture card's rule. The camera fails closed because it
+ * is new and there is no working behaviour to lose, so hiding it wrongly costs
+ * nothing. Floor comms is the opposite case and this file already says so:
+ * `floor_comms` is unenforced precisely because "switching it off on the first
+ * failed fetch would break every tenant to protect a permission none of them
+ * have set". A 2.5s timeout on a shop's wifi must not silently remove typed
+ * messaging for the rest of the shift — so the card goes when the store said
+ * no, and stays when we could not ask.
+ */
+function mountFloorCard(caps: Capabilities) {
+  const mount = document.getElementById("floor-mount");
+  if (!mount) return;
+  mount.replaceChildren();
+  if (caps.known && caps.floor_comms === false) return;
+
+  const card = document.createElement("section");
+  card.className = "card floor";
+
+  const title = document.createElement("h3");
+  title.textContent = "Floor";
+  card.appendChild(title);
+
+  const blurb = document.createElement("p");
+  blurb.className = "capture-note";
+  blurb.textContent =
+    "Type to the whole floor, or pick one person to reach only them. "
+    + "It arrives in their glasses — they can reply with a phrase from the ring.";
+  card.appendChild(blurb);
+
+  const list = document.createElement("div");
+  list.className = "floor-roster";
+  list.id = "floor-roster";
+  card.appendChild(list);
+
+  const row = document.createElement("div");
+  row.className = "floor-compose";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.id = "floor-input";
+  input.className = "floor-input";
+  // The server truncates at 140 and the glass truncates by pixel; saying so
+  // here means a long message is short before it is sent rather than clipped
+  // after, where the sender cannot see what was lost.
+  input.maxLength = 140;
+  input.placeholder = "Say something to the floor";
+  input.autocomplete = "off";
+  row.appendChild(input);
+
+  const send = document.createElement("button");
+  send.type = "button";
+  send.className = "btn btn-primary";
+  send.textContent = "Send";
+  row.appendChild(send);
+  card.appendChild(row);
+
+  const status = document.createElement("div");
+  status.className = "floor-status";
+  status.id = "floor-status";
+  status.setAttribute("role", "status");
+  card.appendChild(status);
+
+  const submit = () => {
+    const text = input.value.trim();
+    if (!text) return;
+    if (!socket?.connected) {
+      setFloorStatus("No connection to the floor — nothing was sent.", "warn");
+      return;
+    }
+    // Never `priority: urgent` from here. Kyle's call: the tier belongs to the
+    // canned backup call, which is a press on the ring — not something a
+    // keyboard can reach for. The server enforces this too; this is just the
+    // client agreeing with it.
+    socket.emit("radio:send", {
+      message: text, tenant: TENANT,
+      ...(floorTarget ? { to: floorTarget } : {}),
+    });
+    const to = floorTarget
+      ? roster.find((r) => r.id === floorTarget)?.name || "them"
+      : "the floor";
+    log(`radio → ${text} (to ${to})`);
+    // Said immediately, and replaced by the receipt when the server answers.
+    // A composer that clears with no acknowledgement at all is one an
+    // associate stops trusting after the first message that goes missing.
+    setFloorStatus(floorTarget ? `Sent to ${to}…` : "Sent to the floor.", "");
+    input.value = "";
+  };
+
+  send.addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); submit(); }
+  });
+
+  mount.appendChild(card);
+  renderFloorRoster();
+  // A phone that opens into a quiet store would otherwise wait for somebody
+  // else to arrive before it could address anyone.
+  socket?.emit("roster:list");
+}
+
+/**
  * The capture card — the phone-page trigger for a scan.
  *
  * **Built only when the store has the camera on, and not built at all
@@ -1846,6 +2103,12 @@ async function main() {
   socket.on("connect", () => {
     ui.serverStatus.textContent = "Realtime linked";
     ui.serverStatus.className = "pill ok";
+    // The roster is keyed by socket id, so this lens already knows its own
+    // address the moment it has a socket — no round trip, and no window in
+    // which the composer offers you yourself because the answer hasn't come
+    // back yet. `roster:you` still arrives and confirms it; this is the same
+    // fact known earlier, not a second source of truth.
+    claimRosterId(socket.id);
     // A reconnect re-registers with whatever the zone is *now*, not with the
     // one this page booted on.
     registerAssociate();
@@ -1897,12 +2160,43 @@ async function main() {
     void restoreFrame();
   });
 
+  socket.on("roster:you", ({ id }: { id?: string }) => {
+    claimRosterId(id);
+    renderFloorRoster();
+  });
+
+  socket.on("roster:update", ({ roster: rows }: { roster?: typeof roster }) => {
+    roster = rows || [];
+    renderFloorRoster();
+  });
+
+  // Both receipts are the sender's own business and stay on the phone: the
+  // glass is for what other people said, not for confirmations of what you
+  // said. The failure is the one that matters — see `radio:undelivered`.
+  socket.on("radio:delivered", ({ toName }: { toName?: string }) => {
+    setFloorStatus(`Delivered to ${toName || "them"}.`, "ok");
+    log(`radio → delivered to ${toName || "?"}`);
+  });
+
+  socket.on("radio:undelivered", ({ reason, message }: { reason?: string; message?: string }) => {
+    // Roster ids churn on reconnect, so this is an ordinary outcome and not a
+    // fault. It must be visible: a message the sender believes was delivered
+    // and that reached nobody is the worst failure this feature has.
+    const why = reason === "not_on_floor"
+      ? "They're no longer on the floor — nothing was sent."
+      : "Not delivered.";
+    setFloorStatus(why, "warn");
+    log(`radio → UNDELIVERED (${reason}): ${message ?? ""}`);
+  });
+
   socket.on("radio:message", (m: RadioMessage) => {
     // Our own message, echoed back so the dashboard and the web harness get
     // the full log. Nobody needs to read on their own glass the thing they
     // just sent.
     if (m.fromId && m.fromId === socket.id) return;
-    log(`radio ← ${m.from}: ${m.message}${m.priority === "urgent" ? " (urgent)" : ""}`);
+    log(`radio ← ${m.from}: ${m.message}`
+        + `${addressedToMe(m) ? " (to you)" : ""}`
+        + `${m.priority === "urgent" ? " (urgent)" : ""}`);
 
     // How much of this is allowed to interrupt is the associate's to decide.
     // What is never theirs to lose is the message itself: every priority at
@@ -1956,6 +2250,7 @@ async function main() {
       `shift=${capabilities.shift_telemetry ? "on" : "off"} ` +
       `voice=${capabilities.voice} floor=${capabilities.floor_comms}`);
   mountCaptureCard(capabilities);
+  mountFloorCard(capabilities);
   // Said before anything is sent, deliberately. If the first record of a shift
   // reaches the server before the sentence reaches the page, there is a window
   // — however short — in which somebody is being measured and their own phone

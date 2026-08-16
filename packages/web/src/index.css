@@ -372,6 +372,22 @@ body::after {
 .btn.danger:hover:not(:disabled) { border-color: var(--flame); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 
+/* ---------- Messaging the floor ----------
+   The composer on the manager's dashboard. A pressed target button uses the
+   primary fill, so who the message is about to reach is legible without
+   reading — the difference between "the floor" and "one person" is the whole
+   feature, and it must not depend on a label. */
+.floor-compose { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.floor-compose .btn { flex: 0 0 auto; }
+.floor-input {
+  flex: 1 1 180px; min-height: 44px; font-family: var(--sans); font-size: 14px;
+  padding: 11px 13px; border-radius: var(--r-ctl, 12px); color: var(--slate-100);
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.floor-input::placeholder { color: var(--slate-300); }
+.floor-input:focus-visible { outline: 2px solid var(--sea-500); outline-offset: 1px; }
+.floor-compose .btn[aria-pressed="true"] { border-color: var(--sea-400, var(--sea-500)); }
+
 /* ---------- Sign in ---------- */
 .signin-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; position: relative; z-index: 1; }
 .signin { width: 100%; max-width: 390px; display: flex; flex-direction: column; gap: 15px; }
