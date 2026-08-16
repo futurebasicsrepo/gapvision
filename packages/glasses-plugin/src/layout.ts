@@ -808,6 +808,11 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     xPosition: lineX - CARD_INSET, yPosition: CARD_Y,
     width: lineW + CARD_INSET * 2, height: CARD_H,
     borderWidth: cue.focused ? CARD_BORDER_FOCUS : CARD_BORDER,
+    // Explicit, because the first photo through the glass showed everything
+    // *except* the frame: on an additive display an unset border colour is
+    // a black border, and a black border is no border. White is max
+    // brightness after the host's gray-4 reduction.
+    borderColor: 0xffffff,
     borderRadius: CARD_RADIUS,
     paddingLength: PAD + CARD_INSET,
     containerID: 6, containerName: "cue-card", zOrderIndex: 3,

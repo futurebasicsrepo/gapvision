@@ -271,17 +271,46 @@ export async function getBridge(): Promise<GlassesBridge> {
 }
 
 function wrapReal(real: any): GlassesBridge {
+  /**
+   * The mirror: every page the glass receives is also painted into the
+   * phone page's virtual lens, images and all.
+   *
+   * Two problems dissolve at once. "What is on the glass right now" becomes
+   * a phone screenshot instead of a photograph taken through somebody's
+   * lens at arm's length — which is how every layout question has had to be
+   * answered until now. And the gesture simulator buttons work on a real
+   * phone at last (handoff bug: they were wired inside MockBridge, so they
+   * only ever bound in a plain browser) — the mirror binds them and its
+   * events are subscribed alongside the host's, so a tap on the phone
+   * drives the app exactly like a temple tap.
+   *
+   * The mirror is a *view* of what was sent, not a claim about what drew:
+   * a host that clips a row or refuses an image will still differ from the
+   * mirror, which is exactly the difference worth photographing.
+   */
+  const mirror = new MockBridge();
   return {
     kind: "even-app",
-    createStartUpPageContainer: (p) => real.createStartUpPageContainer(p),
-    rebuildPageContainer: (p) => real.rebuildPageContainer(p),
-    textContainerUpgrade: (u) => real.textContainerUpgrade(u),
+    createStartUpPageContainer: (p) => {
+      void mirror.createStartUpPageContainer(p);
+      return real.createStartUpPageContainer(p);
+    },
+    rebuildPageContainer: (p) => {
+      void mirror.rebuildPageContainer(p);
+      return real.rebuildPageContainer(p);
+    },
+    textContainerUpgrade: (u) => {
+      void mirror.textContainerUpgrade(u);
+      return real.textContainerUpgrade(u);
+    },
     // Optional-chained and never throwing: an Even App build without image
     // support should cost us the mark, not the HUD. `main.ts` reads the
     // non-success verdict and rebuilds with the wordmark instead.
-    updateImageRawData: (u) =>
-      real.updateImageRawData?.(u).then((r: any) => String(r ?? "success"))
-        .catch((e: any) => `imageException: ${e}`) ?? Promise.resolve("unsupported"),
+    updateImageRawData: (u) => {
+      void mirror.updateImageRawData(u);
+      return real.updateImageRawData?.(u).then((r: any) => String(r ?? "success"))
+        .catch((e: any) => `imageException: ${e}`) ?? Promise.resolve("unsupported");
+    },
     shutDownPageContainer: (m = 1) => real.shutDownPageContainer(m),
     audioControl: (o, s) => real.audioControl(o, s),
     // Optional-chained like `getDeviceInfo`, and for a sharper reason: the
@@ -342,7 +371,18 @@ function wrapReal(real: any): GlassesBridge {
         return null;
       }
     },
-    onEvenHubEvent: (cb) => real.onEvenHubEvent(cb),
+    // Both sources: the host's real events, and the mirror's — which is
+    // where the phone page's simulator buttons arrive. Same decoder, same
+    // handler, so a button tap and a temple tap are indistinguishable
+    // downstream, which is the whole point of a simulator.
+    onEvenHubEvent: (cb) => {
+      const offReal = real.onEvenHubEvent(cb);
+      const offMirror = mirror.onEvenHubEvent(cb);
+      return () => {
+        if (typeof offReal === "function") offReal();
+        offMirror();
+      };
+    },
     onDeviceStatus: (cb) => {
       try {
         const off = real.onDeviceStatusChanged?.((raw: any) => {
