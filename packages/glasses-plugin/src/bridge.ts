@@ -434,6 +434,18 @@ class MockBridge implements GlassesBridge {
         el.style.top = `${c.yPosition * sy}px`;
         el.style.width = `${c.width * sx}px`;
         el.style.height = `${c.height * sy}px`;
+        // The card frame: the SDK's border is a rounded rectangle around the
+        // container, and the browser should draw what the glass will.
+        if (c.borderWidth) {
+          el.style.border = `${c.borderWidth}px solid rgba(75,255,154,.85)`;
+          el.style.borderRadius = `${c.borderRadius ?? 0}px`;
+          el.style.boxSizing = "border-box";
+        }
+        if (c.paddingLength) el.style.padding = `${c.paddingLength * sy}px ${c.paddingLength * sx}px`;
+        // The header cluster right-aligns with measured leading spaces;
+        // collapsing them would un-align the clock in the one place the
+        // alignment is the point.
+        el.style.whiteSpace = "pre";
         el.textContent = c.content;
         lens.appendChild(el);
       });
@@ -489,6 +501,11 @@ class MockBridge implements GlassesBridge {
   }
 
   async updateImageRawData(u: { containerID: number; containerName: string; imageData: Uint8Array }) {
+    // `window.__cueMockImage = "fail"` forces the refusal, the same way
+    // `__cueMockCapture` forces a camera that says no. It is how a browser
+    // test reaches the fallback latches — the wordmark and the text rail —
+    // which otherwise only a real host in a bad mood could exercise.
+    if ((window as any).__cueMockImage === "fail") return "imageException";
     const c = this.images.get(u.containerID);
     // Same verdict the host gives: a container that was never declared cannot
     // be filled, and saying so here is how the browser test catches an id that

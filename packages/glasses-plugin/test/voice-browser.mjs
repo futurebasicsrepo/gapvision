@@ -41,7 +41,9 @@ const lens = () => page.$$eval("#virtual-lens .lens-text:not(.meta)",
   (els) => els.map((e) => e.textContent));
 const log = () => page.$eval("#event-log", (e) => e.textContent);
 
-check("boots to idle", (await lens())[0]?.includes("CUESEA READY"), (await lens())[0]);
+check("boots to idle",
+  (await lens()).some((l) => (l || "").includes("AWAITING GUEST SIGNAL")),
+  JSON.stringify((await lens()).slice(0, 3)));
 check("realtime linked",
   (await page.textContent("#server-status")) === "Realtime linked",
   await page.textContent("#server-status"));

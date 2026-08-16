@@ -21,11 +21,12 @@
 import { io, type Socket } from "socket.io-client";
 import { getBridge, type GlassesBridge } from "./bridge";
 import { decodeGesture, describeGesture, type DecodedGesture } from "./gestures";
-import { buildCue, buildMenu, buildRuler, CUE_LINES, FACT_PX, IDLE_CUE,
+import { buildCue, buildMenu, buildRuler, clockLabel, CUE_LINES, FACT_PX, IDLE_CUE,
          RULER_HEIGHTS, toDisplayText, type Cue, type MicState } from "./layout";
 import { fitsPx } from "./text";
-import { cardsFor, cueOf, money, type Card, type DisplayPayload,
+import { allLines, cardsFor, cueOf, money, type Card, type DisplayPayload,
          type Recommendation } from "./cards";
+import { heroClock, heroRail } from "./hero";
 import { markBytes } from "./mark";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
 import { captureControls, fetchCapabilities, NO_CAPABILITIES, VisionController,
@@ -165,6 +166,25 @@ let pageBuilt = false;
  * empty every time, so `pushMark` runs after every build, not just the first.
  */
 let useMark = true;
+/**
+ * Whether to draw the left column as the hero rail — garment icons and the
+ * guest's sizes in dot type — instead of text rows.
+ *
+ * Same latch discipline as `useMark`, same reason: the first non-`success`
+ * from the host turns it off for the life of the app and the next render
+ * builds the text rail, so the failure mode is the 0.2.0 lens rather than an
+ * empty box where the sizes should be.
+ */
+let useHeroRail = true;
+/** What pixels each drawn image container currently shows, as comparable
+ *  keys — pushed again whenever the values change or a rebuild wipes the
+ *  container. Cleared by every build; pixels never survive one. */
+const imagesShown = new Map<string, string>();
+/** Which value the shirt slot is showing: 0 = tops, 1 = outerwear. The
+ *  associate cycles this by scrolling on the focused SIZES card. */
+let railVariant = 0;
+/** Glasses battery, from the host's own status push. Null until it says. */
+let battery: number | null = null;
 /** On the type ruler — a diagnostic page that is not a cue and must not be
  *  treated as one. See showRuler(). */
 let onRuler = false;
@@ -256,6 +276,18 @@ let recommendations: Recommendation[] = [];
  */
 let cards: Card[] = [];
 let cardIndex = 0;
+/**
+ * Clicked into the card, or browsing the deck.
+ *
+ * The deck has two levels now, and one gesture moves between them: a press
+ * enters the card under the cursor, a press inside leaves it. Focused, the
+ * frame's border thickens and scrolling moves the card's *content* — the
+ * fourth cart item, the older orders — instead of the deck. Unfocused,
+ * scrolling is the deck, exactly as it always was.
+ */
+let cardFocus = false;
+/** Where the focused card's window starts. */
+let cardScroll = 0;
 
 function modulePosition() { return cardIndex; }
 function moduleTotal() { return engaged ? cards.length : 0; }
@@ -270,6 +302,29 @@ function moduleLabel() { return cards[cardIndex]?.kind || "CUE"; }
  * mid-sentence. Cleared on idle, because facts about nobody are noise.
  */
 let railFacts: string[] = [];
+/** The guest's name, for its own row above the rail. */
+let railGuestName = "";
+
+/**
+ * What the hero rail's two slots show for the current guest.
+ *
+ * The shirt slot is tops — or outerwear, when the associate has cycled the
+ * rail from the focused SIZES card. The trousers slot is bottoms, always;
+ * there is nothing else trousers-shaped to switch to.
+ */
+function heroValues(): [string, string] {
+  const sizes = (lastDisplay?.guest as any)?.sizes || {};
+  const shirt = railVariant === 1 && sizes.outerwear ? sizes.outerwear : sizes.tops;
+  return [String(shirt || ""), String(sizes.bottoms || "")];
+}
+
+/** The hero's stat band — the figure under the sizes, Weather-dashboard
+ *  style. Points, respecting the same preference the text rail honours;
+ *  empty leaves the band dark. */
+function heroStat(): string {
+  const g = lastDisplay?.guest as any;
+  return prefs.railPoints && typeof g?.points === "number" ? `${g.points} PTS` : "";
+}
 
 /**
  * Session state that has to outlive a foreground transition.
@@ -331,13 +386,26 @@ function micState(): MicState {
  *  and a hint row is chrome. */
 async function renderCue(cue: Cue, latencyMs?: number) {
   // Every surface — guest card, recommendation, voice answer — gets the rail
-  // and the module position from here, rather than each call site remembering.
+  // and the header state from here, rather than each call site remembering.
+  //
+  // A cue that says nothing about its left column gets the guest's: name row,
+  // hero if the host takes images, text facts if not. A cue that *sets*
+  // `facts` — the urgent interrupt, a guest request, idle — is asking for
+  // exactly that column and nothing is added to it.
+  const defaultRail = cue.facts === undefined && cue.name === undefined;
+  const [heroTop, heroBtm] = heroValues();
+  const wantHero = useHeroRail && Boolean(heroTop || heroBtm);
   const page = buildCue(
     {
       ...cue,
       logo: useMark,
       mic: cue.mic ?? micState(),
-      facts: cue.facts ?? railFacts,
+      unread: cue.unread ?? inbox.length,
+      battery: cue.battery ?? battery,
+      ...(defaultRail
+        ? { name: railGuestName || undefined, facts: railFacts,
+            hero: engaged && wantHero }
+        : { hero: cue.hero ?? false }),
       moduleIndex: cue.moduleIndex ?? modulePosition(),
       moduleCount: cue.moduleCount ?? moduleTotal(),
       moduleName: cue.moduleName ?? moduleLabel(),
@@ -369,18 +437,26 @@ async function renderCue(cue: Cue, latencyMs?: number) {
   // toggle, none of which are hot, while the actual hot path — three cue
   // lines changing under an unchanged rail, which is every card scroll and
   // every voice answer — still takes the cheap path.
+  // Border width rides in the key so entering and leaving a card — the one
+  // change that lives in a property the cheap path cannot send — rebuilds by
+  // construction rather than by every caller remembering to say so. Image
+  // containers ride in it for the reason the mark once regressed: an image
+  // appearing or vanishing is a different page.
   const shape = [
-    ...page.textObject.map((c) => `t${c.containerID}`),
+    ...page.textObject.map(
+      (c) => `t${c.containerID}${c.borderWidth ? `b${c.borderWidth}` : ""}`),
     ...(page.listObject || []).map(
       (c) => `l${c.containerID}:${(c.itemContainer?.itemName || []).join("|")}`,
     ),
+    ...(page.imageObject || []).map((c) => `i${c.containerID}`),
   ].join(",");
   const sameShape = pageBuilt && shape === currentShape;
 
   if (!pageBuilt) {
     await bridge.createStartUpPageContainer(page);
     pageBuilt = true;
-    if (!(await pushMark(page))) return renderCue(cue, latencyMs);
+    imagesShown.clear();   // pixels never survive a build
+    if (!(await pushImages(page))) return renderCue(cue, latencyMs);
   } else if (sameShape) {
     // Cheap path: text-only updates, no page rebuild.
     for (const c of page.textObject) {
@@ -390,9 +466,13 @@ async function renderCue(cue: Cue, latencyMs?: number) {
         content: c.content,
       });
     }
+    // The hero container survived, but the guest may have changed under it —
+    // same shape, different sizes. Push only when the values moved.
+    if (!(await pushImages(page, true))) return renderCue(cue, latencyMs);
   } else {
     await bridge.rebuildPageContainer(page);
-    if (!(await pushMark(page))) return renderCue(cue, latencyMs);
+    imagesShown.clear();
+    if (!(await pushImages(page))) return renderCue(cue, latencyMs);
   }
   currentShape = shape;
 }
@@ -427,20 +507,60 @@ function rebuildNext() {
  * vision.
  */
 async function pushMark(page: ReturnType<typeof buildCue>): Promise<boolean> {
+  return pushImages(page);
+}
+
+/**
+ * Send pixels for whatever image containers this page declared — the mark
+ * gets the mark's bytes, the hero rail gets *this guest's* sizes drawn fresh.
+ *
+ * `onlyChanged` is the cheap path's version: containers already have pixels,
+ * so nothing is sent unless the hero's values moved. `imagesShown` holds the keys,
+ * and it is cleared by every build because the container comes back empty.
+ */
+async function pushImages(
+  page: ReturnType<typeof buildCue>, onlyChanged = false,
+): Promise<boolean> {
   for (const c of page.imageObject || []) {
+    let data: Uint8Array;
+    let heroKey = "";
+    if (c.containerName === "cue-hero") {
+      const [top, btm] = heroValues();
+      heroKey = `${top}|${btm}|${heroStat()}`;
+      if (onlyChanged && heroKey === imagesShown.get(c.containerName)) continue;
+      data = heroRail(top, btm, heroStat());
+    } else if (c.containerName === "cue-idle-clock") {
+      // The big dotted clock. Keyed on the minute, so an idle repaint that
+      // crossed no minute boundary sends nothing.
+      heroKey = clockLabel();
+      if (onlyChanged && heroKey === imagesShown.get(c.containerName)) continue;
+      data = heroClock(heroKey);
+    } else {
+      if (onlyChanged) continue;   // the mark's pixels never change
+      data = markBytes();
+    }
     const result = await bridge.updateImageRawData({
       containerID: c.containerID,
       containerName: c.containerName,
-      imageData: markBytes(),
+      imageData: data,
     });
     if (result !== "success") {
-      log(`mark rejected by host (${result}) — falling back to the wordmark`);
-      useMark = false;
+      // Latch off whichever image the host refused and rebuild without it.
+      // The failure mode is the wordmark and the text rail — the 0.2.0 lens —
+      // never an empty box on somebody's face.
+      if (c.containerName === "cue-hero") {
+        log(`hero rail rejected by host (${result}) — falling back to the text rail`);
+        useHeroRail = false;
+      } else {
+        log(`mark rejected by host (${result}) — falling back to the wordmark`);
+        useMark = false;
+      }
       // The shape is about to change, and the page we just built is the one
       // being replaced. Clear it so the re-render cannot take the cheap path.
       currentShape = "";
       return false;
     }
+    if (heroKey) imagesShown.set(c.containerName, heroKey);
   }
   return true;
 }
@@ -504,17 +624,17 @@ function railFor(payload: DisplayPayload): string[] {
   // Which is also the argument for making points a preference rather than a
   // decision taken for everybody: it is the row with the weakest claim, on the
   // scarcest rows in the product.
+  // The name is no longer a rail row — it has its own container above the
+  // rail (`cue-name`), where it stays whichever form the rail below takes.
+  // These rows are the *text* fallback for a host that refuses the hero, so
+  // the sizes still lead. The unread count left the rail for the header
+  // cluster, where it shows on every page instead of only railed ones.
   return [
-    railName(g.name),
     g.tier || "",
     sizes.tops ? `TOP ${sizes.tops}` : "",
     sizes.bottoms ? `BTM ${sizes.bottoms}` : "",
+    sizes.outerwear ? `OUT ${sizes.outerwear}` : "",
     prefs.railPoints && typeof g.points === "number" ? `${g.points} PTS` : "",
-    // Unread floor traffic, as a sixth rail row. The rail is a single list
-    // container with six slots, so this is free: no new container, no
-    // page-shape change, no rebuild. That is the whole reason the priority
-    // tier fits inside the host's budget at all.
-    inbox.length ? `${inbox.length} MSG` : "",
   ].filter(Boolean);
 }
 
@@ -654,17 +774,28 @@ async function showIdle() {
   onRequest = null;
   cards = [];
   cardIndex = 0;
+  cardFocus = false;
+  cardScroll = 0;
+  railVariant = 0;
   engaged = false;
   engagedGuestId = null;
   focusSku = null;
   lastDisplay = null;
   railFacts = [];
+  railGuestName = "";
   forgetSession();
   // The engagement is over, so a zone change that was waiting for it can go.
   flushZoneRegistration();
   await renderCue({
     ...IDLE_CUE,
-    lines: ["CUESEA READY", TENANT_LABEL, "AWAITING GUEST SIGNAL"],
+    // The resting screen: a 48px dotted clock in the card, with the state
+    // in the card's title. The lens's first impression should read as an
+    // instrument, not a terminal — see `heroClock` in hero.ts. When the
+    // host has refused images the lines carry the words instead, exactly
+    // as before.
+    heroClock: useHeroRail,
+    cardTitle: "AWAITING GUEST SIGNAL",
+    lines: useHeroRail ? [] : ["CUESEA READY", TENANT_LABEL, "AWAITING GUEST SIGNAL"],
     // The build, on the glass. An install that silently did not roll over is
     // indistinguishable from a fix that did not work, and we burned two
     // uploads on exactly that ambiguity.
@@ -682,6 +813,11 @@ async function showIdle() {
       `V${__APP_VERSION__.replace(/\./g, "·")}`,
       ...(prefs.voice ? ["PRESS TO ASK"] : []),
       "2X EXIT",
+      // The tenant moved here from the second line — the clock owns the card
+      // now. Last, because `fit` drops from the right and the exit hint is
+      // the one fact an associate cannot discover by accident; the tenant is
+      // on the phone page too.
+      ...(useHeroRail ? [TENANT_LABEL] : []),
     ],
   });
   ui.sessionInfo.textContent = "No active session";
@@ -695,9 +831,17 @@ async function onDisplay(payload: DisplayPayload) {
   // Build the stack once per guest, not per render. The whole value of a card
   // stack is that it does not reorder underneath somebody who is scrolling
   // through it looking for the address.
-  cards = cardsFor(payload);
+  // The floor rides at the end of the deck: scrolling to it shows what is
+  // waiting, clicking it opens the menu. Mid-engagement is exactly when
+  // "covering your guest" needs answering, and this is how it is reached now
+  // that scrolling down means "next card" — see onGesture.
+  cards = [...cardsFor(payload), { kind: "FLOOR", lines: [] }];
   cardIndex = 0;
+  cardFocus = false;
+  cardScroll = 0;
+  railVariant = 0;
   railFacts = railFor(payload);
+  railGuestName = railName((payload.guest as any)?.name);
   focusSku = recommendations[0]?.sku ?? focusSku;
   rememberSession();
   await showCard(0);
@@ -710,7 +854,7 @@ async function onDisplay(payload: DisplayPayload) {
 /** Restore whatever was on the lens before a voice interaction took it over. */
 async function restoreView() {
   if (!engaged || !lastDisplay) return showIdle();
-  if (cardIndex > 0 && cards[cardIndex]) return showCard(cardIndex);
+  if (cards[cardIndex]) return showCard(cardIndex);
   await renderCue(cueOf(lastDisplay));
 }
 
@@ -730,8 +874,36 @@ async function showCard(index: number) {
   if (!card) return;
   cardIndex = index;
   focusSku = card.sku ?? cards.find((c) => c.sku)?.sku ?? null;
-  await renderCue({ lines: card.lines, meta: card.meta || [] });
-  log(`card ${index + 1}/${cards.length}: ${card.kind}`);
+
+  // The floor card's face is live — it says what is waiting *now*, so it is
+  // composed at show time rather than frozen into the deck at guest arrival.
+  const lines = card.kind === "FLOOR"
+    ? [inbox.length ? `${inbox.length} WAITING` : "FLOOR QUIET",
+       inbox.length ? toDisplayText(`${inbox[inbox.length - 1].from} ${inbox[inbox.length - 1].message}`) : "",
+       "PRESS TO OPEN"]
+    : card.lines;
+
+  if (cardFocus && card.kind !== "FLOOR") {
+    // Clicked in: the frame thickens and the window scrolls the whole card.
+    // The title carries the window — `CART · 2-4/9` — because the font has no
+    // scrollbar and a fraction is read rather than counted.
+    const all = allLines(card);
+    const max = Math.max(0, all.length - CUE_LINES);
+    cardScroll = Math.max(0, Math.min(cardScroll, max));
+    const win = all.slice(cardScroll, cardScroll + CUE_LINES);
+    const title = all.length > CUE_LINES
+      ? `${card.kind} · ${cardScroll + 1}-${cardScroll + win.length}/${all.length}`
+      : card.kind;
+    await renderCue({
+      lines: win, meta: card.meta || [], cardTitle: title, focused: true,
+    });
+  } else {
+    await renderCue({
+      lines, meta: card.meta || [],
+      cardTitle: `${card.kind} · ${index + 1}/${cards.length}`,
+    });
+  }
+  log(`card ${index + 1}/${cards.length}: ${card.kind}${cardFocus ? ` (in, at ${cardScroll})` : ""}`);
 }
 
 async function cycleCards(step: 1 | -1) {
@@ -741,7 +913,33 @@ async function cycleCards(step: 1 | -1) {
   // than a shape — and the cue is one step backwards from the last card,
   // which is where you most often want it.
   const next = (cardIndex + step + cards.length) % cards.length;
+  cardFocus = false;
+  cardScroll = 0;
   await showCard(next);
+}
+
+/**
+ * Scroll inside the focused card.
+ *
+ * On the SIZES card this is the value switch instead: the card *is* the
+ * sizes, so scrolling it cycles which value the hero's shirt slot shows —
+ * tops, then outerwear where the guest has one. Everything else windows.
+ */
+async function scrollFocusedCard(step: 1 | -1) {
+  const card = cards[cardIndex];
+  if (!card) return;
+  if (card.kind === "SIZES") {
+    const sizes = (lastDisplay?.guest as any)?.sizes || {};
+    if (sizes.outerwear) {
+      railVariant = railVariant === 0 ? 1 : 0;
+      rebuildNext();   // the change lives in image pixels and rail rows
+      railFacts = lastDisplay ? railFor(lastDisplay) : railFacts;
+    }
+    await showCard(cardIndex);
+    return;
+  }
+  cardScroll += step;
+  await showCard(cardIndex);
 }
 
 function onRootPage(): boolean {
@@ -820,18 +1018,37 @@ function onGesture(g: DecodedGesture) {
       // nobody can start a voice query from a diagnostic screen by accident.
       if (onRuler) { onRuler = false; void showIdle(); return; }
       // A click first dismisses whatever voice put on the lens; only then does
-      // it mean "I'm done with this guest".
+      // it mean anything about the deck.
       if (voice.dismiss()) return;
       // Same for a scan's progress or its answer. It cannot recall a camera
       // the phone has already opened — but it can stop the answer from waiting
       // out its dwell, which is what a press means everywhere else.
       if (vision.dismiss()) return;
-      // Kyle's rule: press takes you home from anywhere, and only ends the
-      // engagement once you are already home. Learnable in a shift, and it
-      // means you can never end a live session by accident from card seven —
-      // which is the mistake that happens in front of a customer.
-      if (cardIndex > 0) { void showCard(0); return; }
+      // The deck's press, and it is one rule at two levels: **a press goes
+      // into the thing in front of you, and a press inside comes back out.**
+      //
+      //   on a card        press clicks in — border thickens, scroll now
+      //                    moves the card's own content
+      //   inside a card    press clicks out, back to the deck
+      //   on FLOOR         press opens the floor menu (its "inside")
+      //   on the cue       press ends the engagement — the cue is home, and
+      //                    ending a session stays a deliberate act you can
+      //                    only do from home, never from card seven by
+      //                    accident in front of a customer
       if (engaged) {
+        if (cardFocus) {
+          cardFocus = false;
+          cardScroll = 0;
+          void showCard(cardIndex);
+          return;
+        }
+        if (cards[cardIndex]?.kind === "FLOOR") { void showFloorMenu(); return; }
+        if (cardIndex > 0) {
+          cardFocus = true;
+          cardScroll = 0;
+          void showCard(cardIndex);
+          return;
+        }
         socket.emit("session:end");
         void showIdle();
         return;
@@ -907,17 +1124,19 @@ function onGesture(g: DecodedGesture) {
       // screen that answers, on the hardware, how small this display will
       // actually draw a row. See buildRuler() in layout.ts.
       if (!engaged && voice.current === "idle") { void showRuler(); return; }
+      if (engaged && cardFocus) { void scrollFocusedCard(-1); return; }
       void cycleCards(-1);
       return;
 
     case "scroll-down":
       if (menuIndex >= 0) { void showFloorMenu(menuIndex + 1); return; }
-      // Down opens the floor: what is waiting, and what you can say back.
-      // Available engaged as well as idle — the whole point of a queue is
-      // that you read it when you choose, and mid-engagement is exactly when
-      // "covering your guest" needs answering.
+      // Inside a card, down scrolls the card. On the deck, down is the next
+      // card — both directions cycle now, which "down opens the floor" used
+      // to shadow. The floor still opens from anywhere it is needed: the
+      // FLOOR card while engaged, and scroll-down at idle.
+      if (engaged && cardFocus) { void scrollFocusedCard(1); return; }
+      if (engaged) { void cycleCards(1); return; }
       if (voice.current === "idle" && !onRuler) { void showFloorMenu(); return; }
-      void cycleCards(1);
       return;
 
     case "exit":
@@ -1433,7 +1652,7 @@ async function main() {
   voice = new VoiceController({
     bridge,
     emit: (event, payload) => socket?.emit(event, payload),
-    render: (lines, meta) => renderCue({ lines, meta }),
+    render: (lines, meta) => renderCue({ lines, meta, cardTitle: "ASK" }),
     log,
     onState: (state: VoiceState) => {
       ui.voiceStatus.textContent =
@@ -1453,7 +1672,7 @@ async function main() {
     bridge,
     serverUrl: SERVER_URL,
     tenant: TENANT,
-    render: (lines, meta) => renderCue({ lines, meta }),
+    render: (lines, meta) => renderCue({ lines, meta, cardTitle: "SCAN" }),
     log,
     // Shares the voice pill on the phone page rather than adding a second one:
     // the two are never in flight at once (`startCapture` ends a voice
@@ -1474,6 +1693,37 @@ async function main() {
     },
     onDone: () => void restoreView(),
   });
+
+  // The glasses' own battery, for the header cluster. Subscribed regardless
+  // of the telemetry gate: this is the associate's battery shown to the
+  // associate on their own face, which is not measurement — nothing here is
+  // sent anywhere. It redraws the frame only when the 20% light changes what
+  // it says, and only when the frame is ours to redraw.
+  bridge.onDeviceStatus((status) => {
+    if (typeof status.batteryPercent !== "number") return;
+    const was = battery;
+    battery = status.batteryPercent;
+    const lit = (v: number | null) => v !== null && v <= 20;
+    const changed = lit(was) !== lit(battery) || (lit(battery) && was !== battery);
+    const ownFrame = !onUrgent && !onRequest && menuIndex < 0 && !onRuler
+      && voice.current === "idle" && vision.current === "idle";
+    if (changed && pageBuilt && ownFrame) {
+      if (engaged) void restoreView();
+      else void showIdle();
+    }
+  });
+
+  // The idle clock has to tick. Nothing else ever repainted the resting
+  // screen, so before this the clock — text or hero — was only as fresh as
+  // the last event that happened to arrive. Repaint only when the minute
+  // actually changed, and only when idle truly owns the frame, so the wire
+  // carries three updates an hour and never interrupts anything.
+  let idleMinute = clockLabel();
+  setInterval(() => {
+    if (clockLabel() === idleMinute) return;
+    idleMinute = clockLabel();
+    if (pageBuilt && onRootPage()) void showIdle();
+  }, 5_000);
 
   bridge.onEvenHubEvent((event: any) => {
     if (event?.audioEvent) return voice.onAudioChunk(event.audioEvent.audioPcm);
@@ -1597,9 +1847,10 @@ async function main() {
     inbox.push(m);
     if (inbox.length > 20) inbox.shift();
     if (engaged) {
-      // Do not touch the frame. The rail picks up the unread count on its
-      // next render, and the associate reads it when they choose.
-      if (lastDisplay) { railFacts = railFor(lastDisplay); rebuildNext(); void renderCue(cueOf(lastDisplay)); }
+      // Do not touch what the associate is looking at — repaint the same
+      // view, which picks up the header's unread count and, on the FLOOR
+      // card, the new message itself.
+      void restoreView();
     } else if (prefs.floorComms === "everything") {
       void showFloorMenu();
     }

@@ -30,7 +30,8 @@ const check = (name, ok, detail = "") => {
 const shapeOf = (cue) => {
   const p = buildCue(cue);
   return [
-    ...p.textObject.map((c) => `t${c.containerID}`),
+    ...p.textObject.map(
+      (c) => `t${c.containerID}${c.borderWidth ? `b${c.borderWidth}` : ""}`),
     ...(p.listObject || []).map(
       (c) => `l${c.containerID}:${(c.itemContainer?.itemName || []).join("|")}`,
     ),
@@ -80,12 +81,13 @@ for (const [name, cue] of Object.entries({ idle: IDLE, guest: GUEST, pick: PICK 
   check("an over-budget page throws instead of failing silently", threw);
 }
 
-// t6 is the structural rule, which every cue page carries — see `buildCue`.
-// It is a *text* container and the page is at seven of the host's eight on the
+// t6 is the card frame, which every cue page carries — see `buildCue`. It is
+// a *text* container (the border draws the card, the content is the title),
+// and the railed page with a name row is at eight of the host's eight on the
 // wordmark fallback, which is why the voice indicator shares the clock's
 // container rather than taking a ninth that would render the page as nothing.
-check("a cue with no rail keeps the original container set, plus the rule",
-  shapeOf(IDLE) === "t1,t2,t3,t4,t5,t6,t7", shapeOf(IDLE));
+check("a cue with no rail keeps the original container set, plus the frame",
+  shapeOf(IDLE) === "t1,t2,t6b1,t3,t4,t5,t7", shapeOf(IDLE));
 
 // Scrolling between modules must NOT force a rebuild — same containers, only
 // text changes. That is the whole point of the cheap path.
@@ -272,22 +274,54 @@ check("the mark and the wordmark are different shapes",
     JSON.stringify(p.listObject[0].itemContainer.itemName));
 }
 
-// The rail carries the unread count as a sixth row — the thing that makes the
-// priority tier free. If FACT_SLOTS ever drops below six this silently stops
-// appearing, which is the failure mode worth a test.
+// The text rail caps at five rows now — the name has its own container above
+// it, and the unread count moved to the header cluster where it shows on
+// every page. A sixth fact is dropped rather than drawn on the footer.
 {
   const railed = buildCue({
-    lines: ["A", "B", "C"],
-    facts: ["SARAH CHEN", "2 MSG", "ICON", "4200 PTS", "TOP M", "BTM 28X30"],
+    lines: ["A", "B", "C"], name: "SARAH CHEN",
+    facts: ["ICON", "4200 PTS", "TOP M", "BTM 28X30", "OUT L", "EXTRA ROW"],
     meta: ["DENIM WALL"], moduleIndex: 0, moduleCount: 4, logo: true,
   });
   const rail = railed.listObject[0];
-  check("a six-row rail still fits above the footer and inside budget",
-    rail.itemContainer.itemName.length === 6
+  check("a full rail is five rows under the name and clears the footer",
+    rail.itemContainer.itemName.length === 5
     && rail.yPosition + rail.height <= 288 - 34
     && railed.textObject.length <= 8,
     `rail ends ${rail.yPosition + rail.height}, ${railed.textObject.length} text`);
 }
+
+// The hero rail: an image container in the rail's place, with the text rows
+// gone — and it must be a different shape from the text rail, or the fallback
+// after a host refusal would cheap-path into containers that do not exist.
+{
+  const hero = buildCue({
+    lines: ["A", "B", "C"], name: "SARAH CHEN", hero: true,
+    facts: ["ICON", "TOP M"], meta: ["DENIM WALL"], moduleCount: 4, logo: true,
+  });
+  check("the hero rail is one image container and no list",
+    hero.imageObject?.some((c) => c.containerName === "cue-hero")
+    && !hero.listObject?.length,
+    JSON.stringify(hero.imageObject?.map((c) => c.containerName)));
+  check("hero and text rails are different shapes",
+    shapeOf({ lines: ["A"], name: "S", facts: ["TOP M"], hero: true })
+      !== shapeOf({ lines: ["A"], name: "S", facts: ["TOP M"] }));
+  const total = hero.textObject.length + (hero.listObject?.length || 0)
+              + (hero.imageObject?.length || 0);
+  check("the marked hero page is inside every budget",
+    hero.textObject.length <= 8 && hero.imageObject.length <= 4 && total <= 12,
+    `${hero.textObject.length} text, ${hero.imageObject.length} image, ${total} total`);
+}
+
+// Focus is a border-width change, and border width rides in the shape key —
+// entering a card must rebuild (the cheap path cannot send a border), and
+// scrolling a focused card's content must stay cheap.
+check("clicking into a card is a shape change",
+  shapeOf({ ...GUEST, focused: true }) !== shapeOf(GUEST),
+  `${shapeOf({ ...GUEST, focused: true })}`);
+check("scrolling inside a focused card is the cheap path",
+  shapeOf({ ...GUEST, focused: true, lines: ["D", "E", "F"] })
+    === shapeOf({ ...GUEST, focused: true }));
 
 // --- the container budget the rule and the mic had to fit inside ------------
 //
@@ -300,17 +334,18 @@ check("the mark and the wordmark are different shapes",
 // This is the assertion behind two decisions worth not undoing: the voice
 // indicator shares the clock's container, and the floor menu has no rule.
 {
-  const p = buildCue({ ...GUEST, logo: false, mic: "open" });
+  const p = buildCue({ ...GUEST, name: "SARAH CHEN", logo: false, mic: "open" });
   const total = p.textObject.length + (p.listObject?.length || 0)
               + (p.imageObject?.length || 0);
-  check("the wordmark fallback with a rail, modules and a rule is exactly at the cap",
+  check("the wordmark fallback with a name, rail and frame is exactly at the cap",
     p.textObject.length === 8 && total <= 12,
     `${p.textObject.length} text, ${total} total: ` +
     p.textObject.map((c) => c.containerName).join(","));
 
+  // Right-aligned by leading spaces, so the *trimmed* content is the cluster.
   const mic = p.textObject.find((c) => c.containerName === "cue-clock");
   check("the mic state rides in the clock rather than in a ninth container",
-    mic.content.startsWith("█"), JSON.stringify(mic.content));
+    mic.content.trim().startsWith("█"), JSON.stringify(mic.content.trim()));
 }
 
 const failed = results.filter((r) => !r).length;
@@ -353,6 +388,31 @@ check("the same guest twice is still the cheap path",
 check("cue lines changing under an unchanged rail is the cheap path",
   shapeOf(GUEST_A) === shapeOf({ ...GUEST_A, lines: ["SHOW THE CREW", "AT KNITWEAR", ""] }),
   "this is the hot path — every card scroll and every voice answer");
+
+// --- the idle clock hero ----------------------------------------------------
+// A 48px dotted clock in the card body at rest. Image containers ride in the
+// shape key, so idle-with-clock and a voice answer over idle (no clock) are
+// different pages by construction.
+{
+  const idle = buildCue({ ...IDLE, heroClock: true, lines: [], logo: true });
+  check("idle draws the dotted clock hero",
+    idle.imageObject?.some((c) => c.containerName === "cue-idle-clock"),
+    JSON.stringify(idle.imageObject?.map((c) => c.containerName)));
+  check("a railed cue never draws the idle clock — the guest owns that space",
+    !buildCue({ ...GUEST, heroClock: true, logo: true }).imageObject
+      ?.some((c) => c.containerName === "cue-idle-clock"));
+  check("the clock hero is a shape change",
+    shapeOf({ ...IDLE, heroClock: true, lines: [] }) !== shapeOf(IDLE));
+  const total = idle.textObject.length + (idle.listObject?.length || 0)
+              + (idle.imageObject?.length || 0);
+  check("the resting screen is inside every budget",
+    idle.textObject.length <= 8 && idle.imageObject.length <= 4 && total <= 12,
+    `${idle.textObject.length} text, ${idle.imageObject.length} image, ${total} total`);
+  const clock = idle.imageObject.find((c) => c.containerName === "cue-idle-clock");
+  check("the clock hero is inside the host's image size limits",
+    clock.width >= 20 && clock.width <= 288 && clock.height >= 20 && clock.height <= 144,
+    `${clock.width}x${clock.height}`);
+}
 
 console.log(`\n${results.length - failed}/${results.length} passed`);
 process.exit(failed ? 1 : 0);
