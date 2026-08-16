@@ -130,7 +130,7 @@ The left rail is ten panels in two groups:
 | Panel | What it is for |
 |---|---|
 | **Health** | What the platform can prove about itself right now. |
-| **Tenants** | Every retailer, their people, their hardware, what they've used. |
+| **Tenants** | Every retailer, their people, their hardware, what they've used — and the switches: the privacy board, and a **Floor** board carrying floor messages. That one is enforced rather than advisory: off removes both composers *and* refuses delivery at the server, so the canned backup call goes quiet too. It fails open, unlike the camera — a store turning messaging off is a deliberate act and a service blip is not. |
 | **CueSea staff** | Accounts with no tenant — us. Invite a colleague, change a role, end a session. |
 | **Plates** | Every printed door, how hard each is being used, and revocation. |
 | **Retention** | Each store's window, and what the last sweep actually deleted. |
