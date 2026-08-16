@@ -544,6 +544,156 @@ body::after {
   color: var(--sea-300); margin-right: 6px; font-variant-numeric: tabular-nums;
 }
 
+/* --- the Cue Lens, drawn ---------------------------------------------------
+   Not a card, not a panel, not an effect: a display. It sits inside a card
+   and is never treated like one — no blur, no radius, no lift, no border. The
+   only colour on it is hud green, and green does not leave this block.
+
+   Geometry is the settled one and every number here is the same number the
+   component holds in pixels of a 640 × 350 frame:
+
+     row    26/350   7.4286cqh — every vertical measure is a multiple of it
+     pad    20/640   3.125cqw
+     rail  188/640  29.375cqw — twelve characters, so MAYA OKAFOR fits whole
+     gutter 14/640   2.1875cqw
+
+   The outer .lens establishes `container-type: size` and .lens-screen reads
+   cqh/cqw off it. It has to be two elements: an element with
+   `container-type: size` cannot query itself, and getting that wrong costs an
+   hour — it already did once. */
+
+.lens-block { display: flex; flex-direction: column; gap: 10px; }
+
+.lens {
+  position: relative;
+  width: 100%;
+  /* The panel's real proportion, held at every width. Nothing inside is
+     allowed to change it. */
+  aspect-ratio: 640 / 350;
+  /* Opaque black. The G2 is emissive: what is not lit is not there. */
+  background: #000;
+  overflow: hidden;
+  border-radius: 0;
+  container-type: size;
+}
+
+.lens-screen {
+  position: absolute; inset: 0;
+  --row: 7.4286cqh;
+  --pad: 3.125cqw;
+  --rail: 29.375cqw;
+  --gutter: 2.1875cqw;
+  /* Glyph advance: 0.6 of the row, the same worst-case ratio every character
+     budget in the component is derived from. Reached by spacing the face out
+     to it rather than by trusting the face's own metrics — `1ch` is this
+     element's own advance, so the sum is exactly `--adv` whether Doto loaded
+     or the monospace fallback did. That is what makes "twelve characters" a
+     measurement rather than a claim. */
+  --adv: calc(var(--row) * .6);
+  /* Doto — the dot-matrix face that stands in for the G2's monochrome grid.
+     brand.css already generates this stack as `--matrix`; `--dot` is the name
+     the design docs use for it, and it is aliased rather than retyped so the
+     two cannot drift. Inside a lens and nowhere else. */
+  --dot: var(--matrix);
+
+  font-family: var(--dot);
+  /* One type size throughout. The hardware has a legibility floor and the
+     sentence already sits on it, so there is no hierarchy to express in size
+     — the hierarchy here is brightness, which is the only one the glass has. */
+  font-size: calc(var(--row) * .78);
+  line-height: var(--row);
+  letter-spacing: calc(var(--adv) - 1ch);
+  font-weight: 600;
+  font-variant-ligatures: none;
+  color: var(--lens-dim, var(--hud-300));
+  padding: calc(var(--row) * .5) var(--pad);
+  display: flex; flex-direction: column;
+}
+
+/* Every row is one row tall and clips rather than wraps — the component has
+   already fitted its text to the box, so anything reaching this rule is a
+   budget that stopped being true and should look wrong. */
+.lens-row { height: var(--row); white-space: nowrap; overflow: hidden; }
+
+.lens-head { display: flex; align-items: center; justify-content: space-between; }
+/* The mark, monochrome: the host quantises it to four greys and the flame cue
+   is a colour this display does not have. */
+.lens-head svg { width: var(--row); height: var(--row); display: block; }
+.lens-head svg circle { fill: currentColor; }
+.lens-clock { font-variant-numeric: tabular-nums; }
+
+/* A whole row between the header and the body — which is 2.5 rows from the
+   top of the frame, the same place the body starts on the panel (52/288). */
+.lens-body {
+  flex: 1; min-height: 0;
+  margin-top: var(--row);
+  display: grid;
+  grid-template-columns: var(--rail) 1fr;
+  column-gap: var(--gutter);
+}
+/* No rail, no rail column. An unrailed page indented to where the rail would
+   have been pays the rail's cost and gets none of its benefit — and idle,
+   which is always unrailed, is the screen that most needs the width. */
+.lens-body[data-railed="no"] { grid-template-columns: 1fr; }
+
+/* Fixed on the left while the module scrolls on the right. `start` so the
+   hairline runs the facts' height rather than the frame's. */
+.lens-rail { position: relative; align-self: start; }
+/* A hairline where the fixed column ends. Structure, not chrome — and it
+   lives in the gutter, so it costs the rail none of its twelve characters. */
+.lens-rail::after {
+  content: ""; position: absolute; top: 0; bottom: 0;
+  right: calc(var(--gutter) / -2); width: 1px;
+  background: color-mix(in srgb, var(--lens-dim, var(--hud-300)) 46%, transparent);
+}
+.lens-fact { color: var(--lens-dim, var(--hud-300)); }
+
+/* The three lines: the only peak-brightness element on the display. */
+.lens-line {
+  color: var(--lens, var(--hud-500));
+  /* An emissive panel blooms. Kept under a fifth of a row so it reads as
+     light rather than as a glow effect. */
+  text-shadow: 0 0 calc(var(--row) * .16) color-mix(in srgb, var(--lens, var(--hud-500)) 30%, transparent);
+}
+
+/* Split on the same two columns as the body — but the left cell runs to where
+   the module column starts, not to the rail's border. The gutter above it is
+   dead space, and at this type size that one column is the difference between
+   "DENIM WALL" and nothing. */
+.lens-foot { display: grid; grid-template-columns: calc(var(--rail) + var(--gutter)) 1fr; }
+/* Nothing sharing the row — idle. Idle's strip is the load-bearing one: it
+   carries the two gestures, and one of them quits the app. */
+.lens-foot[data-shares="no"] { grid-template-columns: 1fr; }
+.lens-module { text-align: right; }
+
+/* Boot sweep: once, on arrival, then never again. Nothing on this surface
+   loops. */
+.lens-scan {
+  position: absolute; left: 0; right: 0; top: 0; height: 24%;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    transparent,
+    color-mix(in srgb, var(--lens, var(--hud-500)) 12%, transparent),
+    transparent);
+  animation: lens-scan 1000ms cubic-bezier(.33, .06, .2, 1) 1 both;
+}
+@keyframes lens-scan {
+  from { transform: translateY(-110%); opacity: 1; }
+  to   { transform: translateY(520%);  opacity: 0; }
+}
+/* A branch taken before the loop starts, not a shorter animation: the lens is
+   simply already at its final state. */
+@media (prefers-reduced-motion: reduce) {
+  .lens-scan { display: none; }
+}
+
+/* A person wrote this line, so it stays in the sans and out of the lens.
+   Measured against the card it sits on, not the ground. */
+.lens-caption {
+  font-family: var(--sans); font-size: 12px; line-height: 1.5;
+  color: var(--slate-300);
+}
+
 /* Touch: 44px is the floor on a finger. The segmented control stays compact
    on a pointer and grows on a phone. */
 @media (pointer: coarse) {

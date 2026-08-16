@@ -6,6 +6,31 @@ import GlassesDisplay from "./GlassesDisplay.jsx";
 // cannot hold the AI service key.
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:4000";
 
+const ZONE = "Denim Wall";
+
+/**
+ * The lens fact rail, from the guest the socket sent.
+ *
+ * Tier, points, then what fits them — the name is the lens's own first row and
+ * is passed separately. TOP/BTM rather than TOPS/BOTTOMS: the rail holds
+ * twelve characters and "BOTTOMS 28X30" is thirteen, so it clipped to
+ * "BOTTOMS 28X" and lost the inseam, which is the half of that fact worth
+ * having. Abbreviating the label saves the value.
+ *
+ * Everything here is conditional on the payload actually carrying it. A rail
+ * row invented to fill the column is worse than a short rail.
+ */
+function railFacts(guest) {
+  if (!guest) return [];
+  const sizes = guest.sizes || {};
+  return [
+    guest.tier,
+    typeof guest.points === "number" ? `${guest.points} PTS` : "",
+    sizes.tops ? `TOP ${sizes.tops}` : "",
+    sizes.bottoms ? `BTM ${sizes.bottoms}` : "",
+  ].filter(Boolean);
+}
+
 export default function AssociateView() {
   const [display, setDisplay] = useState(null);
   const [guests, setGuests] = useState([]);
@@ -15,7 +40,7 @@ export default function AssociateView() {
 
   useEffect(() => {
     if (!registered.current) {
-      socket.emit("register", { role: "associate", name: "You (Demo)", zone: "Denim Wall", tenant: currentTenant() });
+      socket.emit("register", { role: "associate", name: "You (Demo)", zone: ZONE, tenant: currentTenant() });
       registered.current = true;
     }
     const onDisplay = (payload) => setDisplay(payload);
@@ -36,7 +61,7 @@ export default function AssociateView() {
   }, []);
 
   const simulateBeacon = (guestId) =>
-    socket.emit("beacon:guest-enter", { guestId, zone: "Denim Wall" });
+    socket.emit("beacon:guest-enter", { guestId, zone: ZONE });
 
   const endSession = () => {
     setDisplay(null);
@@ -55,7 +80,21 @@ export default function AssociateView() {
       <div className="grid" style={{ gap: 16 }}>
         <div className="card">
           <h3>In-Lens View</h3>
-          <GlassesDisplay lines={display?.lines} />
+          {/* The socket's `lines` is still the only required prop; everything
+              else is what the same payload happens to carry, and the lens
+              degrades to an empty rail without it rather than inventing a
+              guest. */}
+          <GlassesDisplay
+            lines={display?.lines}
+            name={display?.guest?.name}
+            facts={railFacts(display?.guest)}
+            zone={ZONE}
+            cycle={
+              display?.recommendations?.length
+                ? { index: 0, count: display.recommendations.length }
+                : undefined
+            }
+          />
         </div>
 
         <div className="card">
