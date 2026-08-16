@@ -320,24 +320,37 @@ def test_the_mailer_builds_the_path_the_frontends_actually_serve():
     )
 
 
+EMITTERS = {"internal": "scripts/emit-routes.mjs", "web": "scripts/emit-here.mjs"}
+
+
 @pytest.mark.parametrize("package", ["internal", "web"])
-def test_the_host_routes_a_cold_navigation_to_the_link(package):
-    """A deep link is not a client-side concern.
+def test_the_host_serves_a_cold_navigation_to_the_link(package):
+    """A deep link is not a client-side concern, and a rewrite is not enough.
 
     Following an invitation from an email client is a fresh request to the CDN
-    for a path no file exists at. Without a rewrite the app's JavaScript never
-    runs, so no amount of routing inside React can save it — which is exactly
-    how this failed in production.
+    for a path no file exists at. Without something serving it the app's
+    JavaScript never runs, so no amount of routing inside React can save it.
+
+    This asserts a *file*, not a rewrite. Both were tried here. The rewrite in
+    `vercel.json` deployed and still 404'd — first on Studio's `/here`, then
+    again on `/set-password`, in front of the first colleague we ever invited.
+    A rewrite only works if the host reads that config from the directory it
+    was written in; a physical file cannot be misconfigured.
     """
-    cfg = REPO / "packages" / package / "vercel.json"
-    assert cfg.exists(), (
-        f"packages/{package} has no vercel.json, so {LINK_PATH} is served by "
-        f"nothing and a cold navigation 404s."
+    pkg = REPO / "packages" / package
+    emitter = pkg / EMITTERS[package]
+    assert emitter.exists(), f"packages/{package} has no route emitter."
+
+    body = emitter.read_text()
+    assert LINK_PATH.lstrip("/") in body, (
+        f"{EMITTERS[package]} does not emit {LINK_PATH}.html, so a cold "
+        f"navigation to the invitation link 404s."
     )
-    rewrites = json.loads(cfg.read_text()).get("rewrites") or []
-    assert any(r.get("source") == LINK_PATH for r in rewrites), (
-        f"packages/{package}/vercel.json does not rewrite {LINK_PATH} to "
-        f"index.html. Invitations sent to this app will 404."
+
+    build = json.loads((pkg / "package.json").read_text())["scripts"]["build"]
+    assert EMITTERS[package].split("/")[-1] in build, (
+        f"packages/{package} has an emitter that its build never runs, so the "
+        f"deployed bundle will not contain {LINK_PATH}.html."
     )
 
 
