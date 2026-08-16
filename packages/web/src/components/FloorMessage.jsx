@@ -38,7 +38,9 @@ export default function FloorMessage({ roster, user }) {
         tone: "error",
         text: reason === "not_on_floor"
           ? "They're no longer on the floor — nothing was sent."
-          : "Not delivered.",
+          : reason === "floor_comms_off"
+            ? "Floor messages are switched off for this store, in Console."
+            : "Not delivered.",
       });
     socket.on("radio:delivered", onDelivered);
     socket.on("radio:undelivered", onUndelivered);

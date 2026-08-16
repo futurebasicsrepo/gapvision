@@ -12,6 +12,7 @@
  * Starts its own server on an unused port. No AI service required.
  */
 import { spawn } from "node:child_process";
+import http from "node:http";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { io } from "socket.io-client";
@@ -233,8 +234,90 @@ async function main() {
   for (const s of [ann, ben, mgr, otherAssoc]) s.close();
 }
 
+/**
+ * The Console switch, enforced.
+ *
+ * Run separately because it needs a *different* server: one pointed at a stub
+ * capabilities endpoint that says this tenant has floor messaging off. The
+ * flag was reported to clients and never enforced, which was fine while it
+ * only decided whether a phone drew a composer and is not fine now that
+ * Console offers a switch labelled off.
+ */
+async function offSwitch() {
+  const capsPort = Number(PORT) + 20;
+  const stub = http.createServer((req, res) => {
+    // Read by hand: `URL` is shadowed at the top of this file by the server
+    // address, so the global constructor is not reachable here.
+    const off = /[?&]tenant=t_quiet(&|$)/.test(req.url || "");
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ floor_comms: !off, voice: true, known: true }));
+  });
+  await new Promise((r) => stub.listen(capsPort, r));
+  // Prove the stub answers before anything depends on it. The switch fails
+  // *open* by design — a capabilities lookup that cannot connect leaves the
+  // floor talking — so a stub that is not up yet reads exactly like a store
+  // with messaging enabled, and the suite would pass or fail on a race
+  // rather than on the behaviour.
+  for (let i = 0; i < 40; i++) {
+    try {
+      const probe = await fetch(`http://localhost:${capsPort}/api/tenant/capabilities?tenant=t_quiet`);
+      if ((await probe.json())?.floor_comms === false) break;
+    } catch { /* not up yet */ }
+    await sleep(100);
+  }
+
+  const port = Number(PORT) + 21;
+  const child2 = spawn(process.execPath, [SERVER], {
+    env: { ...process.env, PORT: String(port), AI_SERVICE_URL: `http://localhost:${capsPort}` },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  try {
+    for (let i = 0; i < 40; i++) {
+      try { if ((await fetch(`http://localhost:${port}/health`)).ok) break; } catch { /* not up */ }
+      await sleep(250);
+    }
+    const link = (tenant) => new Promise((resolve, reject) => {
+      const s = io(`http://localhost:${port}`, { transports: ["websocket"], reconnection: false });
+      s.on("connect", () => { s.emit("register", { role: "associate", name: "A", tenant }); resolve(s); });
+      s.on("connect_error", reject);
+    });
+
+    const quiet = await link("t_quiet");
+    const quietHeard = [];
+    const refusals = [];
+    quiet.on("radio:message", (m) => quietHeard.push(m));
+    quiet.on("radio:undelivered", (r) => refusals.push(r));
+    await sleep(300);
+    quiet.emit("radio:send", { message: "anyone about" });
+    await sleep(400);
+
+    check("a store with floor messages off does not deliver them",
+      quietHeard.length === 0, JSON.stringify(quietHeard));
+    check("and the sender is told why, rather than the message vanishing",
+      refusals.at(-1)?.reason === "floor_comms_off",
+      JSON.stringify(refusals.at(-1)));
+
+    const loud = await link("t_loud");
+    const loudHeard = [];
+    loud.on("radio:message", (m) => loudHeard.push(m));
+    await sleep(300);
+    loud.emit("radio:send", { message: "still talking" });
+    await sleep(400);
+    check("a store that never touched the switch is unaffected",
+      loudHeard.some((m) => m.message === "still talking"),
+      JSON.stringify(loudHeard.map((m) => m.message)));
+
+    quiet.close();
+    loud.close();
+  } finally {
+    child2.kill("SIGTERM");
+    stub.close();
+  }
+}
+
 try {
   await main();
+  await offSwitch();
 } catch (e) {
   check("suite ran", false, String(e.message || e));
   console.error(serverLog.join(""));

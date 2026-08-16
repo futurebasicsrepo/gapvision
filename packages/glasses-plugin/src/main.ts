@@ -2184,7 +2184,9 @@ async function main() {
     // and that reached nobody is the worst failure this feature has.
     const why = reason === "not_on_floor"
       ? "They're no longer on the floor — nothing was sent."
-      : "Not delivered.";
+      : reason === "floor_comms_off"
+        ? "Your store has floor messages switched off."
+        : "Not delivered.";
     setFloorStatus(why, "warn");
     log(`radio → UNDELIVERED (${reason}): ${message ?? ""}`);
   });
