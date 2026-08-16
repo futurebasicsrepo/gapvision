@@ -118,7 +118,12 @@ def update_tenant(id_or_slug: str, req: TenantUpdate,
     sets, params = [], []
     for key, value in fields.items():
         if key in ("config", "privacy"):
-            sets.append(f"{key} = %s::jsonb")
+            # Merged, never replaced. These are single jsonb columns holding
+            # unrelated switches, and a client that PATCHes one key must not
+            # be able to wipe its siblings — the UI merges before sending,
+            # but a stale tab or a hand-written curl should be equally safe.
+            # `||` is jsonb concatenation: right side wins per key.
+            sets.append(f"{key} = COALESCE({key}, '{{}}'::jsonb) || %s::jsonb")
             import json
             params.append(json.dumps(value))
         else:

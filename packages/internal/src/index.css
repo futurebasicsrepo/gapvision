@@ -772,3 +772,79 @@ body::before {
     scroll-behavior: auto !important;
   }
 }
+
+/* --- the systems board -------------------------------------------------------
+   Tenant privacy as mission control: each capability is one row — a state
+   dot, a machine-face label, and a switch whose state is readable from
+   across the room. Sea when lit, never green: a switch's state is a
+   measurement (see brand.css colour law). The board sits a shade below the
+   card so the rows read as instruments in a console, not fields in a form. */
+.mc-board {
+  background: var(--sea-900);
+  border: 1px solid var(--sea-700);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.mc-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+.mc-row + .mc-row { border-top: 1px solid var(--sea-800); }
+.mc-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--sea-700);
+  flex: none;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.mc-row.on .mc-dot {
+  background: var(--sea-300);
+  box-shadow: 0 0 8px var(--sea-300);
+}
+.mc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mc-label {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .08em;
+  color: var(--sea-100);
+}
+.mc-row.on .mc-label { color: #fff; }
+.mc-desc { font-size: 12px; line-height: 1.45; color: var(--sea-200); opacity: .75; }
+.mc-switch {
+  display: flex; align-items: center; gap: 8px;
+  background: none; border: 0; padding: 6px; cursor: pointer;
+  flex: none;
+}
+.mc-switch:disabled { cursor: default; opacity: .7; }
+.mc-track {
+  width: 40px; height: 22px; border-radius: 11px;
+  background: var(--sea-800);
+  border: 1px solid var(--sea-700);
+  display: inline-flex; align-items: center;
+  padding: 2px;
+  transition: background .15s ease, border-color .15s ease;
+}
+.mc-row.on .mc-track { background: var(--sea-500); border-color: var(--sea-400); }
+.mc-knob {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--sea-200);
+  transition: transform .15s ease, background .15s ease;
+}
+.mc-row.on .mc-knob { transform: translateX(18px); background: #fff; }
+.mc-state {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .08em;
+  width: 26px; text-align: left;
+  color: var(--sea-200);
+}
+.mc-row.on .mc-state { color: var(--sea-100); }
+.mc-select {
+  flex: none;
+  background: var(--sea-800); color: var(--sea-100);
+  border: 1px solid var(--sea-700); border-radius: 8px;
+  font-family: var(--mono); font-size: 12px;
+  padding: 6px 8px;
+}
+@media (pointer: coarse) { .mc-switch { min-height: 44px; } }
