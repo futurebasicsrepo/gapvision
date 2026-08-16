@@ -314,7 +314,13 @@ def usage_all_tenants(days: int = 30) -> list[dict]:
     """CueSea-side billing view: one row per tenant for the window."""
     return db.query(
         """
+        -- `privacy` and `crm_provider` ride along because the Console's
+        -- tenant detail is fed from this list. They were absent, so every
+        -- privacy control rendered "off" whatever the database held — a
+        -- toggle that cannot show its own state is a toggle that "doesn't
+        -- work", which is exactly how it was reported from the floor.
         SELECT t.id, t.slug, t.name, t.billing_plan, t.status,
+               t.privacy, t.crm_provider,
                COALESCE(sum(u.engagements), 0)   AS engagements,
                COALESCE(sum(u.voice_queries), 0) AS voice_queries,
                COALESCE(sum(u.stt_seconds), 0)   AS stt_seconds,

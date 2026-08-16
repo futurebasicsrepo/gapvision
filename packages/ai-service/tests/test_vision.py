@@ -29,7 +29,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import capabilities, crm, vision
-from app.llm import AnthropicProvider, MockProvider, VisionUnsupported
+from app.llm import MockProvider, OpenAIProvider, VisionUnsupported
 from app.main import app
 
 #: Big enough to clear the "too small to read anything" floor, small enough to
@@ -289,14 +289,14 @@ def test_a_photograph_of_a_person_is_refused_on_the_glass(monkeypatch):
 
 def test_a_provider_without_vision_says_so_clearly():
     with pytest.raises(VisionUnsupported) as e:
-        AnthropicProvider().read_image(IMAGE, "image/jpeg", "read it")
+        OpenAIProvider().read_image(IMAGE, "image/jpeg", "read it")
     assert "no vision support" in str(e.value), str(e.value)
     assert "GAPVISION_LLM" in str(e.value), (
         f"the error has to name what an operator changes: {e.value}")
 
 
 def test_a_provider_without_vision_is_an_operator_error_not_a_blank_lens(monkeypatch):
-    monkeypatch.setattr(vision, "get_provider", lambda: AnthropicProvider())
+    monkeypatch.setattr(vision, "get_provider", lambda: OpenAIProvider())
     with pytest.raises(vision.VisionRefused) as e:
         vision.analyze(tenant="gap", kind="sku", image_base64=IMAGE,
                        mime="image/jpeg", note=None, crm=FakeCRM())
