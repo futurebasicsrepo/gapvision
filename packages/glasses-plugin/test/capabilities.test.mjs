@@ -15,9 +15,12 @@
  * camera control. So the fetch is asserted to fail *closed* for each of them
  * separately, rather than trusting one happy-path check.
  *
- * The rows are asserted twice — once as data, once as the text actually on the
- * glass — because "not in the list" and "not rendered" are different claims
- * and only the second is what an associate sees.
+ * The affordance moved from the floor menu to the phone page — the trigger is
+ * a card on the page, the readout is still the glass. So this file covers the
+ * gate *as data*, in all three states, and `vision-browser.mjs` covers the
+ * same three states as rendered DOM. "Not in the list" and "not on the page"
+ * are different claims and only the second is what an associate sees; neither
+ * test is allowed to be the only one.
  */
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
@@ -35,7 +38,10 @@ await build({
   bundle: true, format: "esm", external: ["./bridge"], outfile: layoutOut, logLevel: "error",
 });
 const V = await import(`file://${visionOut}`);
-const { buildMenu, RAIL_LINE_CHARS } = await import(`file://${layoutOut}`);
+// `layout.mjs` is built here rather than only used here: `page-shape.test.mjs`
+// imports it from `dist-test`, so dropping this build would break that suite
+// from a change that looks unrelated.
+const { RAIL_LINE_CHARS } = await import(`file://${layoutOut}`);
 
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -112,45 +118,37 @@ const ON = { camera_capture: true, voice: true, floor_comms: true };
 const OFF = { camera_capture: false, voice: true, floor_comms: true };
 
 check("the affordance is present when the flag is true",
-  V.visionMenuItems(ON).length === 2 &&
-  V.visionMenuItems(ON).every((i) => i.label && (i.kind === "sku" || i.kind === "part")),
-  JSON.stringify(V.visionMenuItems(ON)));
+  V.captureControls(ON).length === 2 &&
+  V.captureControls(ON).every((i) => i.label && (i.kind === "sku" || i.kind === "part")),
+  JSON.stringify(V.captureControls(ON)));
+
+check("the affordance offers a tag and a part, which the service needs told apart",
+  V.captureControls(ON).map((c) => c.kind).join(",") === "sku,part",
+  JSON.stringify(V.captureControls(ON).map((c) => c.kind)));
 
 check("the affordance is absent when the flag is false",
-  V.visionMenuItems(OFF).length === 0,
-  JSON.stringify(V.visionMenuItems(OFF)));
+  V.captureControls(OFF).length === 0,
+  JSON.stringify(V.captureControls(OFF)));
 
 check("the affordance is absent when the fetch failed",
-  V.visionMenuItems(V.NO_CAPABILITIES).length === 0 &&
-  V.visionMenuItems(await V.fetchCapabilities("http://x", "gap",
+  V.captureControls(V.NO_CAPABILITIES).length === 0 &&
+  V.captureControls(await V.fetchCapabilities("http://x", "gap",
     fetchOf(async () => { throw new Error("down"); }))).length === 0);
 
 check("the affordance is absent when capabilities never arrived at all",
-  V.visionMenuItems(undefined).length === 0 &&
-  V.visionMenuItems(null).length === 0 &&
-  V.visionMenuItems({}).length === 0);
+  V.captureControls(undefined).length === 0 &&
+  V.captureControls(null).length === 0 &&
+  V.captureControls({}).length === 0);
 
-// --- and absent on the glass, not merely absent from an array --------------
-
-/** The floor menu exactly as main.ts assembles it: waiting messages, then the
- *  camera rows if there are any, then the phrases. */
-const PHRASES = ["NEED BACKUP", "ON MY WAY", "SIZE CHECK"];
-const menuTextFor = (caps) => {
-  const items = [...V.visionMenuItems(caps).map((v) => v.label), ...PHRASES];
-  const page = buildMenu("FLOOR", items, 0, { footer: "PRESS TO SEND · 2X BACK" });
-  return [
-    ...page.textObject.map((c) => c.content),
-    ...(page.listObject || []).flatMap((c) => c.itemContainer.itemName),
-  ].join("\n");
-};
-
-check("nothing on the rendered menu mentions scanning when the flag is off",
-  !/SCAN/.test(menuTextFor(OFF)), JSON.stringify(menuTextFor(OFF)));
-check("the rendered menu offers both scans when the flag is on",
-  /SCAN A TAG/.test(menuTextFor(ON)) && /SCAN A PART/.test(menuTextFor(ON)),
-  JSON.stringify(menuTextFor(ON)));
-check("nothing mentions scanning when the fetch failed",
-  !/SCAN/.test(menuTextFor(V.NO_CAPABILITIES)));
+// --- written for the page it now lives on ----------------------------------
+// The trigger used to be two rows in the floor menu, written in glass grammar:
+// uppercase, no punctuation, twenty-one characters. It is a button on the
+// phone now, and a button a person presses is sentence case in the sans face.
+// A label that drifts back to SHOUTING is the visible sign the control has
+// drifted back toward a surface that has no buttons.
+check("the control labels are written for a page, not for the glass",
+  V.captureControls(ON).every((c) => /^Scan a (tag|part)$/.test(c.label)),
+  JSON.stringify(V.captureControls(ON).map((c) => c.label)));
 
 // --- which failure, not "something went wrong" ------------------------------
 

@@ -10,16 +10,23 @@
  *
  * What it is here to prove, in order of how badly it would hurt to get wrong:
  *
- *   1. With the camera off, there is no camera control on the glass. Not
- *      greyed out — absent. Everything else on that screen still works.
- *   2. With it on, the control is reachable by gestures that already exist,
- *      and the capture runs through the MockBridge's canned photo.
- *   3. The glass shows a stage and a running count while the round trip is in
+ *   1. With the camera off, there is no camera control on the phone page. Not
+ *      greyed out — absent. Everything else on the page still works.
+ *   2. A capabilities fetch that never lands is the same as a store that said
+ *      no. This is the state a fail-open bug would hide in, because in dev the
+ *      fetch always succeeds.
+ *   3. With it on, the card is on the page and the capture runs through the
+ *      MockBridge's canned photo.
+ *   4. The glass shows a stage and a running count while the round trip is in
  *      flight, rather than freezing on the last frame.
- *   4. The answer comes back through the ordinary cue path — three lines and a
- *      meta strip, like every other cue.
- *   5. Each failure says which failure.
- *   6. The base64 never reaches the log.
+ *   5. The answer comes back through the ordinary cue path — three lines and a
+ *      meta strip, like every other cue — and lands on the *glass*. A phone
+ *      showing a result the glasses do not is the failure this product exists
+ *      to avoid, so the card is asserted not to carry the answer.
+ *   6. The glasses offer no scan of their own. The trigger moved to the page;
+ *      the floor menu is phrases and waiting messages again.
+ *   7. Each failure says which failure.
+ *   8. The base64 never reaches the log.
  */
 import { chromium } from "playwright";
 
@@ -36,14 +43,17 @@ const browser = await chromium.launch(
 );
 const ctx = await browser.newContext();
 
-let cameraOn = false;
+/** "on" | "off" | "unreachable" — the three states the gate has to hold in. */
+let caps = "off";
 let posted = null;
 
-await ctx.route("**/api/tenant/capabilities**", (r) =>
-  r.fulfill({
+await ctx.route("**/api/tenant/capabilities**", (r) => {
+  if (caps === "unreachable") return r.abort("connectionrefused");
+  return r.fulfill({
     status: 200, contentType: "application/json",
-    body: JSON.stringify({ camera_capture: cameraOn, voice: true, floor_comms: true }),
-  }));
+    body: JSON.stringify({ camera_capture: caps === "on", voice: true, floor_comms: true }),
+  });
+});
 await ctx.route("**/api/vision/analyze", async (r) => {
   posted = JSON.parse(r.request().postData() || "{}");
   // Deliberately slow. The point of the progress screen is the seconds where
@@ -69,6 +79,12 @@ const pageErrors = [];
 const lensOf = (p) => () =>
   p.$$eval("#virtual-lens .lens-text, #virtual-lens .lens-item",
     (els) => els.map((e) => e.textContent).join(" | "));
+/** The capture card, or the empty string when there is no card at all. The
+ *  mount is always in the document; what matters is whether anything is in it. */
+const cardOf = (p) => () =>
+  p.$eval("#capture-mount", (el) => el.textContent.trim());
+const cardButtons = (p) => () =>
+  p.$$eval("#capture-mount button", (els) => els.map((e) => e.textContent));
 
 async function open() {
   const p = await ctx.newPage();
@@ -89,33 +105,62 @@ async function open() {
 {
   const p = await open();
   const lens = lensOf(p);
+  check("camera off: there is no capture card on the page",
+    (await cardOf(p)()) === "" && (await cardButtons(p)()).length === 0,
+    JSON.stringify(await cardOf(p)()));
   await p.click('[data-event="scroll-down"][data-source="ring"]');
   await p.waitForTimeout(300);
   const text = await lens();
-  check("camera off: nothing on the glass offers a scan", !/SCAN/.test(text), text);
+  check("camera off: nothing on the glass offers a scan", !/SCAN/i.test(text), text);
   check("camera off: the floor menu is otherwise intact", /NEED BACKUP/.test(text));
   await p.close();
 }
 
-// --- 2..4. the camera is on ------------------------------------------------
+// --- 2. the capabilities fetch never landed --------------------------------
+// The state a fail-open bug hides in: in dev this fetch always succeeds, so
+// nothing else in the suite would ever exercise it.
 
-cameraOn = true;
+{
+  caps = "unreachable";
+  const p = await open();
+  check("fetch failed: there is no capture card on the page",
+    (await cardOf(p)()) === "" && (await cardButtons(p)()).length === 0,
+    JSON.stringify(await cardOf(p)()));
+  const logged = await p.$eval("#event-log", (e) => e.textContent);
+  check("fetch failed: the log says which way the gate fell",
+    /capabilities: camera=off/.test(logged));
+  await p.close();
+}
+
+// --- 3..5. the camera is on ------------------------------------------------
+
+caps = "on";
 const p = await open();
 const lens = lensOf(p);
 const ring = (a) => p.click(`[data-event="${a}"][data-source="ring"]`);
 
+check("camera on: the card offers a tag and a part",
+  (await cardButtons(p)()).join(" | ") === "Scan a tag | Scan a part",
+  JSON.stringify(await cardButtons(p)()));
+
+// --- 6. and the glasses stay a display -------------------------------------
 await ring("scroll-down");
 await p.waitForTimeout(300);
 let text = await lens();
-check("camera on: both scan rows are on the glass",
-  /SCAN A TAG/.test(text) && /SCAN A PART/.test(text), text);
-check("the footer says what a press will do now", /PRESS TO SCAN/.test(text), text);
+check("camera on: the glasses still offer no scan of their own",
+  !/SCAN/i.test(text), text);
+check("camera on: the floor menu is phrases and messages again",
+  /NEED BACKUP/.test(text) && /PRESS TO SEND/.test(text), text);
+await ring("double-click");   // back out of the menu before shooting
+await p.waitForTimeout(200);
 
-await ring("click");
+await p.click("#capture-mount .btn-primary");
 await p.waitForTimeout(600);
 text = await lens();
 check("the glass says it is working, and for how long",
   /READING THE TAG/.test(text) && /\dS/.test(text), text);
+check("the phone says the same thing in its own words",
+  /WATCH THE GLASSES/i.test(await cardOf(p)()), await cardOf(p)());
 
 await p.waitForFunction(
   () => /BARREL JEAN/.test(document.getElementById("virtual-lens")?.textContent || ""),
@@ -125,20 +170,23 @@ text = await lens();
 check("the answer renders as an ordinary cue",
   /BARREL JEAN 28X30/.test(text) && /DENIM WALL BAY 3/.test(text) && /SKU 41221/.test(text),
   text);
+// The whole point of moving the trigger and not the readout. A phone that
+// answers is a phone an associate reads instead of looking up.
+check("the answer is on the glass and not on the card",
+  !/BARREL JEAN/.test(await cardOf(p)()), await cardOf(p)());
 check("the POST carried the tenant, the kind, the mime and an image",
   !!posted && posted.tenant === "gap" && posted.kind === "sku" &&
   posted.mime === "image/png" &&
   typeof posted.image_base64 === "string" && posted.image_base64.length > 50,
   JSON.stringify({ ...posted, image_base64: `<${posted?.image_base64?.length} chars>` }));
 
-// --- 5. which failure ------------------------------------------------------
+// --- 7. which failure ------------------------------------------------------
 
-/** Force one of the MockBridge's capture outcomes, then run a scan. */
+/** Force one of the MockBridge's capture outcomes, then run a scan from the
+ *  page — the trigger an associate actually has. */
 async function scanWith(forced) {
   await p.evaluate((f) => { window.__cueMockCapture = f; }, forced);
-  await ring("scroll-down");
-  await p.waitForTimeout(300);
-  await ring("click");
+  await p.click("#capture-mount .btn-primary");
   await p.waitForTimeout(600);
   return lens();
 }
@@ -153,7 +201,16 @@ await p.waitForTimeout(5_100);
 check("a host that tried and failed says a third thing",
   /CAMERA DIDNT OPEN/.test(await scanWith("failed")));
 
-// --- 6. the image never lands anywhere it shouldn't ------------------------
+// The second control is not a copy of the first — the service is told which
+// question it is being asked, which is the only reason there are two.
+await p.evaluate(() => { delete window.__cueMockCapture; });
+posted = null;
+await p.click("#capture-mount .btn-ghost");
+await p.waitForTimeout(2_200);
+check("scanning a part asks the service about a part",
+  posted?.kind === "part", JSON.stringify(posted?.kind));
+
+// --- 8. the image never lands anywhere it shouldn't ------------------------
 
 const log = await p.$eval("#event-log", (e) => e.textContent);
 check("no base64 in the event log", !/[A-Za-z0-9+/]{60,}/.test(log));

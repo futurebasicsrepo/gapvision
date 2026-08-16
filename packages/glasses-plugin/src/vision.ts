@@ -19,6 +19,18 @@
  * associate's pocket. The glasses' only role is to show that something is
  * happening and then to show the answer.
  *
+ * ## Which surface starts it
+ *
+ * The phone page, not the glasses. Aiming a camera is the most hands-and-eyes
+ * task in the product — you are holding the phone and looking at it to frame a
+ * swing tag whatever we do — so a glasses affordance only adds a step to
+ * something that cannot be finished without the phone. The glasses' grammar is
+ * no buttons and no chrome; their four input events are all spoken for.
+ *
+ * Eyes down to shoot, eyes up to read the answer while you are still talking
+ * to the customer. The readout stays in the lens: a phone showing a result the
+ * glasses do not is the failure this product exists to avoid.
+ *
  * ## Why it looks the way it does
  *
  * A photo and a network round trip is slower than voice, and voice at ~3s is
@@ -103,31 +115,37 @@ export async function fetchCapabilities(
 /** What the service is being asked to recognise. */
 export type VisionKind = "sku" | "part";
 
-export interface VisionMenuItem {
+export interface CaptureControl {
   label: string;
   kind: VisionKind;
 }
 
 /**
- * The camera affordance, as menu rows — **or nothing at all.**
+ * The camera affordance on the phone page — **or nothing at all.**
  *
- * When the store has not turned the camera on these rows do not exist. Not
+ * When the store has not turned the camera on these controls do not exist. Not
  * greyed out, not erroring when pressed, not present-but-refused: an associate
  * should never see a control their store declined, because a control that
  * exists and does not work is a support call, and a control that exists and
- * *shouldn't* is a conversation with a customer about why the glasses are
- * taking pictures.
+ * *shouldn't* is a conversation with a customer about why the phone is taking
+ * pictures on the shop floor.
  *
- * Two rows rather than one because the service wants to know whether it is
- * reading a tag or identifying a part, and a menu row is a free way to say so
- * — the alternative is guessing, or a second gesture on hardware that has no
- * spare gestures left.
+ * The gate is a list rather than a flag on purpose. The page builds its card
+ * from whatever this returns, so an empty array is an absent card by
+ * construction — there is no branch where a control gets built and then hidden.
+ *
+ * Two controls rather than one because the service wants to know whether it is
+ * reading a tag or identifying a part, and asking on the phone — where the
+ * associate is already looking — is free. The alternative is guessing.
+ *
+ * Sentence case, in the page's sans face: this is a control a person presses,
+ * not a line the machine says in the glass.
  */
-export function visionMenuItems(caps: Capabilities): VisionMenuItem[] {
+export function captureControls(caps: Capabilities): CaptureControl[] {
   if (!caps?.camera_capture) return [];
   return [
-    { label: "SCAN A TAG", kind: "sku" },
-    { label: "SCAN A PART", kind: "part" },
+    { label: "Scan a tag", kind: "sku" },
+    { label: "Scan a part", kind: "part" },
   ];
 }
 
@@ -175,7 +193,7 @@ export type VisionFailure =
 export function failureCue(reason: VisionFailure, detail = ""): string[] {
   switch (reason) {
     case "cancelled":
-      return ["NO PHOTO TAKEN", "SCAN AGAIN FROM MENU"];
+      return ["NO PHOTO TAKEN", "SCAN AGAIN ON PHONE"];
     case "unsupported":
       return ["CAMERA UNAVAILABLE", "UPDATE THE EVEN APP"];
     case "capture-failed":
