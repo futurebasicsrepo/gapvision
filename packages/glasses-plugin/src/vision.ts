@@ -205,9 +205,12 @@ export type VisionFailure =
   | "service-error"; // it landed and came back wrong
 
 /**
- * Written to 21 characters, which is what a line holds beside the fact rail —
- * the tightest place any of these can land, and where they will land, because
- * an associate scanning a tag is usually mid-engagement with the rail up.
+ * Written short, because these land in the module column beside the fact rail
+ * — the tightest box any of them can arrive in, and where they will arrive,
+ * since an associate scanning a tag is usually mid-engagement with the rail
+ * up. "Short" is deliberately not a number here: the glass measures each of
+ * these against the actual box (see `layout.ts`), and a count written into
+ * this comment would be a second budget to keep in step with the first.
  */
 export function failureCue(reason: VisionFailure, detail = ""): string[] {
   switch (reason) {
@@ -325,9 +328,9 @@ export class VisionController {
     // that reports size as 0 (some do) would otherwise walk straight past this.
     const bytes = Math.max(asset.size || 0, Math.floor((asset.base64.length * 3) / 4));
     if (bytes > MAX_IMAGE_BYTES) {
-      // Whole megabytes: the glass charset is [A-Z0-9 ·%$£€/+-] and has no
-      // decimal point, so "5.2 MB" would arrive as "5 2 MB" — a number that
-      // reads as two numbers.
+      // Whole megabytes: the charset declines the full stop — the brand allows
+      // the interpunct and nothing else — so "5.2 MB" would arrive as "5 2 MB",
+      // a number that reads as two numbers.
       return this.fail("too-large", 5_000, `${Math.round(bytes / 1_000_000)} MB`);
     }
     // The size and the kind, never the bytes. There is no path from this
@@ -414,10 +417,9 @@ export class VisionController {
    * the thing the glass must never do.
    */
   private async paint() {
-    // Whole seconds, floored. Not `toFixed(1)`: the glass charset is
-    // [A-Z0-9 ·%$£€/+-] and has no full stop, so "3.4S" arrives as "3 4S" —
-    // one number that reads as two. At the length of a photo round trip the
-    // tenths were never worth reading anyway.
+    // Whole seconds, floored. Not `toFixed(1)`: the charset declines the full
+    // stop, so "3.4S" arrives as "3 4S" — one number that reads as two. At the
+    // length of a photo round trip the tenths were never worth reading anyway.
     const seconds = Math.floor((Date.now() - this.startedAt) / 1000);
     await this.deps.render(this.stageLines, [`${seconds}S`]);
   }

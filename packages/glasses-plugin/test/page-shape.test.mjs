@@ -80,8 +80,12 @@ for (const [name, cue] of Object.entries({ idle: IDLE, guest: GUEST, pick: PICK 
   check("an over-budget page throws instead of failing silently", threw);
 }
 
-check("a cue with no rail keeps the original container set",
-  shapeOf(IDLE) === "t1,t2,t3,t4,t5,t7", shapeOf(IDLE));
+// t6 is the structural rule, which every cue page carries — see `buildCue`.
+// It is a *text* container and the page is at seven of the host's eight on the
+// wordmark fallback, which is why the voice indicator shares the clock's
+// container rather than taking a ninth that would render the page as nothing.
+check("a cue with no rail keeps the original container set, plus the rule",
+  shapeOf(IDLE) === "t1,t2,t3,t4,t5,t6,t7", shapeOf(IDLE));
 
 // Scrolling between modules must NOT force a rebuild — same containers, only
 // text changes. That is the whole point of the cheap path.
@@ -283,6 +287,30 @@ check("the mark and the wordmark are different shapes",
     && rail.yPosition + rail.height <= 288 - 34
     && railed.textObject.length <= 8,
     `rail ends ${rail.yPosition + rail.height}, ${railed.textObject.length} text`);
+}
+
+// --- the container budget the rule and the mic had to fit inside ------------
+//
+// The worst case is a railed guest cue with modules, drawn with the *wordmark*
+// rather than the mark — the fallback the host takes us to when it refuses an
+// image. That page is at eight text containers, which is the host's entire
+// allowance: label, clock, three lines, rule, meta, modules. A ninth renders
+// nothing at all and says nothing about why.
+//
+// This is the assertion behind two decisions worth not undoing: the voice
+// indicator shares the clock's container, and the floor menu has no rule.
+{
+  const p = buildCue({ ...GUEST, logo: false, mic: "open" });
+  const total = p.textObject.length + (p.listObject?.length || 0)
+              + (p.imageObject?.length || 0);
+  check("the wordmark fallback with a rail, modules and a rule is exactly at the cap",
+    p.textObject.length === 8 && total <= 12,
+    `${p.textObject.length} text, ${total} total: ` +
+    p.textObject.map((c) => c.containerName).join(","));
+
+  const mic = p.textObject.find((c) => c.containerName === "cue-clock");
+  check("the mic state rides in the clock rather than in a ninth container",
+    mic.content.startsWith("█"), JSON.stringify(mic.content));
 }
 
 const failed = results.filter((r) => !r).length;

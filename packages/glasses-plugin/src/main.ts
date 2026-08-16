@@ -21,8 +21,9 @@
 import { io, type Socket } from "socket.io-client";
 import { getBridge, type GlassesBridge } from "./bridge";
 import { decodeGesture, describeGesture, type DecodedGesture } from "./gestures";
-import { buildCue, buildMenu, buildRuler, CUE_LINES, FACT_CHARS, IDLE_CUE,
-         RULER_HEIGHTS, toDisplayText, type Cue } from "./layout";
+import { buildCue, buildMenu, buildRuler, CUE_LINES, FACT_PX, IDLE_CUE,
+         RULER_HEIGHTS, toDisplayText, type Cue, type MicState } from "./layout";
+import { fitsPx } from "./text";
 import { cardsFor, cueOf, money, type Card, type DisplayPayload,
          type Recommendation } from "./cards";
 import { markBytes } from "./mark";
@@ -197,8 +198,8 @@ let inbox: RadioMessage[] = [];
  * not arrive.
  *
  * `line` is composed server-side with the size first, deliberately: it is the
- * part that must survive truncation on a 21-character row. A clipped product
- * name still names the jean. A clipped size is a wrong answer.
+ * part that must survive truncation in a narrow box. A clipped product name
+ * still names the jean. A clipped size is a wrong answer.
  */
 type GuestRequest = {
   request_id: string; zone?: string; line: string;
@@ -216,10 +217,11 @@ let menuItems: { label: string; send?: string; urgent?: boolean; msg?: RadioMess
 /**
  * What an associate can say back, without a keyboard and without speaking.
  *
- * Written to 21 characters, which is what a row holds beside the fact rail —
- * the tightest place any of these can land. The vocabulary is a real product
- * decision and should come from watching a floor; this is the starting guess
- * from `claude/floor-comms.md`.
+ * Written short enough for the narrowest row any of them can land in. Not to a
+ * character count: the font is proportional and the glass does the fitting
+ * against the real box. The vocabulary is a real product decision and should
+ * come from watching a floor; this is the starting guess from
+ * `claude/floor-comms.md`.
  *
  * Only the first is urgent. If everything is urgent then nothing is, and the
  * tier stops meaning anything within a shift.
@@ -307,6 +309,24 @@ function resumeSession() {
   return true;
 }
 
+/**
+ * Whether the glass should show the mic as open, closed, or not there at all.
+ *
+ * There was no answer to "is the mic open" anywhere on the display. The level
+ * meter said so while it was the thing on the glass, and stopped saying so the
+ * moment an answer, a card or a guest cue replaced it — which is exactly when
+ * an associate standing in front of a customer would want to know. It is one
+ * glyph in the header now; see `headerStatus` in layout.ts.
+ *
+ * "off" is voice switched off in preferences or declined by the store, and it
+ * draws nothing. A state light for a feature that does not exist is a lie, and
+ * the idle strip has already stopped offering the gesture in that case.
+ */
+function micState(): MicState {
+  if (!prefs.voice) return "off";
+  return voice?.current === "listening" ? "open" : "closed";
+}
+
 /** Render a cue. `status` is gone: the glass shows nothing it doesn't have to,
  *  and a hint row is chrome. */
 async function renderCue(cue: Cue, latencyMs?: number) {
@@ -316,6 +336,7 @@ async function renderCue(cue: Cue, latencyMs?: number) {
     {
       ...cue,
       logo: useMark,
+      mic: cue.mic ?? micState(),
       facts: cue.facts ?? railFacts,
       moduleIndex: cue.moduleIndex ?? modulePosition(),
       moduleCount: cue.moduleCount ?? moduleTotal(),
@@ -435,24 +456,24 @@ async function pushMark(page: ReturnType<typeof buildCue>): Promise<boolean> {
 /**
  * The full name when it fits, first name plus an initial when it doesn't.
  *
- * The rail is ten characters wide at the measured row height. "SARAH CHEN" is
- * exactly ten and keeps her surname; "MARCUS WEBB" is eleven and becomes
- * "MARCUS W". What must never happen is the middle case — "MARCUS WEB" reads
- * as a broken display rather than a shortened name, and the surname is the
- * droppable half anyway, since the associate is about to say the first name
- * out loud and the full name is on the guest card when they arrive.
+ * What must never happen is the middle case — "MARCUS WEB" reads as a broken
+ * display rather than a shortened name, and the surname is the droppable half
+ * anyway, since the associate is about to say the first name out loud and the
+ * full name is on the guest card when they arrive.
  *
- * Asking `FACT_CHARS` rather than hardcoding ten means this follows the row
- * height and the glyph ratio automatically, instead of becoming another
- * constant that quietly stops being true.
+ * **Which names fit is now a measurement, and it changes the answer.** The
+ * rail was described as "ten characters wide", so `MAYA OKAFOR` — eleven —
+ * was being shortened to `MAYA O`. It is 127px in a 156px column: it fits, and
+ * fits comfortably. `SARAH CHEN` was never in question. What still shortens is
+ * a genuinely wide name, and now for a genuine reason rather than a count.
  */
 function railName(name?: string): string {
   const full = String(name || "").trim().replace(/\s+/g, " ");
-  if (full.length <= FACT_CHARS) return full;
+  if (fitsPx(full, FACT_PX)) return full;
   const parts = full.split(" ");
-  if (parts.length < 2) return full;   // one long word — let the rail slice it
+  if (parts.length < 2) return full;   // one long word — let the rail fit it
   const short = `${parts[0]} ${parts[parts.length - 1][0]}`;
-  return short.length <= FACT_CHARS ? short : parts[0];
+  return fitsPx(short, FACT_PX) ? short : parts[0];
 }
 
 function railFor(payload: DisplayPayload): string[] {
@@ -577,7 +598,7 @@ async function showFloorMenu(index = 0) {
     unread ? `FLOOR · ${unread} WAITING` : "FLOOR",
     menuItems.map((i) => i.label),
     menuIndex,
-    { logo: useMark, footer: menuItems[menuIndex]?.msg
+    { logo: useMark, mic: micState(), footer: menuItems[menuIndex]?.msg
         ? "PRESS TO REPLY ON MY WAY · 2X BACK"
         : "PRESS TO SEND · 2X BACK" },
   );

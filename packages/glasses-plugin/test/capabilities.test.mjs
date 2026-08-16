@@ -22,6 +22,7 @@
  * are different claims and only the second is what an associate sees; neither
  * test is allowed to be the only one.
  */
+import { getTextWidth } from "@evenrealities/pretext";
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -41,7 +42,7 @@ const V = await import(`file://${visionOut}`);
 // `layout.mjs` is built here rather than only used here: `page-shape.test.mjs`
 // imports it from `dist-test`, so dropping this build would break that suite
 // from a change that looks unrelated.
-const { RAIL_LINE_CHARS } = await import(`file://${layoutOut}`);
+const { RAIL_LINE_PX, GLASS_CHARS } = await import(`file://${layoutOut}`);
 
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -195,19 +196,25 @@ check("every failure has its own sentence",
   new Set(sentences).size === reasons.length,
   `${new Set(sentences).size}/${reasons.length} distinct`);
 
-// `RAIL_LINE_CHARS` is what a line holds beside the fact rail, which is where
-// a scan's answer lands during an engagement. A sentence that clips there
-// reads as broken hardware. Taken from the geometry rather than written down
-// as a number, so it moves when `CHAR_ASPECT` or `ROW_H` does.
+// `RAIL_LINE_PX` is the module column beside the fact rail, which is where a
+// scan's answer lands during an engagement. A sentence that overruns it is
+// clipped by the glass and reads as broken hardware. Measured against the
+// font's own metrics, and taken from the geometry rather than written down —
+// it used to be a character count, and a character count cannot describe a
+// proportional font.
 const tooLong = reasons.flatMap((r) =>
-  V.failureCue(r, "9 MB").filter((l) => l.length > RAIL_LINE_CHARS).map((l) => `${r}: ${l}`));
+  V.failureCue(r, "9 MB")
+    .filter((l) => getTextWidth(l) > RAIL_LINE_PX)
+    .map((l) => `${r}: ${l} (${getTextWidth(l)}px)`));
 check("every failure sentence fits beside the rail", tooLong.length === 0,
-  tooLong.join(", ") || `all within ${RAIL_LINE_CHARS}`);
+  tooLong.join(", ") || `all within ${RAIL_LINE_PX}px`);
 
-// The glass charset is [A-Z0-9 ·%$£€/+-]; anything else is stripped on the way
-// out, so a sentence written with an apostrophe arrives with a hole in it.
+// Anything outside the charset is stripped on the way out, so a sentence
+// written with an apostrophe arrives with a hole in it. The charset is derived
+// from the font's own tables now, so this asks the real set rather than a
+// literal copied into a third file.
 const offCharset = reasons.flatMap((r) =>
-  V.failureCue(r, "9 MB").filter((l) => /[^A-Z0-9 ·%$£€/+-]/.test(l)));
+  V.failureCue(r, "9 MB").filter((l) => [...l].some((c) => !GLASS_CHARS.includes(c))));
 check("every failure sentence is in the glass charset", offCharset.length === 0,
   offCharset.join(", ") || "clean");
 

@@ -24,6 +24,7 @@
  * smaller text, it is clipped text. So a shorter frame gets *fewer rows*, and
  * this file asserts that the rows it does get do not land on each other.
  */
+import { getAdvW, getTextWidth } from "@evenrealities/pretext";
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -60,9 +61,6 @@ const OLD = {
   HEADER_Y: 12, BODY_TOP: 52,               // const HEADER_Y = 12; const BODY_TOP = 52
   FOOT_Y: 254,                              // DISPLAY_H - 34
   MENU_TITLE_Y: 50, MENU_TOP: 84,           // yPosition: 50 / yPosition: 84 in buildMenu
-  LINE_CHARS: 33,                           // fitChars(536, 26)
-  RAIL_LINE_CHARS: 21,                      // fitChars(354, 26)
-  FACT_CHARS: 10,                           // fitChars(168, 26)
   FACT_SLOTS: 6,                            // export const FACT_SLOTS = 6
   MENU_ROWS: 6,                             // export const MENU_ROWS = 6
 };
@@ -70,19 +68,30 @@ const OLD = {
 const D = L.createGeometry(576, 288);
 for (const [k, v] of Object.entries(OLD)) eq(`default geometry: ${k}`, D[k], v);
 
-// The budgets have to come out of `fitChars` and not out of a table, or the
-// next `CHAR_ASPECT` calibration moves the rule and leaves the numbers behind.
-eq("LINE_CHARS is fitChars(W, LINE_H)", D.LINE_CHARS, L.fitChars(OLD.W, OLD.LINE_H));
-eq("RAIL_LINE_CHARS is fitChars(MODULE_W, LINE_H)",
-   D.RAIL_LINE_CHARS, L.fitChars(OLD.MODULE_W, OLD.LINE_H));
-eq("FACT_CHARS is fitChars(RAIL_W, RAIL_ROW)",
-   D.FACT_CHARS, L.fitChars(OLD.RAIL_W, OLD.RAIL_ROW));
+// --- 1b. the budgets are pixels, and they are the box minus its padding ------
+//
+// `LINE_CHARS`, `RAIL_LINE_CHARS` and `FACT_CHARS` are gone with `fitChars`
+// and `CHAR_ASPECT`. They were character counts derived from one ratio — glyph
+// advance as a fraction of container height — and the G2's font is
+// proportional, so no single count could have described it. What replaced them
+// is the drawable width of each box; whether a string fits is a question for
+// the font tables.
+eq("LINE_PX is the content width less its padding", D.LINE_PX, OLD.W - OLD.PAD * 2);
+eq("RAIL_LINE_PX is the module column less its padding",
+   D.RAIL_LINE_PX, OLD.MODULE_W - OLD.PAD * 2);
+// The rail keeps its extra 2px of inset, and no longer pays for a border it
+// was never drawing as a rule — see `RAIL_BORDER` in layout.ts.
+eq("FACT_PX is the rail less its padding", D.FACT_PX, OLD.RAIL_W - (OLD.PAD + 2) * 2);
+check("no character budget survives the change",
+  L.LINE_CHARS === undefined && L.RAIL_LINE_CHARS === undefined
+  && L.FACT_CHARS === undefined && L.fitChars === undefined,
+  "a count is the fault, not the fix");
 
 // --- 2. the named exports are still the default geometry ----------------------
 // `cards.ts`, `main.ts`, `cue.py`'s contract and four test files import these
 // by name. Adding the seam was the job; migrating every call site was not.
-for (const k of ["DISPLAY_W", "DISPLAY_H", "LINE_CHARS", "RAIL_LINE_CHARS",
-                 "FACT_CHARS", "FACT_SLOTS", "MENU_ROWS"]) {
+for (const k of ["DISPLAY_W", "DISPLAY_H", "LINE_PX", "RAIL_LINE_PX",
+                 "FACT_PX", "FACT_SLOTS", "MENU_ROWS"]) {
   check(`export ${k} is bound to the default geometry`,
     L[k] === D[k] && L[k] === L.DEFAULT_GEOMETRY[k], `${L[k]} vs ${D[k]}`);
 }
@@ -153,15 +162,22 @@ for (const [w, h] of FRAMES) {
     Math.abs(a.RAIL_W / 576 - b.RAIL_W / 640) < 0.002,
     `${(a.RAIL_W / 576).toFixed(4)} vs ${(b.RAIL_W / 640).toFixed(4)}`);
 
-  // The character counts are where the two records actually differed, and the
-  // site's is the wrong one: 188 ÷ (26 × 0.60) = 12.05 only if you spend the
-  // padding on glyphs. `fitChars` does not, so the honest budget at 640 is 11.
-  // Ten at 576 is unchanged because there the two methods happen to agree.
-  eq("10 rail characters at 576", a.FACT_CHARS, 10);
-  eq("11 rail characters at 640 — not 12, which spends the padding",
-    b.FACT_CHARS, 11);
+  // The character counts were where the two records differed, and neither of
+  // them was answerable: 10 and 12 are two ways of dividing a box by an
+  // average glyph, and the rail draws names. What the rail actually holds is a
+  // question about a string, and it has an exact answer.
+  eq("156px of rail at 576", a.FACT_PX, 156);
+  check("MAYA OKAFOR fits the 576 rail whole — the name that started this",
+    getTextWidth("MAYA OKAFOR") <= a.FACT_PX,
+    `${getTextWidth("MAYA OKAFOR")}px in ${a.FACT_PX}px`);
+  check("eleven wide characters do not, and the 12-char budget said they would",
+    getTextWidth("WWWWWWWWWWW") > a.FACT_PX,
+    `${getTextWidth("WWWWWWWWWWW")}px in ${a.FACT_PX}px`);
+  check("BOTTOMS 28X30 fits, which is why the rail is 168 and not 148",
+    getTextWidth("BOTTOMS 28X30") <= a.FACT_PX,
+    `${getTextWidth("BOTTOMS 28X30")}px in ${a.FACT_PX}px`);
   check("the rail budget grows with the frame and never shrinks",
-    b.FACT_CHARS > a.FACT_CHARS, `${a.FACT_CHARS} -> ${b.FACT_CHARS}`);
+    b.FACT_PX > a.FACT_PX, `${a.FACT_PX} -> ${b.FACT_PX}`);
 }
 
 // --- 5. a short frame loses rows, never row height ---------------------------
@@ -175,14 +191,263 @@ for (const [w, h] of FRAMES) {
   check("a short frame gives up rows instead",
     short.FACT_SLOTS < tall.FACT_SLOTS && short.MENU_ROWS < tall.MENU_ROWS,
     `facts ${tall.FACT_SLOTS}->${short.FACT_SLOTS}, menu ${tall.MENU_ROWS}->${short.MENU_ROWS}`);
-  check("the same width gives the same character budgets on both",
-    short.LINE_CHARS === tall.LINE_CHARS && short.FACT_CHARS === tall.FACT_CHARS,
-    `${short.LINE_CHARS}/${short.FACT_CHARS} vs ${tall.LINE_CHARS}/${tall.FACT_CHARS}`);
+  check("the same width gives the same pixel budgets on both",
+    short.LINE_PX === tall.LINE_PX && short.FACT_PX === tall.FACT_PX,
+    `${short.LINE_PX}/${short.FACT_PX} vs ${tall.LINE_PX}/${tall.FACT_PX}`);
   // 640 × 200: header 12–38, three lines 52–142, footer 166–192, rail 4 rows
   // 52–156. The grammar fits; the sixth and fifth facts do not.
   eq("640x200 holds four rail rows", short.FACT_SLOTS, 4);
   eq("640x200 holds three menu rows", short.MENU_ROWS, 3);
 }
+
+
+// --- 6. the charset is what the font has, not what somebody typed ------------
+//
+// The charset used to be the literal `[A-Z0-9 ·%$£€/+-]` written into two
+// files and three comments. It banned glyphs the G2 renders perfectly — every
+// box-drawing character, the blocks, the arrow — and one of the casualties was
+// the voice level meter, which is drawn from `█` and has therefore never once
+// appeared on the glass: every block was replaced with a space on the way out.
+//
+// So it is derived: `text.ts` asks the font tables for each candidate's
+// advance and keeps what exists. These assertions are the other half of that.
+// If a firmware font drops a glyph, this suite fails; the alternative is
+// finding out from a hole in the middle of a word on somebody's face.
+{
+  check("nothing we ask for is missing from the font",
+    L.MISSING_GLYPHS.length === 0, L.MISSING_GLYPHS.join(" ") || "all present");
+
+  // Verified present at 20px (320/16), and the reason the rule and the state
+  // light are possible at all.
+  const STRUCTURE = "─│┌┐└┘├┤┬┴┼━┃═█▌▒■★";
+  const banned = [...STRUCTURE].filter((c) => !L.GLASS_CHARS.includes(c));
+  check("the box-drawing and block glyphs are admitted",
+    banned.length === 0, banned.join(" ") || "all admitted");
+
+  check("the arrow and the two dots are admitted",
+    ["→", "·", "•"].every((c) => L.GLASS_CHARS.includes(c)));
+
+  // The other half of a derived charset: glyphs that are *not* there. All five
+  // measure 0 advance, and this is written down so the next person reaching
+  // for a tick mark does not have to rediscover it on hardware.
+  const ABSENT = "║░▸✓▮";
+  const present = [...ABSENT].filter((c) => getAdvW(c.codePointAt(0)) !== 0);
+  check("the glyphs the font does not have are still missing", present.length === 0,
+    present.join(" ") || "║ ░ ▸ ✓ ▮ all absent, as measured");
+  check("and none of them can reach the glass",
+    [...ABSENT].every((c) => !L.GLASS_CHARS.includes(c)));
+
+  // Lowercase and ordinary punctuation are *declined*, not absent — the font
+  // has all of them. That distinction is the reason the charset is a brand
+  // rule applied to a measured set, rather than a measured set on its own.
+  check("the font has a full stop and a colon; the charset declines them",
+    getAdvW(".".codePointAt(0)) > 0 && getAdvW(":".codePointAt(0)) > 0
+    && !L.GLASS_CHARS.includes(".") && !L.GLASS_CHARS.includes(":"));
+
+  check("a comma still becomes a space on the way to the glass",
+    L.toDisplayText("SIZE M, TOP") === "SIZE M TOP",
+    JSON.stringify(L.toDisplayText("SIZE M, TOP")));
+
+  check("the level meter's blocks now survive the filter",
+    L.toDisplayText("███▒▒▒") === "███▒▒▒",
+    JSON.stringify(L.toDisplayText("███▒▒▒")));
+}
+
+// --- 7. the strings the old model got wrong, in both directions -------------
+//
+// One eleven-character string is 56px, another is 176px, and a character
+// budget calls them the same. For plain uppercase Latin the 0.60 ratio landed
+// close at the wide end almost by luck — the widest letter is 16px against the
+// 15.6px it assumed — and badly wrong at the narrow end, which is why real
+// names were being shortened for nothing. Where it broke outright is the
+// rail's ten-character rows, and anything drawn from the glyphs the old
+// hand-written charset banned: every box-drawing and block glyph is 20px, a
+// third wider than the ratio ever allowed for.
+{
+  const RAIL = ["MAYA OKAFOR", "ICON", "TOP M", "BTM 28X30"];
+
+  // Too wide, and it used to "fit": ten characters was exactly the rail's old
+  // budget, and ten of the widest letters is 160px in a 156px column. The
+  // glass renders that by clipping, silently, which is the whole "font is cut
+  // off" complaint.
+  const WIDE = "WWWWWWWWWW";   // 10 characters — the old budget, to the letter
+  const wide = L.buildCue({ lines: ["A"], facts: [WIDE], moduleCount: 0 });
+  const wideRow = wide.listObject[0].itemContainer.itemName[0];
+  check("a ten-character rail row that used to pass now truncates",
+    WIDE.length === 10 && getTextWidth(WIDE) > D.FACT_PX
+    && wideRow.endsWith("+") && getTextWidth(wideRow) <= D.FACT_PX,
+    `${getTextWidth(WIDE)}px into ${D.FACT_PX}px → ${JSON.stringify(wideRow)}`);
+
+  // The same fault, larger, on the glyphs the widened charset admits: twenty
+  // blocks is twenty characters against a 21-character budget, and 400px
+  // against a 346px box. A count would have waved this straight through — and
+  // this is not a hypothetical string, it is the shape of the level meter.
+  const BLOCKS = "█".repeat(20);
+  const blocks = L.buildCue({ lines: [BLOCKS], facts: RAIL, meta: [], moduleCount: 0 });
+  const blockLine = blocks.textObject.find((c) => c.containerName === "cue-line-1").content;
+  check("twenty block glyphs are 400px, not twenty characters' worth",
+    getTextWidth(BLOCKS) > D.RAIL_LINE_PX && getTextWidth(blockLine) <= D.RAIL_LINE_PX,
+    `${getTextWidth(BLOCKS)}px into ${D.RAIL_LINE_PX}px → ${blockLine.length} glyphs`);
+
+  // Too narrow to have been truncated, and it was. 24 characters against a
+  // 21-character budget, and 189px against a 346px box.
+  const NARROW = "IN LIST TILL TILL TILL 1";   // 24 characters
+  const narrow = L.buildCue({ lines: [NARROW], facts: RAIL, meta: [], moduleCount: 0 });
+  const narrowLine = narrow.textObject.find((c) => c.containerName === "cue-line-1").content;
+  check("a narrow 24-character line that used to truncate now arrives whole",
+    NARROW.length > 21 && narrowLine === NARROW
+    && getTextWidth(NARROW) <= D.RAIL_LINE_PX,
+    `${getTextWidth(NARROW)}px into ${D.RAIL_LINE_PX}px → ${JSON.stringify(narrowLine)}`);
+
+  // The narrow case where it actually cost something: eleven characters was
+  // over the rail's old ten, so `MAYA OKAFOR` was being shortened to `MAYA O`
+  // beside a column it fits inside with 29px to spare.
+  const rail = narrow.listObject[0].itemContainer.itemName;
+  check("MAYA OKAFOR reaches the rail whole",
+    rail[0] === "MAYA OKAFOR" && getTextWidth(rail[0]) <= D.FACT_PX,
+    `${JSON.stringify(rail[0])} at ${getTextWidth(rail[0])}px in ${D.FACT_PX}px`);
+
+  // Nothing on any page may exceed the box it was given. This is the assertion
+  // the whole change exists to make possible: before, it could not be written,
+  // because there was no way to ask how wide a string was.
+  const pages = {
+    idle: L.buildCue({ lines: ["CUESEA READY", "GAP · DEMO", "AWAITING GUEST SIGNAL"],
+                       meta: ["V0·1·15", "PRESS TO ASK", "2X EXIT"], mic: "closed" }),
+    guest: L.buildCue({ lines: ["IN CART CASHSOFT CREW", "BOUGHT BARREL JEANS TWICE",
+                                "OFFER IT IN SIZE M"],
+                        facts: RAIL, meta: ["DENIM WALL"], moduleCount: 4,
+                        moduleName: "CUE", mic: "open" }, 1180),
+    menu: L.buildMenu("FLOOR · 2 WAITING",
+                      ["MARCUS NEED BACKUP IN THE FITTING ROOMS", "ON MY WAY"], 0,
+                      { mic: "closed" }),
+  };
+  const over = [];
+  for (const [name, page] of Object.entries(pages)) {
+    for (const c of page.textObject) {
+      const budget = c.width - (c.paddingLength ?? 0) * 2;
+      if (getTextWidth(c.content) > budget) {
+        over.push(`${name}/${c.containerName}: ${getTextWidth(c.content)}px in ${budget}px`);
+      }
+    }
+    for (const l of page.listObject || []) {
+      const budget = l.width - (l.paddingLength ?? 0) * 2;
+      for (const row of l.itemContainer.itemName) {
+        if (getTextWidth(row) > budget) {
+          over.push(`${name}/${l.containerName}: ${JSON.stringify(row)} ${getTextWidth(row)}px in ${budget}px`);
+        }
+      }
+    }
+  }
+  check("every row on every page fits the box it was given", over.length === 0,
+    over.join("; ") || "measured against the firmware's own metrics");
+}
+
+// --- 8. the voice indicator --------------------------------------------------
+//
+// There was no way to see whether the mic was open. It shares the clock's
+// container rather than taking one of its own, because a railed guest page
+// with the wordmark fallback already spends all eight text containers the host
+// allows — and the container that buys is spent on the rule.
+{
+  const clockOf = (mic) =>
+    L.buildCue({ lines: ["A"], clock: "14·32", mic }).textObject
+      .find((c) => c.containerName === "cue-clock").content;
+
+  check("mic open and mic closed are visibly different",
+    clockOf("open") !== clockOf("closed"),
+    `${JSON.stringify(clockOf("open"))} vs ${JSON.stringify(clockOf("closed"))}`);
+
+  check("neither state can be mistaken for a cue — it is one glyph and the time",
+    clockOf("open") === "█ 14·32" && clockOf("closed") === "▒ 14·32",
+    `${clockOf("open")} / ${clockOf("closed")}`);
+
+  // The property that keeps it from being a distraction: both glyphs are the
+  // same advance, so the time does not move when the mic opens.
+  check("the clock does not shift sideways when the mic opens",
+    getTextWidth(clockOf("open")) === getTextWidth(clockOf("closed")),
+    `${getTextWidth(clockOf("open"))}px both`);
+
+  check("voice switched off draws no state light at all",
+    clockOf("off") === "14·32", JSON.stringify(clockOf("off")));
+
+  check("the cluster fits the clock box",
+    getTextWidth(clockOf("open")) <= D.CLOCK_PX,
+    `${getTextWidth(clockOf("open"))}px in ${D.CLOCK_PX}px`);
+
+  // The state light lives in the container the cheap path can update, so the
+  // mic opening is a text upgrade rather than a page rebuild.
+  const shape = (mic) => L.buildCue({ lines: ["A"], mic }).textObject
+    .map((c) => c.containerID).join(",");
+  check("opening the mic does not change the page shape",
+    shape("open") === shape("closed") && shape("closed") === shape("off"));
+}
+
+// --- 9. the structural rule --------------------------------------------------
+{
+  const railed = L.buildCue({ lines: ["A"], facts: ["MAYA OKAFOR", "ICON"],
+                              meta: ["DENIM WALL"], moduleCount: 4 });
+  const rule = railed.textObject.find((c) => c.containerName === "cue-rule");
+  check("a railed cue draws a rule above the footer", rule !== undefined,
+    rule ? JSON.stringify(rule.content) : "missing");
+
+  check("the rule ends where the footer starts",
+    rule.yPosition + rule.height === D.FOOT_Y,
+    `${rule.yPosition}+${rule.height} vs ${D.FOOT_Y}`);
+
+  check("the rule clears the cue lines and a full rail",
+    rule.yPosition >= D.BODY_BOTTOM
+    && rule.yPosition >= D.BODY_TOP + D.FACT_SLOTS * D.RAIL_ROW,
+    `rule at ${rule.yPosition}, body ends ${D.BODY_BOTTOM}`);
+
+  check("the rule carries a junction where the rail column ends",
+    rule.content.includes("┴") && rule.content.split("┴").length === 2,
+    JSON.stringify(rule.content));
+
+  // The tick has to land in the gutter, not through a column of text.
+  const tickPx = D.X + D.PAD + getTextWidth(rule.content.slice(0, rule.content.indexOf("┴")));
+  check("the junction lands in the gutter between the two columns",
+    tickPx >= D.X + D.RAIL_W - 10 && tickPx <= D.MODULE_X + 10,
+    `tick at ${tickPx}, gutter ${D.X + D.RAIL_W}..${D.MODULE_X}`);
+
+  const plain = L.buildCue({ lines: ["A"], meta: ["V0·1·15"] });
+  const plainRule = plain.textObject.find((c) => c.containerName === "cue-rule");
+  check("a cue with no rail draws a rule with no junction",
+    plainRule !== undefined && !plainRule.content.includes("┴"),
+    JSON.stringify(plainRule?.content));
+
+  check("the rule fits the frame's content width",
+    getTextWidth(rule.content) <= D.LINE_PX,
+    `${getTextWidth(rule.content)}px in ${D.LINE_PX}px`);
+
+  // The rail's border is gone: `borderWidth` is one scalar with a radius, so
+  // it draws a rounded panel around the whole rail rather than the hairline
+  // the comment claimed. A panel is chrome; a rule is structure.
+  check("the rail no longer asks for a border box",
+    (railed.listObject[0].borderWidth ?? 0) === 0
+    && railed.listObject[0].borderRadius === undefined,
+    `border ${railed.listObject[0].borderWidth}`);
+
+  // A short surface gives up the rule the same way it gives up rail rows.
+  const short = L.createGeometry(640, 200);
+  check("a 200px frame has no room for a rule and does not draw one",
+    short.RULE_Y === null, `${short.RULE_Y}`);
+  check("the 576x288 frame does", D.RULE_Y === 254 - 26, `${D.RULE_Y}`);
+
+  // The floor menu deliberately has none — six rows of list reach 240 and the
+  // footer starts at 254, so a rule would cost a row of floor comms.
+  const menu = L.buildMenu("FLOOR", ["ON MY WAY"], 0, {});
+  check("the floor menu spends the space on a row instead of a rule",
+    !menu.textObject.some((c) => c.containerName === "menu-rule")
+    && D.MENU_ROWS === 6);
+}
+
+// --- 10. the menu cursor, measured ------------------------------------------
+// Unselected rows are padded so the text does not jump sideways as the cursor
+// moves. That worked by luck of a hoped-for uniform glyph width; it works by
+// measurement now, and the measurement says the two are exactly equal.
+check("the cursor and its padding are the same width",
+  getTextWidth("· ") === getTextWidth("  "),
+  `${getTextWidth("· ")}px vs ${getTextWidth("  ")}px`);
 
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);

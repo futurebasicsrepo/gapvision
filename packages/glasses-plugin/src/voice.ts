@@ -141,10 +141,25 @@ export function frameLevel(bytes: Uint8Array): number {
   return counted ? total / counted / 32768 : 0;
 }
 
-/** Eight-step bar for the lens; monochrome-safe block glyphs. */
+/**
+ * The level bar for the lens, in block glyphs the font actually has.
+ *
+ * **This has never once appeared on the glass.** The charset filter in
+ * `layout.ts` was a hand-written literal, `[A-Z0-9 ·%$£€/+-]`, and `█` is not
+ * in it — so every block was replaced with a space and collapsed away on the
+ * way to the display, leaving a row of interpuncts that never moved. The
+ * charset is derived from the font's own tables now (`text.ts`), the block is
+ * verified present, and the meter draws.
+ *
+ * The empty cells are `▒` rather than `·` for a reason that only shows up once
+ * you can measure: `█` and `▒` are both 20px and `·` is 5px, so a bar of
+ * blocks and interpuncts would grow and shrink as the level moved. Two block
+ * glyphs of the same width make a bar that fills in place, which is what a
+ * level meter is supposed to look like.
+ */
 export function levelMeter(level: number, width = 12): string {
   const filled = Math.min(width, Math.round(Math.sqrt(level) * width * 1.6));
-  return "█".repeat(filled) + "·".repeat(Math.max(0, width - filled));
+  return "█".repeat(filled) + "▒".repeat(Math.max(0, width - filled));
 }
 
 export class VoiceController {

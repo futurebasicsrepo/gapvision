@@ -36,9 +36,26 @@
  * the type floor are absolute pixels.** The rows are absolute because the host
  * has a floor under how small it will draw a glyph (see `ROW_H`), and a frame
  * being shorter does not move that floor — it just means fewer rows fit.
+ *
+ * **And the horizontal half is now measured rather than modelled.** Every
+ * budget below is a number of pixels, and whether a string fits one is asked
+ * of Even's own font tables through `text.ts` — never of a character count.
+ * The font is proportional; a character count cannot describe it. That change
+ * is the reason several of the comments in this file read as corrections.
  */
 import type { ImageContainer, ListContainer, PageSpec, TextContainer } from "./bridge";
 import { MARK_H, MARK_W } from "./mark";
+import { NOT_GLASS, fitsPx, repeatToWidth, textWidth, truncatePx } from "./text";
+
+/**
+ * What the glass may draw, re-exported from where it is measured.
+ *
+ * This module is what everything else imports to put something on the display,
+ * so the charset belongs on its surface even though the derivation lives in
+ * `text.ts` — and `geometry.test.mjs` asserts against these rather than
+ * against a copy of the list.
+ */
+export { GLASS_CHARS, MISSING_GLYPHS } from "./text";
 
 /**
  * The host's hard budgets, kept beside the code that has to respect them.
@@ -82,28 +99,58 @@ const FACT_SLOTS_MAX = 6;
 const MENU_ROWS_MAX = 6;
 
 /**
- * Glyph advance as a fraction of container height.
+ * Budgets are pixels, and fitting is measurement. Here is what that replaced.
  *
- * Every character budget in this file used to be a number somebody chose: 60
- * per line, 42 with a rail, 17 per fact. They were chosen when the containers
- * were 38 and 44 pixels tall. Once height became the type control those
- * numbers meant nothing, and the rail quietly shipped rows needing 178px in a
- * 148px box — which the glass renders by clipping, which is what "font is cut
- * off" was.
+ * **First generation — chosen numbers.** 60 characters per line, 42 with a
+ * rail, 17 per fact. They were chosen when the containers were 38 and 44
+ * pixels tall, and once height became the type control they meant nothing: the
+ * rail shipped rows needing 178px in a 148px box, and the glass renders that
+ * by clipping. "Font is cut off" was this.
  *
- * So the budgets are derived instead, from the one ratio that governs them.
- * 0.60 is the widest advance the preview render measures — 0.57 at 24px and
- * 0.60 at 28px, so it is taken at the worst case rather than the average,
- * because being one character optimistic here means a clipped word on a
- * customer's face. It is measured off the preview font, not off the G2, and
- * the G2's is very likely narrower. Calibrating it on glass is a one-line
- * change here and every budget in the file moves with it.
+ * **Second generation — one ratio, `CHAR_ASPECT = 0.60`.** Glyph advance as a
+ * fraction of container height, measured off the *preview* render (0.57 at
+ * 24px, 0.60 at 28px, taken at the worst case), with `fitChars(width, height)`
+ * turning a box into a character count. It was a real improvement — the
+ * budgets moved together and stopped being folklore — and it was still wrong
+ * in a way no amount of calibrating it could fix.
+ *
+ * **The G2's font is proportional.** From Even's own font-metric package:
+ *
+ *     MAYA OKAFOR   127px   11 chars      the 0.60 model budgets 172px
+ *     IIIIIIIIIII    56px   11 chars
+ *     WWWWWWWWWWW   176px   11 chars      the 0.60 model says this fits 156px
+ *
+ * Eleven characters is anywhere between 56 and 176 pixels, a 3.1× range, and a
+ * character budget calls all three identical. So the ratio was simultaneously
+ * far too generous for a wide string — still clipping words, which is the
+ * fault it was introduced to end — and far too mean for an ordinary name:
+ * `MAYA OKAFOR` fits the 168px rail with 29px to spare and was being shortened
+ * to `MAYA O` for nothing. It also settles the "10 versus 12 characters" rail
+ * argument by dissolving it; see `RAIL_FRACTION`.
+ *
+ * So there is no ratio any more. Each region carries the **pixel width it has
+ * to draw in**, and `text.ts` asks the firmware's own metrics whether a given
+ * string fits it. `fitChars` is gone with `CHAR_ASPECT`: nothing in this
+ * codebase needs a character estimate now that a string can be measured, and
+ * anything reintroducing one would be reintroducing the same fault.
+ *
+ * What has *not* changed is the vertical half. `ROW_H` is still 26 because a
+ * person read it off the glass, and the font tables have nothing to say about
+ * what the host does with a box shorter than a glyph.
  */
-const CHAR_ASPECT = 0.60;
 
-/** How many characters fit a box, given the host scales glyphs to its height. */
-export function fitChars(width: number, height: number): number {
-  return Math.max(1, Math.floor((width - PAD * 2 - 4) / (height * CHAR_ASPECT)));
+/**
+ * The drawable width inside a container: its box, less the padding on both
+ * sides, less any border.
+ *
+ * The old `fitChars` also subtracted a 4px safety margin, which was there to
+ * absorb the error in the ratio. There is no error left to absorb — pretext
+ * mirrors LVGL's per-glyph rounding and kerning — so the margin is gone and
+ * the budget is the real number. That is where most of the extra room for
+ * names came from.
+ */
+export function textBudget(width: number, padding = PAD, border = 0): number {
+  return Math.max(0, width - (padding + border) * 2);
 }
 
 /**
@@ -121,27 +168,33 @@ const GUTTER = 14;
  * put, and a module on the right that scrolling moves between.
  *
  * The rail costs the sentence about a third of its width. That is the real
- * price of this layout and the thing to judge on the glass; `cue.py` shortens
- * the evidence line to `RAIL_LINE_CHARS` to suit.
+ * price of this layout and the thing to judge on the glass. `cue.py` writes
+ * the evidence line short to suit — but it no longer writes it to a budget,
+ * because the service is Python and the font tables are JavaScript, so the
+ * server cannot measure what it is writing. The contract is now "the server
+ * writes short, the glass fits exactly", and the exact fitting happens here.
  *
  * 168 at 576 rather than 148 because at 148 the rail could not hold "BOTTOMS
  * 28X30" — the sizes are the reason the rail exists, and a rail that clips the
  * sizes is a rail that costs the sentence a third of its width for nothing.
  * That measurement is what fixes the fraction: 168/576 = 0.2917 of the frame.
  *
- * **The "168/10 vs 188/12" discrepancy, since it has been logged twice.**
- * They were never two rails. 0.2917 of 640 is 187 — the site's 188 is the same
- * rail to within a pixel of rounding, so the *width* is one fraction at two
- * frames and there is nothing to reconcile.
+ * **The "168/10 vs 188/12" discrepancy, since it has been logged twice and is
+ * now closed.** They were never two rails. 0.2917 of 640 is 187 — the site's
+ * 188 is the same rail to within a pixel of rounding, so the *width* is one
+ * fraction at two frames and there was never anything to reconcile there.
  *
- * The character counts are a different matter, and this is the half that was
- * actually wrong. `fitChars` subtracts the padding and margin before it
- * divides; 188/12 does not — 188 ÷ (26 × 0.60) = 12.05, which is the count you
- * get by dividing the raw box width by the glyph advance and forgetting that
- * two paddings and a safety margin are not available to draw in. At 576 the
- * two methods agree by luck (168 gives 10 either way), which is why this went
- * unnoticed. At 640 they do not: the honest budget is **11**, not 12. Do not
- * "restore" 12 without moving `CHAR_ASPECT` or `PAD` and saying why.
+ * The character counts were the half that was actually being argued about, and
+ * the answer is that **both numbers were answering a question the font does
+ * not have.** 10 and 12 are two ways of dividing a box by an average glyph;
+ * the rail draws real names, and real names are 56–176px per eleven
+ * characters. Measured, the rail's 156px of drawable width holds `MAYA OKAFOR`
+ * (127px) whole with room left, and refuses `WWWWWWWWWWW` (176px) — which the
+ * 12-character budget would have accepted and the glass would have clipped.
+ * Nobody needed to widen anything; the rail was never the problem.
+ *
+ * The width stays 168 at 576 for the reason it was measured: the sizes are why
+ * the rail exists, and `BOTTOMS 28X30` — 147px — has to arrive whole.
  */
 const RAIL_FRACTION = 168 / DEFAULT_FRAME_W;
 
@@ -179,6 +232,19 @@ const RAIL_FRACTION = 168 / DEFAULT_FRAME_W;
  * `buildRuler()` stays in the build. It cost one screen, it answered a
  * question three releases could not, and the next firmware may move the floor.
  *
+ * **What the font tables added to this, 2026-08-16.** Even's own metrics
+ * package describes *one* font at one size, with a fixed 27px line height —
+ * there is no scale factor anywhere in it. That is evidence for a different
+ * reading of the same measurement: the host may not be scaling glyphs to the
+ * box at all. It may simply draw one size and clip whatever the box cannot
+ * hold, which fits every observation in the table above exactly — 20 and 24
+ * are under the glyph and clip; 26, 28 and 32 are over it and are whole, with
+ * 28 and 32 differing only in leading. Nothing in that changes what to do:
+ * **26 is still the floor and every row still sits on it.** It is written down
+ * because the next person to reach for "make this row smaller" should know
+ * that the lever may not exist rather than assuming it does, and because it
+ * would take one screen on real glass to settle — the ruler already draws it.
+ *
  * **And this is why `ROW_H` is not a fraction of anything.** Everything else
  * in this file scales with the frame; the row does not, because the floor it
  * sits on belongs to the host's renderer and not to the display. A row
@@ -208,10 +274,24 @@ const HEADER_Y = 12;
 /** The header wordmark and the clock. Content-sized, so absolute — but the
  *  clock is *placed* against the right edge, which is not.
  *
- *  Boxes get a margin, not an exact fit: the clock sat in 90px, which holds
- *  exactly five characters at this row height, and "14·32" is exactly five. */
+ *  Boxes get a margin, not an exact fit. The clock sat in 90px when that was
+ *  believed to be five characters' worth; measured, "14·32" is 47px and the
+ *  box has 96px to draw in, which is what makes room for the voice indicator
+ *  to share this container rather than cost a new one — see `headerStatus`. */
 const LABEL_W = 64;
 const CLOCK_W = 104;
+
+/**
+ * The rail's hairline, and the padding inside it.
+ *
+ * `borderWidth` is a single scalar in the SDK — there is no per-edge control —
+ * so what it draws is a rounded rectangle around the whole rail, which is a
+ * panel, and a panel is chrome. The structure this layout actually wants is
+ * one line saying where the fixed column ends, and that is drawn as a rule
+ * (see `buildRule`). So the border is 0 and the rail keeps only its padding.
+ */
+const RAIL_BORDER = 0;
+const RAIL_PAD = PAD + 2;
 
 /** Everything `createGeometry` works out for one frame. */
 export interface Geometry {
@@ -245,10 +325,27 @@ export interface Geometry {
   FOOT_Y: number;
   MENU_TITLE_Y: number;
   MENU_TOP: number;
-  /** What each region can hold, in characters. */
-  LINE_CHARS: number;
-  RAIL_LINE_CHARS: number;
-  FACT_CHARS: number;
+  /**
+   * Where the structural rule sits, or `null` on a frame with no room for it.
+   *
+   * Structure is the first thing a short surface gives up, the same way it
+   * gives up rail rows: a rule drawn over the last line of a cue is worse than
+   * no rule at all.
+   */
+  RULE_Y: number | null;
+  /**
+   * What each region can hold, **in pixels of drawable width**. These were
+   * `LINE_CHARS`, `RAIL_LINE_CHARS` and `FACT_CHARS`, and they were character
+   * counts derived from a ratio; the font is proportional, so a count could
+   * never have been right. Whether a given string fits one of these is asked
+   * of the font tables — see `text.ts`.
+   */
+  LINE_PX: number;
+  RAIL_LINE_PX: number;
+  FACT_PX: number;
+  /** The footer's two cells, and the header's clock cluster. */
+  META_PX: number;
+  CLOCK_PX: number;
   /** What each region can hold, in rows. */
   FACT_SLOTS: number;
   MENU_ROWS: number;
@@ -291,26 +388,51 @@ export function createGeometry(width: number, height: number): Geometry {
   const rowsBetween = (top: number, bottom: number, cap: number) =>
     Math.max(0, Math.min(cap, Math.floor((bottom - top) / ROW_H)));
 
+  const FACT_SLOTS = rowsBetween(BODY_TOP, FOOT_Y, FACT_SLOTS_MAX);
+
+  /**
+   * The rule sits immediately above the footer, and only if it clears both
+   * columns — the three cue lines on the right and a full rail on the left.
+   *
+   * Measured against `FACT_SLOTS` rather than against whatever rail a
+   * particular cue happens to have, so the answer is a property of the frame
+   * and not of the content: a rule that came and went with the number of facts
+   * would change the page shape on every guest and force a rebuild for a line.
+   */
+  const ruleTop = FOOT_Y - ROW_H;
+  const railBottom = BODY_TOP + FACT_SLOTS * RAIL_ROW;
+  const RULE_Y = ruleTop >= Math.max(BODY_BOTTOM, railBottom) ? ruleTop : null;
+
   return {
     DISPLAY_W: width, DISPLAY_H: height,
     X, W,
     RAIL_W, GUTTER, MODULE_X, MODULE_W,
     ROW_H, HEADER_H, LINE_H, LINE_STEP, RAIL_ROW, META_H, PAD,
     LABEL_W, CLOCK_W,
-    HEADER_Y, BODY_TOP, BODY_BOTTOM, FOOT_Y, MENU_TITLE_Y, MENU_TOP,
+    HEADER_Y, BODY_TOP, BODY_BOTTOM, FOOT_Y, MENU_TITLE_Y, MENU_TOP, RULE_Y,
     /**
-     * What each region can actually hold, derived rather than chosen.
+     * What each region can actually draw in, in pixels.
      *
-     * `cue.py` writes to these: `LINE_CHARS` across the full frame, and
-     * `RAIL_LINE_CHARS` — the one that matters, because a guest cue always has
-     * a rail beside it.
+     * `cue.py` used to be written to the character forms of these, and can no
+     * longer be: the service is Python and the font tables are JavaScript, so
+     * the server cannot measure anything. It writes short and the glass fits
+     * exactly — see the note on `RAIL_LINE_PX`.
      */
-    LINE_CHARS: fitChars(W, LINE_H),
-    RAIL_LINE_CHARS: fitChars(MODULE_W, LINE_H),
-    /** The rail is a short label and a value, and not much of either. */
-    FACT_CHARS: fitChars(RAIL_W, RAIL_ROW),
+    LINE_PX: textBudget(W),
+    /**
+     * The one that matters, because a guest cue always has a rail beside it.
+     * 346px at 576 — which is `IN CART CASHSOFT CREW` (224px) with room to
+     * spare, and was a 21-character budget that had no way to know that.
+     */
+    RAIL_LINE_PX: textBudget(MODULE_W),
+    /** The rail is a short label and a value, and not much of either — but its
+     *  156px holds `BOTTOMS 28X30` (147px) whole, which ten characters did not,
+     *  and `MAYA OKAFOR` (127px), which is the name that started this. */
+    FACT_PX: textBudget(RAIL_W, RAIL_PAD, RAIL_BORDER),
+    META_PX: textBudget(MODULE_X - X),
+    CLOCK_PX: textBudget(CLOCK_W),
     /** Rows in the fact rail, between the header and the meta strip. */
-    FACT_SLOTS: rowsBetween(BODY_TOP, FOOT_Y, FACT_SLOTS_MAX),
+    FACT_SLOTS,
     /** Rows in the floor menu, between the title and the footer. */
     MENU_ROWS: rowsBetween(MENU_TOP, FOOT_Y, MENU_ROWS_MAX),
   };
@@ -328,12 +450,12 @@ export const DEFAULT_GEOMETRY = createGeometry(DEFAULT_FRAME_W, DEFAULT_FRAME_H)
 
 export const {
   DISPLAY_W, DISPLAY_H,
-  LINE_CHARS, RAIL_LINE_CHARS, FACT_CHARS,
+  LINE_PX, RAIL_LINE_PX, FACT_PX,
   FACT_SLOTS,
 } = DEFAULT_GEOMETRY;
 
 const { W, RAIL_W, MODULE_X, MODULE_W, BODY_TOP, FOOT_Y,
-        MENU_TITLE_Y, MENU_TOP } = DEFAULT_GEOMETRY;
+        MENU_TITLE_Y, MENU_TOP, RULE_Y, META_PX, CLOCK_PX } = DEFAULT_GEOMETRY;
 
 export interface Cue {
   lines: string[];
@@ -368,7 +490,26 @@ export interface Cue {
    * has said `success` once, so the failure mode is a wordmark, not a hole.
    */
   logo?: boolean;
+  /**
+   * Whether the mic is open, closed, or not a thing this associate has.
+   *
+   * Rendered in the header beside the clock — see `headerStatus`. It is on the
+   * `Cue` rather than held in this module because voice state belongs to
+   * `main.ts`, and a layout that remembered it would be a layout with a
+   * lifecycle.
+   */
+  mic?: MicState;
 }
+
+/**
+ * The mic, as the glass shows it.
+ *
+ * `off` is not "closed" — it is voice switched off in preferences or declined
+ * by the store, and it renders as nothing at all. A state light for a feature
+ * that does not exist is a lie, and the idle strip has already stopped naming
+ * the gesture in that case.
+ */
+export type MicState = "open" | "closed" | "off";
 
 /**
  * Strip anything the glass shouldn't render.
@@ -376,15 +517,26 @@ export interface Cue {
  * The service already writes in glass grammar, so this is a backstop for
  * anything that reaches the lens from an older path — an icon marker, a
  * stray comma, lowercase.
+ *
+ * **The charset is derived from the font's own tables** (see `text.ts`), not
+ * written out here. It used to be the literal `[A-Z0-9 ·%$£€/+-]`, which
+ * banned glyphs the G2 renders perfectly — box drawing, blocks, the arrow —
+ * and among the casualties was the voice level meter, which is drawn from `█`
+ * and had every block silently replaced with a space for as long as it has
+ * existed. A literal cannot notice that, in either direction.
+ *
+ * `maxPx` is a pixel budget and the fitting is a measurement. It defaults to
+ * the full frame, which is a backstop rather than a layout decision: every
+ * call site that knows its box passes that box's width.
  */
-export function toDisplayText(line: string): string {
-  return String(line ?? "")
+export function toDisplayText(line: string, maxPx: number = LINE_PX): string {
+  const clean = String(line ?? "")
     .replace(/\[ICON:\w+\]\s*/g, "")
     .toUpperCase()
-    .replace(/[^A-Z0-9 ·%$£€/+-]/g, " ")
+    .replace(NOT_GLASS, " ")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, LINE_CHARS);
+    .trim();
+  return truncatePx(clean, maxPx);
 }
 
 /**
@@ -393,12 +545,41 @@ export function toDisplayText(line: string): string {
  * `latency` is rendered because the brand makes it a claim rather than a
  * diagnostic: the associate can see the cue is live.
  */
-/** HH:MM, zero-padded. The glass charset has no colon, so the interpunct
- *  stands in — it is the one separator the brand allows anyway. */
+/** HH:MM, zero-padded, with the interpunct for a separator.
+ *
+ *  Not because the font has no colon — it has one, 4px wide, and an earlier
+ *  comment here said otherwise. The interpunct is a brand rule: it is the only
+ *  separator the identity system allows, and the charset declines the colon
+ *  along with the comma and the full stop. Declined, not missing. */
 function clockLabel(now = new Date()): string {
   const h = String(now.getHours()).padStart(2, "0");
   const m = String(now.getMinutes()).padStart(2, "0");
   return `${h}·${m}`;
+}
+
+/**
+ * The header's right-hand cluster: the mic, then the time.
+ *
+ * **The voice indicator shares the clock's container rather than taking one of
+ * its own,** and that is a budget decision with a real edge case behind it. A
+ * railed guest page with the wordmark fallback already needs eight text
+ * containers, which is the host's entire allowance; a ninth renders *nothing*
+ * and reports nothing. So the two header facts share a box, and the container
+ * freed by doing that is spent on the structural rule.
+ *
+ * The two mic glyphs are `█` and `▒`, and they are the same 20px advance —
+ * verified from the font tables, not assumed — so the time does not move when
+ * the mic opens. A clock that jumped sideways every time somebody spoke would
+ * be the most distracting thing on the display.
+ *
+ * `off` draws the time alone.
+ */
+export const MIC_OPEN = "█";
+export const MIC_CLOSED = "▒";
+
+export function headerStatus(clock: string, mic: MicState = "off"): string {
+  const glyph = mic === "open" ? MIC_OPEN : mic === "closed" ? MIC_CLOSED : "";
+  return truncatePx(glyph ? `${glyph} ${clock}` : clock, CLOCK_PX);
 }
 
 /**
@@ -412,35 +593,65 @@ function clockLabel(now = new Date()): string {
  *
  * `keep` is pinned to the end and never dropped. It is the latency, and the
  * point of showing latency is that it is always there.
+ *
+ * The budget is now the box's drawable width and the test is a measurement, so
+ * the strip keeps as many facts as will *actually* fit rather than as many as
+ * an average glyph width predicted.
  */
-function fit(text: string, width: number, height: number, keep = ""): string {
-  const budget = fitChars(width, height);
+function fit(text: string, maxPx: number, keep = ""): string {
   const parts = String(text).split(" · ").filter(Boolean);
   while (parts.length) {
     const joined = [...parts, keep].filter(Boolean).join(" · ");
-    if (joined.length <= budget) return joined;
+    if (fitsPx(joined, maxPx)) return joined;
     parts.pop();
   }
-  return keep.slice(0, budget);
+  return truncatePx(keep, maxPx);
+}
+
+/**
+ * A structural rule, drawn with the box-drawing glyphs the font turned out to
+ * have — and the tick that says where the fixed column ends.
+ *
+ * This is the answer to "the lens reads weak and unstructured beside other
+ * Even Hub apps", and it is one line rather than a frame because the brand
+ * rule is no chrome. What it says is a fact about the layout: everything above
+ * is the cue and the rail, everything below is the machine's own strip, and
+ * the `┴` marks the boundary the two columns were already implying with
+ * whitespace.
+ *
+ * Drawn, rather than the rail container's `borderWidth`. The SDK's border is
+ * one scalar with a radius — there is no per-edge control — so what it draws
+ * is a rounded rectangle around the whole rail. That is a panel. Nobody has
+ * ever seen it on glass to confirm what it looks like, and the comment that
+ * called it "a hairline down the rail's edge" was describing an intention. A
+ * rule is the thing we actually want, and a rule is what this draws.
+ */
+function ruleContent(maxPx: number, railed: boolean, tickAtPx: number): string {
+  const run = repeatToWidth("─", maxPx);
+  if (!railed || !run) return run;
+  // Place the junction on whichever glyph the column boundary falls in. The
+  // rule glyphs are one width, but this measures rather than divides — see
+  // `repeatToWidth` for why that is not pedantry.
+  const unit = textWidth("─");
+  const at = Math.max(0, Math.min(run.length - 1, Math.round(tickAtPx / unit)));
+  return `${"─".repeat(at)}┴${"─".repeat(run.length - at - 1)}`;
 }
 
 export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
   const railed = (cue.facts || []).length > 0;
-  // With a rail beside it the sentence has a third less room, so it is cut to
-  // that budget here. A clipped word at this size reads as a fault in the
-  // hardware; an ellipsis reads as "there was more".
+  // With a rail beside it the sentence has a third less room, so it is fitted
+  // to that box here — and "fits" is now the font's answer about this exact
+  // string, not a character count that treats `IIIIIIIIIII` and `WWWWWWWWWWW`
+  // as the same width. A clipped word at this size reads as a fault in the
+  // hardware; the `+` reads as "there was more".
   const lines = (cue.lines || [])
-    .map((l) => {
-      const s = toDisplayText(l);
-      return railed && s.length > RAIL_LINE_CHARS
-        ? s.slice(0, RAIL_LINE_CHARS - 1).trimEnd() + "+"
-        : s;
-    })
+    .map((l) => toDisplayText(l, railed ? RAIL_LINE_PX : LINE_PX))
     .filter(Boolean)
     .slice(0, CUE_LINES);
-  const meta = (cue.meta || []).map(toDisplayText).filter(Boolean).slice(0, 3);
+  const meta = (cue.meta || []).map((m) => toDisplayText(m, META_PX))
+    .filter(Boolean).slice(0, 3);
   const facts = (cue.facts || [])
-    .map((f) => toDisplayText(f).slice(0, FACT_CHARS))
+    .map((f) => toDisplayText(f, FACT_PX))
     .filter(Boolean)
     .slice(0, FACT_SLOTS);
 
@@ -475,7 +686,12 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     // The clock, not the latency. An associate mid-shift wants the time far
     // more often than a round-trip figure; latency moved to the meta strip
     // where it stays a visible claim without owning the corner.
-    content: cue.clock ?? clockLabel(),
+    //
+    // And the mic, in front of it. There was no way to see whether the mic was
+    // open — the level meter said so while it was on the glass, but a voice
+    // answer, a card or a guest cue replaced it and told the associate nothing
+    // about a mic that might still be listening. See `headerStatus`.
+    content: headerStatus(cue.clock ?? clockLabel(), cue.mic),
     // The page's single gesture receiver. It used to be the header, but an
     // image container has no `isEventCapture` field at all — swapping the
     // wordmark for the mark would have taken the page's only receiver with it.
@@ -524,16 +740,16 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
   // bearing: it carries the two gestures, one of which quits the app. Held to
   // a rail's width it fitted the build number and dropped both of them.
   // The footer's left cell runs to where the module column starts, not to
-  // where the rail's border does — the gutter above it is dead space, and at
-  // this type size the strip is nine characters against ten. "DENIM WALL" is
-  // exactly the fact that falls off the end of it.
+  // where the rail's edge does — the gutter above it is dead space, and every
+  // pixel of it is one the strip can draw in. "DENIM WALL" is exactly the fact
+  // that fell off the end of the narrower version.
   const metaW = hasRail || showModules ? MODULE_X - X : W;
   const footRight = latencyMs ? `${(latencyMs / 1000).toFixed(1)}S` : "";
   if (showModules) {
-    // "2/3", not dots. The glass charset is [A-Z0-9 ·%$£€/+-] — a filled dot
-    // is stripped on the way out, which rendered the *active* module as a gap.
-    // And at this size on a monochrome display, counting dots is work; a
-    // fraction is read, not counted.
+    // "2/3", not dots. A filled dot is in the charset now — `•` is in the font
+    // and was banned by a hand-written literal — but the fraction stays: at
+    // this size on a monochrome display, counting dots is work, and a fraction
+    // is read rather than counted.
     const position = `${(cue.moduleIndex || 0) + 1}/${cue.moduleCount}`;
     textObject.push({
       xPosition: lineX, yPosition: FOOT_Y,
@@ -541,10 +757,32 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
       paddingLength: PAD,
       containerID: 8, containerName: "cue-modules", zOrderIndex: 8,
       // Latency rides here rather than in the meta strip. It is a claim the
-      // brand wants visible, and this is the only row on a railed page with
-      // room for it — the meta strip is a rail's width and cannot hold
-      // "DENIM WALL · 1.2S" without clipping the S off the end of it.
-      content: fit(`${cue.moduleName || ""} ${position}`, lineW, META_H, footRight),
+      // brand wants visible, and this is the wider of the two footer cells —
+      // the meta strip is a rail's width and cannot hold "DENIM WALL · 1.2S"
+      // without losing the S off the end of it.
+      content: fit(`${cue.moduleName || ""} ${position}`, textBudget(lineW), footRight),
+      isEventCapture: 0,
+    });
+  }
+
+  // The structural rule, immediately above the footer.
+  //
+  // One line, spanning the content width, with a `┴` where the rail column
+  // ends. It is the whole of the answer to "this reads weak and unstructured":
+  // the split between the fixed column and the module, and the boundary
+  // between the cue and the machine's own strip, were both being carried by
+  // whitespace, and whitespace on a 25° monochrome field carries very little.
+  //
+  // It costs one text container, which is why the voice indicator shares the
+  // clock's. On a frame with no room for it — a 200px surface, where the rail
+  // already reaches the footer — `RULE_Y` is null and there is simply no rule.
+  // Structure is the first thing a short surface gives up.
+  if (RULE_Y !== null) {
+    textObject.push({
+      xPosition: X, yPosition: RULE_Y, width: W, height: ROW_H,
+      paddingLength: PAD,
+      containerID: 6, containerName: "cue-rule", zOrderIndex: 6,
+      content: ruleContent(textBudget(W), hasRail, MODULE_X - GUTTER / 2 - (X + PAD)),
       isEventCapture: 0,
     });
   }
@@ -562,12 +800,15 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
       xPosition: X, yPosition: BODY_TOP,
       width: RAIL_W, height: RAIL_ROW * facts.length,
       containerID: 9, containerName: "cue-rail", zOrderIndex: 9,
-      // A hairline down the rail's edge. The brand bans chrome, and this is
-      // structure rather than decoration: it says where the fixed column ends
-      // and the module begins, which is the whole point of the layout.
-      borderWidth: 1,
-      borderRadius: 2,
-      paddingLength: PAD + 2,
+      // No border. This carried `borderWidth: 1` and a 2px radius, described in
+      // the comment as "a hairline down the rail's edge" — which is not what
+      // the SDK draws. `borderWidth` is a single scalar with no per-edge
+      // control, so it draws a rounded rectangle around the entire rail: a
+      // panel, which is chrome, which the brand bans. The structure it was
+      // reaching for is the drawn rule above the footer, where the `┴` marks
+      // this column's boundary in one line rather than four.
+      borderWidth: RAIL_BORDER,
+      paddingLength: RAIL_PAD,
       isEventCapture: 0,
       itemContainer: {
         itemCount: facts.length,
@@ -588,7 +829,7 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
     paddingLength: PAD,
     containerID: 7, containerName: "cue-meta", zOrderIndex: 7,
     // When there is no module row, latency has nowhere else to go.
-    content: fit(meta.join(" · "), metaW, META_H, showModules ? "" : footRight),
+    content: fit(meta.join(" · "), textBudget(metaW), showModules ? "" : footRight),
     isEventCapture: 0,
   });
 
@@ -623,14 +864,22 @@ export function buildCue(cue: Cue, latencyMs?: number): PageSpec {
  * many rows there are, the selected one is on the glass.
  */
 export const { MENU_ROWS } = DEFAULT_GEOMETRY;
-/** Marks the row a press will act on. The glass charset is
- *  [A-Z0-9 ·%$£€/+-], so this is one of very few characters available, and
- *  unselected rows are padded to match so the text does not jump sideways. */
+/**
+ * Marks the row a press will act on, with unselected rows padded to match so
+ * the text does not jump sideways as the cursor moves.
+ *
+ * That padding is exact rather than approximate, and now demonstrably so: the
+ * interpunct and the space are both 5px advances in this font, so `"· "` and
+ * `"  "` are both 10px. It was a reasonable hope when the charset was a
+ * literal and every glyph was assumed to be one width; it is a measurement
+ * now, and `geometry.test.mjs` asserts it rather than trusting it.
+ */
 const MENU_CURSOR = "· ";
+const MENU_CURSOR_PAD = "  ";
 
 export function buildMenu(
   title: string, items: string[], selected: number,
-  opts: { clock?: string; logo?: boolean; footer?: string } = {},
+  opts: { clock?: string; logo?: boolean; footer?: string; mic?: MicState } = {},
 ): PageSpec {
   const textObject: TextContainer[] = [];
   const imageObject: ImageContainer[] = [];
@@ -652,12 +901,12 @@ export function buildMenu(
     xPosition: DISPLAY_W - X - CLOCK_W, yPosition: HEADER_Y, width: CLOCK_W,
     height: HEADER_H, paddingLength: PAD,
     containerID: 2, containerName: "cue-clock", zOrderIndex: 2,
-    content: opts.clock ?? clockLabel(), isEventCapture: 1,
+    content: headerStatus(opts.clock ?? clockLabel(), opts.mic), isEventCapture: 1,
   });
   textObject.push({
     xPosition: X, yPosition: MENU_TITLE_Y, width: W, height: ROW_H, paddingLength: PAD,
     containerID: 3, containerName: "menu-title", zOrderIndex: 3,
-    content: toDisplayText(title), isEventCapture: 0,
+    content: toDisplayText(title, textBudget(W)), isEventCapture: 0,
   });
 
   // Window the list so the selection is always visible.
@@ -665,10 +914,13 @@ export function buildMenu(
   const start = n <= MENU_ROWS
     ? 0
     : Math.min(Math.max(0, selected - Math.floor(MENU_ROWS / 2)), n - MENU_ROWS);
+  // The row's budget is the list's drawable width less whatever the cursor
+  // column costs — measured, because "a cursor is two characters" is the kind
+  // of statement this whole change exists to stop anyone making.
+  const rowPx = textBudget(W) - textWidth(MENU_CURSOR);
   const rows = items.slice(start, start + MENU_ROWS).map((label, i) => {
     const isSel = start + i === selected;
-    const budget = fitChars(W, ROW_H) - MENU_CURSOR.length;
-    return (isSel ? MENU_CURSOR : "  ") + toDisplayText(label).slice(0, budget);
+    return (isSel ? MENU_CURSOR : MENU_CURSOR_PAD) + toDisplayText(label, rowPx);
   });
 
   const listObject: ListContainer[] = [{
@@ -683,10 +935,20 @@ export function buildMenu(
     },
   }];
 
+  // **No rule on this page, and the reason is a row of floor comms.**
+  //
+  // The cue page has ~46px of dead space above its footer and the rule lives
+  // there. The menu does not: six rows of list run to 240 and the footer
+  // starts at 254, so a rule would have to be paid for out of `MENU_ROWS`,
+  // and five rows of "what is waiting and what you can say back" is a worse
+  // trade than an implied boundary. The list is also the one page on this
+  // display that is already structured — rows of equal height *are* the
+  // structure, which is exactly what the cue page lacks and why it needed a
+  // line drawn.
   textObject.push({
     xPosition: X, yPosition: FOOT_Y, width: W, height: ROW_H, paddingLength: PAD,
     containerID: 7, containerName: "menu-foot", zOrderIndex: 7,
-    content: fit(opts.footer ?? "PRESS TO SEND · 2X BACK", W, ROW_H),
+    content: fit(opts.footer ?? "PRESS TO SEND · 2X BACK", textBudget(W)),
     isEventCapture: 0,
   });
 

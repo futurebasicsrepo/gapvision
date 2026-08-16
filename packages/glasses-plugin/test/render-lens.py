@@ -2,14 +2,16 @@
 
     npm run render:lens
 
-An approximation of one thing only: the host scales glyphs to the container,
-so this fits each string to its box's inner height and reports anything that
-then overruns the box's width. That is the failure the last two builds shipped
-with — a row whose text did not fit the box it was given — and it is the one
-thing a preview can catch before an upload.
+**The verdict is not drawn here any more.** This used to fit each string with a
+desktop font scaled to its box and report what overran — an approximation
+resting on the belief that the host scales glyphs to the container, which the
+G2's own font tables give reason to doubt. The overruns now come from
+`render-lens.mjs`, measured against the firmware's real metrics through
+`@evenrealities/pretext`, and this file draws a picture and prints them.
 
-Everything else here is a lie of convenience: the real display is monochrome
-with its own dither, and the mark is gray-4. Judge the fit, not the finish.
+Everything here is a lie of convenience: the real display is monochrome with
+its own dither, the mark is gray-4, and DejaVu is not the G2's font. Judge the
+shape, and trust the measurement for the fit.
 """
 import base64
 import json
@@ -41,14 +43,15 @@ def font_for(box_h):
     return ImageFont.truetype(FONT_PATH, size)
 
 
-pages = json.loads(subprocess.check_output(
+dump = json.loads(subprocess.check_output(
     ["node", str(ROOT / "packages/glasses-plugin/test/render-lens.mjs")], text=True))
+pages = dump["pages"]
+overruns = list(dump["overruns"])
 
 mark_src = (ROOT / "packages/glasses-plugin/src/mark.ts").read_text()
 b64 = "".join(re.findall(r'"([A-Za-z0-9+/=]{8,})"', mark_src))
 mark = Image.open(BytesIO(base64.b64decode(b64))).convert("L")
 
-overruns = []
 tiles = []
 
 for name, page in pages.items():
@@ -63,9 +66,6 @@ for name, page in pages.items():
                                 radius=2 * SCALE, outline=(90, 105, 125), width=1)
         d.text((x * SCALE + 4 * SCALE, (y + h / 2) * SCALE), text, font=f, fill=fill,
                anchor="lm")
-        used = d.textlength(text, font=f) / SCALE + 8
-        if used > w:
-            overruns.append(f"{name}: {text[:28]!r} needs {used:.0f}px in a {w}px box")
 
     for c in page["textObject"]:
         dim = c["containerName"] in ("cue-label", "cue-clock", "cue-meta", "cue-modules")
@@ -74,10 +74,18 @@ for name, page in pages.items():
     for c in page.get("listObject", []):
         rows = c["itemContainer"]["itemName"]
         row_h = c["height"] / max(1, len(rows))
-        d.rounded_rectangle(
-            [c["xPosition"] * SCALE, c["yPosition"] * SCALE,
-             (c["xPosition"] + c["width"]) * SCALE, (c["yPosition"] + c["height"]) * SCALE],
-            radius=2 * SCALE, outline=(90, 105, 125), width=1)
+        # Only if the page asked for one. This used to draw a box around every
+        # list unconditionally, which meant the preview showed a rail border
+        # whatever `buildCue` said — including now, when the rail has none and
+        # the structure is a drawn rule instead. A preview that draws what it
+        # likes is a preview that cannot report anything.
+        if c.get("borderWidth", 0):
+            d.rounded_rectangle(
+                [c["xPosition"] * SCALE, c["yPosition"] * SCALE,
+                 (c["xPosition"] + c["width"]) * SCALE,
+                 (c["yPosition"] + c["height"]) * SCALE],
+                radius=c.get("borderRadius", 0) * SCALE, outline=(90, 105, 125),
+                width=c["borderWidth"])
         for i, row in enumerate(rows):
             cell(c["xPosition"] + 6, c["yPosition"] + i * row_h,
                  c["width"] - 12, row_h, row, dim=(i > 0))
@@ -108,8 +116,8 @@ sheet.save(out)
 print(f"wrote {out}")
 
 if overruns:
-    print("\nrows that do not fit their container:")
+    print("\nrows that do not fit their container (measured, not drawn):")
     for o in overruns:
         print(f"  {o}")
     sys.exit(1)
-print("every row fits its container")
+print("every row fits its container — measured against the G2's own font tables")

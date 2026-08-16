@@ -19,7 +19,8 @@
  * main.ts first and could not be tested there, which for the one function
  * that decides what an associate can find is the wrong trade.
  */
-import { CUE_LINES, RAIL_LINE_CHARS, toDisplayText, type Cue } from "./layout";
+import { CUE_LINES, RAIL_LINE_PX, toDisplayText, type Cue } from "./layout";
+import { fitsPx, wrapPx } from "./text";
 
 export type Recommendation = {
   sku: string;
@@ -66,13 +67,15 @@ export function money(v?: number): string {
  *
  * So anything that has to be transcribable wraps, and anything that only has
  * to be recognisable may truncate.
+ *
+ * The width is pixels and the break points are measured. It used to be a
+ * character count, which on a proportional font meant `Rancho Santa Margarita`
+ * and `IIIIIIIIIIIIIIIIIIIIII` were wrapped identically — one of them into
+ * lines that overflowed the box and were clipped by the glass, which is the
+ * failure this function exists to avoid.
  */
-export function wrap(text: string, width: number): string[] {
-  const t = String(text || "");
-  if (t.length <= width) return t ? [t] : [];
-  const out: string[] = [];
-  for (let i = 0; i < t.length; i += width) out.push(t.slice(i, i + width));
-  return out;
+export function wrap(text: string, maxPx: number): string[] {
+  return wrapPx(String(text || ""), maxPx);
 }
 
 /**
@@ -92,7 +95,9 @@ export function addressLines(a: any): string[] {
   const street = String(a.line1 || "").trim();
   const unit = String(a.line2 || "").trim();
   const region = String(a.line3 || "").trim();
-  const fits = (t: string) => t.length <= RAIL_LINE_CHARS;
+  // A card sits beside the rail, so it draws in the module column. Whether a
+  // line fits is measured against that box, never counted.
+  const fits = (t: string) => fitsPx(t, RAIL_LINE_PX);
 
   if (fits(region)) {
     return [street, unit, region].filter(Boolean).slice(0, CUE_LINES);
@@ -109,7 +114,7 @@ export function addressLines(a: any): string[] {
 /**
  * Contact details, folded the same way and for the same reason.
  *
- * An email is the worst case on this display: 21 characters gets you
+ * An email is the worst case on this display: truncation gets you
  * "sarah.chen@example.c" and a "+", which is not an email address — it is a
  * thing that looks like one and is not. Split at the @ instead, so both halves
  * are whole and someone can read them out.
@@ -122,10 +127,10 @@ export function contactLines(c: any): string[] {
     // Prefer the @ as the break, because it is where a person's eye expects
     // one. Fall back to a hard wrap when either half is still too long.
     const at = email.lastIndexOf("@");
-    const parts = email.length <= RAIL_LINE_CHARS ? [email]
+    const parts = fitsPx(email, RAIL_LINE_PX) ? [email]
       : at > 0 ? [email.slice(0, at), email.slice(at)]
       : [email];
-    for (const part of parts) lines.push(...wrap(part, RAIL_LINE_CHARS));
+    for (const part of parts) lines.push(...wrap(part, RAIL_LINE_PX));
   }
   if (phone) lines.push(phone);
   return lines.slice(0, CUE_LINES);

@@ -26,20 +26,33 @@ from __future__ import annotations
 
 import re
 
-# Budgets, and they are not chosen — they are what `layout.ts` derives for the
-# 576x288 frame, transcribed. `test_cue_budgets.py` asserts they still agree.
+# Sanity caps, not budgets — and the difference is the whole point.
 #
-# `layout.ts` said "cue.py shortens the evidence line to RAIL_LINE_CHARS to
-# suit" and cue.py truncated at 60. A guest cue always has a rail beside it, so
-# every line written here was landing in a box that holds 21 characters and the
-# glass was clipping the difference — nearly two thirds of a full-width line.
-# The comment described an intention nobody had implemented.
+# These used to be `layout.ts`'s character budgets, transcribed: 33 across the
+# frame, 21 beside the rail, 10 on the rail. That was an improvement on the 60
+# they replaced, and it was still a fiction, because **the G2's font is
+# proportional**: eleven characters is 56px of `IIIIIIIIIII` or 176px of
+# `WWWWWWWWWWW`, and one number cannot mean both. The glass now measures every
+# string against Even's own font tables and fits it to the box exactly.
 #
-# Written at the worst case on purpose: RAIL_LINE_CHARS, not LINE_CHARS.
-# Being one character optimistic here is a clipped word on a stranger's face.
-LINE_CHARS = 33        # full frame, no rail
-RAIL_LINE_CHARS = 21   # what a guest cue actually gets
-FACT_CHARS = 10        # the rail, and the meta strip that sits under it
+# **The server cannot do that.** The metrics package is JavaScript; this
+# service is Python. Transcribing a character count here was the service
+# pretending to fit pixels it has no way to see — and being wrong in both
+# directions at once: clipping `WOMENS OUTERWEAR WALL` while shortening
+# `MAYA OKAFOR` for nothing.
+#
+# So the contract changed rather than the number. **The server writes short,
+# and the glass fits exactly.** These caps exist to stop absurd input — a
+# paragraph arriving where a cue belongs — and are deliberately generous: a
+# line that runs long is now trimmed on the glass, at the pixel, by something
+# that can see the box. What still belongs here is the *writing*: three lines,
+# uppercase, the interpunct, front-loaded so the words that matter survive.
+#
+# `test_cue_budgets.py` holds the new contract, which is that the composer
+# writes to the shape of a cue and not to a box it cannot measure.
+LINE_CHARS = 120       # a sanity cap on any one line
+RAIL_LINE_CHARS = 120  # a guest cue: same cap, and the glass fits it to the rail
+FACT_CHARS = 40        # a meta fact is a fact, not a sentence
 CUE_LINES = 3
 META_FACTS = 3
 
