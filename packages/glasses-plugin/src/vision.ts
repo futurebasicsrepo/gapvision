@@ -55,6 +55,11 @@ import type { CaptureResult, GlassesBridge } from "./bridge";
  * everything else.
  */
 export interface Capabilities {
+  /** Whether the server found a tenant with this slug at all. Not a switch —
+   *  the switches already fail closed. This is so the page can say *which*
+   *  nothing it is looking at, instead of rendering a typo as a real store
+   *  with the camera switched off. */
+  known: boolean;
   camera_capture: boolean;
   voice: boolean;
   floor_comms: boolean;
@@ -68,7 +73,7 @@ export interface Capabilities {
  * whose store declined the camera. Failing the other way costs a feature for
  * as long as the network is down, which is recoverable and visible.
  */
-export const NO_CAPABILITIES: Capabilities = {
+export const NO_CAPABILITIES: Capabilities = { known: false,
   camera_capture: false,
   voice: false,
   floor_comms: false,
@@ -103,6 +108,11 @@ export async function fetchCapabilities(
     const body = await res.json();
     if (!body || typeof body !== "object") return { ...NO_CAPABILITIES };
     return {
+      // An older service that predates this field answers `undefined`, which
+      // reads as unknown — wrong, and it would paint every existing tenant as
+      // a typo. Absent means "this service cannot tell me", and a service that
+      // cannot tell us is not evidence the tenant is missing.
+      known: body.known === undefined ? true : body.known === true,
       camera_capture: body.camera_capture === true,
       voice: body.voice === true,
       floor_comms: body.floor_comms === true,

@@ -81,6 +81,7 @@ const ui = {
   inspector: document.getElementById("event-inspector"),
   whoName: document.getElementById("whoami-name"),
   whoMeta: document.getElementById("whoami-meta"),
+  whoTenant: document.getElementById("whoami-tenant"),
 };
 
 function log(msg: string) {
@@ -1495,6 +1496,20 @@ async function main() {
   await showIdle();
 
   capabilities = await capabilitiesReady;
+
+  // Which retail world this launch belongs to, on the always-visible line.
+  //
+  // The badge for this used to be in the diagnostics strip, and the
+  // preferences restructure put that strip behind a collapsed disclosure — so
+  // the single most important piece of context on the page became invisible.
+  // The lens demo defaults to `?tenant=gap`; a store whose slug is `cuesea`
+  // then reads as a store with the camera switched off, and the next move is
+  // to go and check a Console toggle that was already right.
+  if (ui.whoTenant) {
+    const unknown = !capabilities.known;
+    ui.whoTenant.textContent = unknown ? `${TENANT} · NOT FOUND` : TENANT;
+    ui.whoTenant.className = unknown ? "whoami-meta unknown" : "whoami-meta";
+  }
   // Logged as what it is — a gate, and which way it fell. When the capture
   // card is missing from the page this line is the only thing that says
   // whether the store turned it off or the fetch never answered.

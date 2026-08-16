@@ -76,6 +76,31 @@ def camera_capture(slug: str | None) -> bool:
     return bool(privacy.get(CAMERA_CAPTURE))
 
 
+def exists(slug: str | None) -> bool:
+    """Is there a tenant with this slug at all?
+
+    Expressed through `_privacy` rather than its own query, because this module
+    promises to be *the one place* a tenant row is read and a second SELECT
+    would quietly make that untrue.
+
+    Separate from the switches on purpose. `for_tenant` fails closed, so an
+    unknown slug and a real store with everything switched off produce an
+    identical answer — which is right as a *decision* and useless as a
+    *report*. A plugin launched with a typo in its URL shows a page with no
+    camera on it and no way to tell why, and the next move is to go and check a
+    Console toggle that was already correct.
+
+    That happened. The lens demo defaults to `?tenant=gap`, the store's real
+    slug is `cuesea`, and the flag had been on the whole time.
+
+    A database blip reads as absent here, which is imprecise and deliberate:
+    the caller reports "cannot confirm this tenant" either way, and the only
+    thing that differs is a sentence. What must never differ is the switches,
+    and those are closed in both cases.
+    """
+    return _privacy(slug or "") is not None
+
+
 def for_tenant(slug: str | None) -> dict[str, bool]:
     """The whole switchboard, as booleans.
 

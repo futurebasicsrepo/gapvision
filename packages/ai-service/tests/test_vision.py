@@ -110,7 +110,7 @@ def test_capabilities_returns_switches_not_a_privacy_posture(client, auth_header
     r = client.get("/api/tenant/capabilities?tenant=gap", headers=auth_headers)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert set(body) == {"camera_capture", "voice", "floor_comms"}, (
+    assert set(body) == {"camera_capture", "voice", "floor_comms", "known"}, (
         f"the capability contract changed: {sorted(body)}")
     assert all(isinstance(v, bool) for v in body.values()), (
         f"a client can only branch on booleans: {body}")
@@ -355,3 +355,39 @@ def test_an_unknown_kind_is_refused(monkeypatch):
                        mime="image/jpeg", note=None, crm=FakeCRM())
     assert e.value.status == 400
     assert not provider.calls
+
+
+def test_an_unknown_slug_is_distinguishable_from_a_store_with_it_switched_off(
+        client, auth_headers, monkeypatch):
+    """The switches fail closed either way. The *report* must not.
+
+    This is the bug that cost an evening. The lens demo defaults to
+    `?tenant=gap`; the store being tested had the slug `cuesea` and its camera
+    flag correctly on. Both answered 200 with an identical body, so a typo in a
+    launch URL rendered as a working page with no camera on it — and the next
+    move is to go and check a Console toggle that was already right.
+
+    Same rule the Health panel has had since the first deploy reported a
+    healthy database with no schema in it: unknown must never render as a
+    valid answer.
+    """
+    # Slug-aware, unlike the shared fixture: the whole question here is
+    # whether the route can tell two slugs apart, so a stub that answers the
+    # same for every slug would test nothing.
+    monkeypatch.setattr(capabilities, "_privacy", lambda slug: (
+        {"camera_capture": True} if slug == "gap" else None))
+    monkeypatch.setattr(capabilities, "_config", lambda slug: {})
+
+    real = client.get("/api/tenant/capabilities?tenant=gap",
+                      headers=auth_headers).json()
+    ghost = client.get("/api/tenant/capabilities?tenant=no-such-store-here",
+                       headers=auth_headers).json()
+
+    assert real["known"] is True, real
+    assert ghost["known"] is False, ghost
+    assert real != ghost, (
+        "a tenant that exists and one that does not produced identical bodies")
+
+    # And the switches still fail closed for the ghost, which is the half that
+    # decides anything.
+    assert ghost["camera_capture"] is False, ghost

@@ -330,7 +330,19 @@ def tenant_capabilities(request: Request, tenant: str = "gap",
     privacy decision.
     """
     guard(request, tenant, x_gapvision_key)
-    return capabilities.for_tenant(tenant)
+    # `known` is not a switch and is not used to decide anything — the
+    # switches below already fail closed, and they stay closed for a tenant
+    # that does not exist.
+    #
+    # It is here so the plugin can say *which* nothing it is looking at. An
+    # unknown slug and a real store with the camera off returned an identical
+    # 200, so a typo in a launch URL rendered as a working page with no camera
+    # on it. Somebody then goes and checks the Console toggle they had already
+    # set correctly — which is exactly what happened: the demo defaults to
+    # `?tenant=gap`, the store's slug is `cuesea`, and the flag was on all
+    # along. Same rule as the Health panel's: unknown must never render as a
+    # valid answer.
+    return {**capabilities.for_tenant(tenant), "known": capabilities.exists(tenant)}
 
 
 class VisionAnalyzeRequest(BaseModel):
