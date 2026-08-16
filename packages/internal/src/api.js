@@ -94,6 +94,7 @@ export const api = {
   // --- platform -------------------------------------------------------------
   platform: () => request("/api/admin/platform"),
   mailTest: () => request("/api/admin/mail/test", { method: "POST" }),
+  providersTest: () => request("/api/admin/providers/test", { method: "POST" }),
 
   // --- tenants --------------------------------------------------------------
   tenants: (days = 30) => request(`/api/admin/tenants?days=${days}`),

@@ -47,6 +47,22 @@ export default function Health() {
   const [mail, setMail] = useState(null);
   const [mailBusy, setMailBusy] = useState(false);
 
+  // Same reason as the mail test, one layer down. Health reports which
+  // provider *resolved at boot* — that proves an environment variable is set
+  // and nothing else. An invalid key constructs a provider happily and fails
+  // only when somebody speaks into the glasses.
+  const [prov, setProv] = useState(null);
+  const [provBusy, setProvBusy] = useState(false);
+
+  const testProviders = useCallback(() => {
+    setProvBusy(true);
+    setProv(null);
+    api.providersTest()
+      .then(setProv)
+      .catch((e) => setProv({ ok: false, results: [{ key: "err", label: "Test", status: "fail", detail: e.message }] }))
+      .finally(() => setProvBusy(false));
+  }, []);
+
   const testMail = useCallback(() => {
     setMailBusy(true);
     setMail(null);
@@ -204,6 +220,25 @@ export default function Health() {
             label="Environment"
             detail={svc.environment || "—"}
           />
+        </div>
+
+        <div className="notice" style={{ marginTop: 14 }}>
+          <div className="btn-row" style={{ justifyContent: "space-between" }}>
+            <span className="meta">
+              These name the provider that resolved at boot, not a credential
+              that works. Rotating a key leaves this unchanged either way.
+            </span>
+            <button className="btn small" onClick={testProviders} disabled={provBusy}>
+              {provBusy ? "Calling…" : "Call each vendor"}
+            </button>
+          </div>
+          {prov && (
+            <div className="checks" style={{ marginTop: 10 }}>
+              {prov.results.map((r) => (
+                <Check key={r.key} status={r.status} label={r.label} detail={r.detail} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

@@ -547,6 +547,104 @@ def mail_test(authorization: str | None = BearerHeader):
     }
 
 
+@router.post("/providers/test")
+def providers_test(authorization: str | None = BearerHeader):
+    """Spend one real call on each vendor, because a name is not a credential.
+
+    Health reports `deepgram` and `grok`. That is the provider that *resolved
+    at boot* — it proves the environment variable is set and non-empty and
+    nothing else. An invalid key constructs a provider perfectly happily and
+    fails only when somebody speaks into the glasses, which means a bad paste
+    shows green here and silent on the floor.
+
+    That is the same failure the mailer had, and the same shape of fix: stop
+    asking whether it is configured and make it do the thing.
+
+    Both probes are deliberately tiny. The point is authentication, not
+    quality — a 401 and a 200 are the whole answer, and the transcript coming
+    back empty is a pass, not a failure.
+    """
+    me = current_user(authorization)
+    require(me, "cue_admin")
+
+    # Imported here, not at module scope, matching `_platform_checks` below.
+    # Constructing a provider reads the environment, and this module is
+    # imported at boot by routers that must load whether or not a vendor is
+    # configured.
+    from .llm import get_provider
+    from .stt import get_stt
+
+    results = []
+
+    # --- speech to text ------------------------------------------------------
+    #
+    # Half a second of a quiet tone rather than silence. `BaseSTT._precheck`
+    # rejects anything under its silence floor *before* the network call, so a
+    # silent clip would fail locally and prove nothing about the key.
+    stt = get_stt()
+    if stt.name == "mock":
+        results.append({"key": "stt", "label": "Speech-to-text", "status": "warn",
+                        "detail": "Provider is mock — nothing was called."})
+    else:
+        try:
+            import math
+            import struct
+            frames = [int(9000 * math.sin(2 * math.pi * 220 * i / 16_000))
+                      for i in range(8_000)]
+            tone = struct.pack(f"<{len(frames)}h", *frames)
+            text = stt.transcribe(tone, 16_000)
+            results.append({
+                "key": "stt", "label": "Speech-to-text", "status": "ok",
+                "detail": f"{stt.name} accepted the audio and answered."
+                          + (f' Heard "{text}".' if text else
+                             " Transcript empty, which is correct for a tone."),
+            })
+        except Exception as e:
+            results.append({"key": "stt", "label": "Speech-to-text", "status": "fail",
+                            "detail": _provider_hint(stt.name, e)})
+
+    # --- language model ------------------------------------------------------
+    llm = get_provider()
+    if llm.name == "mock":
+        results.append({"key": "llm", "label": "Language model", "status": "warn",
+                        "detail": "Provider is mock — nothing was called."})
+    else:
+        try:
+            out = llm.answer_question("DO YOU HAVE THIS IN A 32", None, None, [])
+            said = (out or {}).get("answer") or ""
+            results.append({
+                "key": "llm", "label": "Language model", "status": "ok",
+                "detail": f"{llm.name} answered"
+                          + (f': "{said[:80]}"' if said else " with an empty body."),
+            })
+        except Exception as e:
+            results.append({"key": "llm", "label": "Language model", "status": "fail",
+                            "detail": _provider_hint(llm.name, e)})
+
+    return {"ok": all(r["status"] == "ok" for r in results), "results": results}
+
+
+def _provider_hint(provider: str, err: Exception) -> str:
+    """Name which of the plausible things is wrong.
+
+    Same lesson as `probe_connection` and the mail hints: "request failed"
+    sends somebody to re-paste a key that was never the problem. The vendor's
+    own words come first, because when a hint and the raw error disagree the
+    raw one is right.
+    """
+    raw = str(err).strip()
+    low = raw.lower()
+    if "401" in raw or "unauthor" in low or "forbidden" in low or "403" in raw:
+        return (f"{provider} rejected the credential. Check the key was pasted "
+                f"whole and has not been revoked. Vendor said: {raw[:200]}")
+    if "429" in raw or "rate" in low:
+        return f"{provider} rate-limited this call. Vendor said: {raw[:200]}"
+    if "timed out" in low or "timeout" in low:
+        return (f"Could not reach {provider} before the timeout — network, not "
+                f"credential.")
+    return f"{provider} failed: {raw[:240]}"
+
+
 class DeviceUpdate(BaseModel):
     label: str | None = None
     user_id: str | None = None
