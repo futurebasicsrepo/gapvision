@@ -1644,6 +1644,35 @@ function setFloorStatus(text: string, tone: "ok" | "warn" | "" = "") {
   el.className = tone ? `floor-status ${tone}` : "floor-status";
 }
 
+/**
+ * The "Sending…" line has to end, receipt or no receipt.
+ *
+ * A phone can be newer than the server it is talking to: this build's
+ * broadcast receipt arrives from a server that knows how to count the floor,
+ * and a deployment that predates it answers a broadcast with nothing at all.
+ * Left alone, the composer would sit mid-sentence forever and read as a hang —
+ * a worse failure than the missing count, and one caused entirely by shipping
+ * the two halves at different times.
+ *
+ * So the status degrades to what an older server's behaviour actually
+ * justifies: the message was sent, and we cannot say who got it.
+ */
+let floorReceiptTimer: ReturnType<typeof setTimeout> | null = null;
+
+function awaitFloorReceipt(fallback: string) {
+  if (floorReceiptTimer) clearTimeout(floorReceiptTimer);
+  floorReceiptTimer = setTimeout(() => {
+    floorReceiptTimer = null;
+    setFloorStatus(fallback, "");
+  }, 4000);
+}
+
+/** A receipt landed — whatever it said, the wait is over. */
+function floorReceiptArrived() {
+  if (floorReceiptTimer) clearTimeout(floorReceiptTimer);
+  floorReceiptTimer = null;
+}
+
 /** Redraw just the people, on every roster push. Rebuilding the whole card
  *  would take the keyboard away mid-sentence. */
 function renderFloorRoster() {
@@ -1784,7 +1813,10 @@ function mountFloorCard(caps: Capabilities) {
     // Said immediately, and replaced by the receipt when the server answers.
     // A composer that clears with no acknowledgement at all is one an
     // associate stops trusting after the first message that goes missing.
-    setFloorStatus(floorTarget ? `Sent to ${to}…` : "Sent to the floor.", "");
+    // Deliberately "Sending", not "Sent": this line is written before anything
+    // has been delivered, and only the receipt knows whether it was.
+    setFloorStatus(`Sending to ${to}…`, "");
+    awaitFloorReceipt(floorTarget ? `Sent to ${to}.` : "Sent to the floor.");
     input.value = "";
   };
 
@@ -2173,18 +2205,38 @@ async function main() {
   // Both receipts are the sender's own business and stay on the phone: the
   // glass is for what other people said, not for confirmations of what you
   // said. The failure is the one that matters — see `radio:undelivered`.
-  socket.on("radio:delivered", ({ toName }: { toName?: string }) => {
-    setFloorStatus(`Delivered to ${toName || "them"}.`, "ok");
-    log(`radio → delivered to ${toName || "?"}`);
+  socket.on("radio:delivered", ({ toName, reach }: { toName?: string; reach?: number }) => {
+    floorReceiptArrived();
+    if (toName) {
+      setFloorStatus(`Delivered to ${toName}.`, "ok");
+      log(`radio → delivered to ${toName}`);
+      return;
+    }
+    // A broadcast, and the count is the answer to the question the sender is
+    // actually asking. Nobody on the floor is the case worth colouring: it
+    // reads as success otherwise, and a message that reached no glasses is
+    // not a success — it is the broadcast version of "they left".
+    if (reach === 0) {
+      setFloorStatus("Nobody else is on the floor — nothing received it.", "warn");
+      log("radio → reached nobody");
+      return;
+    }
+    if (typeof reach === "number") {
+      setFloorStatus(`Sent to ${reach} on the floor.`, "ok");
+      log(`radio → reached ${reach}`);
+    }
   });
 
   socket.on("radio:undelivered", ({ reason, message }: { reason?: string; message?: string }) => {
+    floorReceiptArrived();
     // Roster ids churn on reconnect, so this is an ordinary outcome and not a
     // fault. It must be visible: a message the sender believes was delivered
     // and that reached nobody is the worst failure this feature has.
     const why = reason === "not_on_floor"
       ? "They're no longer on the floor — nothing was sent."
-      : "Not delivered.";
+      : reason === "floor_comms_off"
+        ? "Your store has floor messages switched off."
+        : "Not delivered.";
     setFloorStatus(why, "warn");
     log(`radio → UNDELIVERED (${reason}): ${message ?? ""}`);
   });

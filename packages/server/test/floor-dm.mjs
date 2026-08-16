@@ -12,11 +12,34 @@
  * Starts its own server on an unused port. No AI service required.
  */
 import { spawn } from "node:child_process";
+import http from "node:http";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import net from "node:net";
 import { io } from "socket.io-client";
 
-const PORT = process.env.TEST_PORT || 4124;
+/**
+ * A port nothing is listening on.
+ *
+ * Fixed ports cost an hour once already: a server left over from an earlier
+ * run of this suite still held 4145, the freshly spawned one died with
+ * EADDRINUSE, and the sockets connected to the *stale* process instead — which
+ * answered every question correctly except the one testing code it did not
+ * have. A test that silently talks to a different server than the one it
+ * started is worse than a test that fails.
+ */
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once("error", reject);
+    probe.listen(0, () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
+const PORT = process.env.TEST_PORT || await freePort();
 const URL = `http://localhost:${PORT}`;
 const SERVER = path.join(
   path.dirname(fileURLToPath(import.meta.url)), "..", "src", "index.js"
@@ -33,8 +56,10 @@ const child = spawn(process.execPath, [SERVER], {
   stdio: ["ignore", "pipe", "pipe"],
 });
 const serverLog = [];
+let childDead = false;
 child.stdout.on("data", (b) => serverLog.push(String(b)));
 child.stderr.on("data", (b) => serverLog.push(String(b)));
+child.on("exit", () => { childDead = true; });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const connect = () => new Promise((resolve, reject) => {
@@ -51,6 +76,9 @@ async function main() {
     } catch { /* not up yet */ }
     await sleep(250);
   }
+
+  check("the server under test actually started", !childDead,
+    childDead ? serverLog.join("").slice(0, 200) : "");
 
   // One store with three associates and a manager, and a second store whose
   // only job is to not hear any of it.
@@ -148,6 +176,16 @@ async function main() {
   check("a broadcast still reaches the whole floor",
     heard.ben.some((m) => m.message === "anyone free for a size check")
       && heard.cass.some((m) => m.message === "anyone free for a size check"));
+
+  // The sender never sees their own message on their own glass, so the count
+  // is the only thing that answers "did that go anywhere". Ann, Ben and Cass
+  // are on this floor; Ann sent it; two received it.
+  check("a broadcast is receipted with how many it reached",
+    receipts.delivered.at(-1)?.reach === 2,
+    JSON.stringify(receipts.delivered.at(-1)));
+  check("the count excludes the sender, whose own glass never renders it",
+    receipts.delivered.at(-1)?.toName === undefined,
+    JSON.stringify(receipts.delivered.at(-1)));
   check("a broadcast is still mirrored to the dashboard",
     JSON.stringify(snaps.alpha.at(-1)?.radioLog || []).includes("size check"));
 
@@ -233,8 +271,108 @@ async function main() {
   for (const s of [ann, ben, mgr, otherAssoc]) s.close();
 }
 
+/**
+ * The Console switch, enforced.
+ *
+ * Run separately because it needs a *different* server: one pointed at a stub
+ * capabilities endpoint that says this tenant has floor messaging off. The
+ * flag was reported to clients and never enforced, which was fine while it
+ * only decided whether a phone drew a composer and is not fine now that
+ * Console offers a switch labelled off.
+ */
+async function offSwitch() {
+  const capsPort = await freePort();
+  const stub = http.createServer((req, res) => {
+    // Read by hand: `URL` is shadowed at the top of this file by the server
+    // address, so the global constructor is not reachable here.
+    const off = /[?&]tenant=t_quiet(&|$)/.test(req.url || "");
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ floor_comms: !off, voice: true, known: true }));
+  });
+  await new Promise((r) => stub.listen(capsPort, r));
+  // Prove the stub answers before anything depends on it. The switch fails
+  // *open* by design — a capabilities lookup that cannot connect leaves the
+  // floor talking — so a stub that is not up yet reads exactly like a store
+  // with messaging enabled, and the suite would pass or fail on a race
+  // rather than on the behaviour.
+  for (let i = 0; i < 40; i++) {
+    try {
+      const probe = await fetch(`http://localhost:${capsPort}/api/tenant/capabilities?tenant=t_quiet`);
+      if ((await probe.json())?.floor_comms === false) break;
+    } catch { /* not up yet */ }
+    await sleep(100);
+  }
+
+  const port = await freePort();
+  const child2 = spawn(process.execPath, [SERVER], {
+    env: { ...process.env, PORT: String(port), AI_SERVICE_URL: `http://localhost:${capsPort}` },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  // If this one dies, every socket below would quietly connect to whatever
+  // else is on that port and the suite would report on a stranger.
+  const child2Log = [];
+  child2.stderr.on("data", (b) => child2Log.push(String(b)));
+  let child2Dead = false;
+  child2.on("exit", () => { child2Dead = true; });
+  try {
+    for (let i = 0; i < 40; i++) {
+      try { if ((await fetch(`http://localhost:${port}/health`)).ok) break; } catch { /* not up */ }
+      await sleep(250);
+    }
+    const link = (tenant) => new Promise((resolve, reject) => {
+      const s = io(`http://localhost:${port}`, { transports: ["websocket"], reconnection: false });
+      s.on("connect", () => { s.emit("register", { role: "associate", name: "A", tenant }); resolve(s); });
+      s.on("connect_error", reject);
+    });
+
+    check("the capability-enforcing server actually started",
+      !child2Dead, child2Dead ? child2Log.join("").slice(0, 200) : "");
+
+    const quiet = await link("t_quiet");
+    const quietHeard = [];
+    const refusals = [];
+    quiet.on("radio:message", (m) => quietHeard.push(m));
+    quiet.on("radio:undelivered", (r) => refusals.push(r));
+    await sleep(300);
+    quiet.emit("radio:send", { message: "anyone about" });
+    await sleep(400);
+
+    check("a store with floor messages off does not deliver them",
+      quietHeard.length === 0, JSON.stringify(quietHeard));
+    check("and the sender is told why, rather than the message vanishing",
+      refusals.at(-1)?.reason === "floor_comms_off",
+      JSON.stringify(refusals.at(-1)));
+
+    const loud = await link("t_loud");
+    const loudHeard = [];
+    const loudReceipts = [];
+    loud.on("radio:message", (m) => loudHeard.push(m));
+    loud.on("radio:delivered", (r) => loudReceipts.push(r));
+    await sleep(300);
+    loud.emit("radio:send", { message: "still talking" });
+    await sleep(400);
+    check("a store that never touched the switch is unaffected",
+      loudHeard.some((m) => m.message === "still talking"),
+      JSON.stringify(loudHeard.map((m) => m.message)));
+    // The lone-tester case, which is what "the messages don't push to glasses"
+    // turned out to be: one person on the floor, sending to everyone, seeing
+    // nothing on their own glass — correctly. The receipt is what tells them
+    // the difference between "it worked" and "there was nobody there".
+    check("a broadcast to an empty floor reports reaching nobody",
+      loudReceipts.at(-1)?.reach === 0,
+      JSON.stringify(loudReceipts.at(-1)));
+
+    quiet.close();
+    loud.close();
+  } finally {
+    child2.kill("SIGTERM");
+    stub.close();
+  }
+}
+
 try {
   await main();
+  await offSwitch();
 } catch (e) {
   check("suite ran", false, String(e.message || e));
   console.error(serverLog.join(""));

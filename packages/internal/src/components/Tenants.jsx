@@ -512,6 +512,28 @@ function TenantDetail({ tenant, onChanged }) {
     }
   }
 
+  /**
+   * The same merge, for the other jsonb column.
+   *
+   * `config` holds what the product may *do*; `privacy` holds what it may
+   * *keep*. They are deliberately separate columns and this is deliberately a
+   * separate function, because the two have opposite defaults — a privacy
+   * switch is off until a retailer says yes, and a capability that predates
+   * the control plane is on until they say no. Writing a capability through
+   * `setPrivacy` would put a feature flag in the column a legal review reads.
+   */
+  async function setConfig(patch) {
+    try {
+      await api.updateTenant(tenant.slug, {
+        config: { ...(tenant.config || {}), ...patch },
+      });
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+      throw e;
+    }
+  }
+
   async function assignDevice(deviceId, userId) {
     // Optimistic: the select has already moved, and snapping it back on a
     // slow round trip reads as the click not registering.
@@ -595,6 +617,30 @@ function TenantDetail({ tenant, onChanged }) {
           Commercial terms are CueSea-side only — a retailer's own admin can set
           their privacy posture but can't change either of these.
         </p>
+
+        {/* What the floor may do, as opposed to what CueSea may keep. One
+            switch today, and its own board rather than a fourth row on the
+            privacy one: these have opposite defaults and different readers.
+            A privacy switch is off until a retailer agrees; floor messaging
+            has been on for every tenant since before this control plane
+            existed, and turning it off is a decision a store makes about how
+            its staff talk to each other — not a consent question. */}
+        <p className="meta" style={{ marginBottom: 6, lineHeight: 1.5 }}>
+          <strong>Floor</strong> — what the associates' glasses can do.
+        </p>
+        <div className="mc-board" style={{ marginBottom: 16 }}>
+          <MissionSwitch
+            // `!== false`, not `!!`. This capability ships on and a tenant row
+            // that has never mentioned it is a tenant with messaging working —
+            // so reading it as a plain truthy check would draw OFF for almost
+            // every store, which is the precise failure the privacy switches
+            // were fixed for last week.
+            on={(tenant.config || {}).floor_comms !== false}
+            label="FLOOR MESSAGES"
+            desc="Associate-to-associate messages, to the whole floor or to one person, and the manager's composer in Studio. Off removes the composers and stops delivery; the backup call goes with it."
+            onChange={(v) => setConfig({ floor_comms: v })}
+          />
+        </div>
 
         {/* Privacy posture, as a systems board: what this tenant has switched
             on, each a plain on/off with its state visible from across the

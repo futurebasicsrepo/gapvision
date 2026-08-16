@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { socket, currentTenant } from "../socket.js";
+import { useCallback, useEffect, useState } from "react";
+import { socket, registerDashboard } from "../socket.js";
 import { api, clock, compact, duration, money } from "../api.js";
 import Waiting from "./Waiting.jsx";
 import FloorMessage from "./FloorMessage.jsx";
@@ -37,7 +37,6 @@ export default function ManagerDashboard({ user }) {
   const [roster, setRoster] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-  const registered = useRef(false);
 
   /**
    * Which retailer's floor we're looking at.
@@ -85,24 +84,28 @@ export default function ManagerDashboard({ user }) {
   // Refresh when the floor does something, rather than polling on a timer —
   // a quiet store shouldn't generate traffic, and a busy one updates at once.
   useEffect(() => {
-    if (!registered.current) {
-      // The name goes with the registration, and it is the signed-in user's
-      // rather than anything typed: the server pins it to the socket here and
-      // stamps it on every message this dashboard sends, so what appears on an
-      // associate's glass is who the manager actually is. A per-message name
-      // field would be a string a browser can choose.
-      socket.emit("register", {
-        role: "dashboard", tenant: currentTenant(), name: user?.name || user?.email,
-      });
-      registered.current = true;
-    }
+    // Register as the store actually being looked at, not as whatever this
+    // account belongs to. For a manager those are the same slug. For CueSea
+    // staff they are not: the account has no tenant, so the old
+    // `currentTenant()` call fell back to the demo world and pinned the socket
+    // there — the roster on screen was Gap's while the numbers beside it were
+    // the retailer's, and nothing said which was which.
+    //
+    // `tenant` is null only for staff who have not picked a store yet, and
+    // that branch renders the picker instead of this view.
+    //
+    // The name rides along, and it is the signed-in user's rather than
+    // anything typed: the server pins it to the socket and stamps it on every
+    // message this dashboard sends, so what appears on an associate's glass is
+    // who the manager actually is.
+    if (tenant) registerDashboard({ tenant, name: user?.name || user?.email });
     const onUpdate = (snap) => {
       setRoster(snap.associates || []);
       void load();
     };
     socket.on("dashboard:update", onUpdate);
     return () => socket.off("dashboard:update", onUpdate);
-  }, [load, user]);
+  }, [load, tenant, user]);
 
   const s = data.summary;
   const rows = data.board?.rows || [];
@@ -221,17 +224,16 @@ export default function ManagerDashboard({ user }) {
            Beside the roster, because who is on the floor and who you want to
            reach are the same question asked twice.
 
-           Not for CueSea staff. A cue_admin belongs to no tenant, so their
-           socket registers under `currentTenant()`'s fallback rather than the
-           store they picked from the tenant switcher above — a message sent
-           from here would land on a *different* retailer's glasses, and
-           `bindTenant` pins that for the life of the socket. That is a bug
-           worth fixing on its own, but it is not the reason this is hidden:
-           CueSea staff writing into a retailer's floor channel is the
-           cross-tenant write Kyle ruled out when he said Studio and never
-           Console, and the rule does not stop applying because the surface
-           says Studio at the top. The roster below stays visible — reading a
-           floor to support a customer is what this account is for. */}
+           Not for CueSea staff, and the reason is the rule rather than any
+           accident of wiring: an account that belongs to no retailer writing
+           into a retailer's floor channel is the cross-tenant write Kyle ruled
+           out when he said Studio and never Console, and that does not stop
+           applying because the surface says Studio at the top. The socket now
+           binds to the store actually being viewed, so this would send to the
+           right floor — it is withheld because it should not send at all.
+
+           The roster below stays visible. Reading a floor to support a
+           customer is what this account is for; speaking on it is not. */}
       {!isCueStaff && <FloorMessage roster={roster} user={user} />}
 
       {/* --- floor roster: socket, live ---------------------------------- */}

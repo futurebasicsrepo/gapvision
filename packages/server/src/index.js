@@ -69,6 +69,51 @@ const dashboardRoom = (tenant) => `dashboard:${tenant}`;
  */
 const URGENT_PHRASES = new Set(["NEED BACKUP"]);
 
+/**
+ * Whether a store has floor messaging switched on, cached per tenant.
+ *
+ * The flag has always been reported to clients and never enforced, which was
+ * honest while it only decided whether the phone drew a composer. It stops
+ * being honest the moment Console offers a switch labelled "off": a control
+ * that leaves the ring's canned phrases working and Studio's composer sending
+ * is a control that does not do what it says, and this codebase has already
+ * paid for one of those.
+ *
+ * Cached for a minute because it is asked on every message and a shop floor's
+ * radio must not wait on an HTTP round trip per sentence.
+ *
+ * **Fails open**, unlike the camera. The camera's closed answer protects a
+ * guest from something a retailer never agreed to; here the closed answer
+ * would take away a floor's ability to call for backup because a service
+ * blinked. A store turning this off is a deliberate act, and a network
+ * failure is not one.
+ */
+const FLOOR_COMMS_TTL_MS = 60_000;
+const floorCommsCache = new Map();
+
+async function floorCommsAllowed(tenant) {
+  const t = (tenant || DEMO_TENANT).toLowerCase();
+  const hit = floorCommsCache.get(t);
+  if (hit && Date.now() - hit.at < FLOOR_COMMS_TTL_MS) return hit.allowed;
+  let allowed = true;
+  try {
+    const r = await fetch(
+      `${AI_SERVICE_URL}/api/tenant/capabilities?tenant=${encodeURIComponent(t)}`,
+      { headers: aiHeaders(AI_API_KEY) },
+    );
+    if (r.ok) {
+      const body = await r.json();
+      // Only an explicit `false` closes it. An unknown tenant, a malformed
+      // body and a service that never answered all leave the floor talking.
+      allowed = body?.floor_comms !== false;
+    }
+  } catch (err) {
+    console.warn(`[cue] floor_comms lookup failed for '${t}': ${err.message}`);
+  }
+  floorCommsCache.set(t, { allowed, at: Date.now() });
+  return allowed;
+}
+
 function freshState(tenant) {
   return {
     associates: new Map(), // socketId -> { name, zone, status }
@@ -657,11 +702,21 @@ io.on("connection", (socket) => {
    * that exists. The interrupt rules, the tenant partition and the sender's
    * identity are shared by construction rather than reimplemented.
    */
-  socket.on("radio:send", ({ from, message, channel, priority, to } = {}) => {
+  socket.on("radio:send", async ({ from, message, channel, priority, to } = {}) => {
     const t = socket.data.tenant || DEMO_TENANT;
     const state = stateFor(t);
     const text = String(message ?? "").slice(0, 140).trim();
     if (!text) return;
+
+    // A store that has switched floor messaging off in Console. Told to the
+    // sender rather than dropped in silence, because the one thing worse than
+    // a floor that cannot message is a floor that thinks it can.
+    if (!(await floorCommsAllowed(t))) {
+      socket.emit("radio:undelivered", {
+        to: to ? String(to) : null, reason: "floor_comms_off", message: text,
+      });
+      return;
+    }
 
     // Who an address resolves to, and the tenant check that makes it safe.
     //
@@ -749,6 +804,17 @@ io.on("connection", (socket) => {
     if (state.radioLog.length > 200) state.radioLog.shift();
     // One store's floor only. This line is the whole reason for the partition.
     io.to(associatesRoom(t)).emit("radio:message", entry);
+    // How many people it actually reached — the sender's own glasses excluded,
+    // because a lens never renders what its wearer just sent.
+    //
+    // "Sent to the floor" is a claim about the future; this is a fact about
+    // what happened. It also makes the empty floor visible: a message to
+    // nobody currently looks identical to a message to everyone, and the
+    // difference is the whole question a sender is asking.
+    socket.emit("radio:delivered", {
+      id: entry.id,
+      reach: state.associates.size - (state.associates.has(socket.id) ? 1 : 0),
+    });
     broadcastDashboard(t);
   });
 
