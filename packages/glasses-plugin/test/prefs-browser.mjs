@@ -281,8 +281,13 @@ const saved = (p) => p.waitForFunction(
   caps = { camera_capture: false, voice: true, floor_comms: false };
   const p = await open();
   const shown = await labels(p);
+  // One .pref-seg remains whatever the store says: the tenant selector,
+  // which is how a phone *reaches* the right store in the first place and
+  // must never be gated behind that store's own capabilities.
   check("floor comms off in the store: the preference is absent, not disabled",
-    !shown.includes("Floor messages") && (await p.$$("#prefs-mount .pref-seg")).length === 0,
+    !shown.includes("Floor messages")
+    && (await p.$$("#prefs-mount .pref-seg")).length === 1
+    && shown.includes("This phone works at"),
     JSON.stringify(shown));
   check("the preferences the store has nothing to say about are still there",
     shown.includes("Zone") && shown.includes("Points on the rail") && shown.includes("Voice"),
@@ -293,7 +298,8 @@ const saved = (p) => p.waitForFunction(
   const q = await open();
   const bare = await labels(q);
   check("voice off in the store: that preference is absent too",
-    !bare.includes("Voice") && bare.join(",") === "Zone,Points on the rail",
+    !bare.includes("Voice")
+    && bare.join(",") === "Zone,Points on the rail,This phone works at",
     JSON.stringify(bare));
   // The unenforced capabilities keep their shipped behaviour. Hiding the
   // control must not become a back door to switching voice off for every

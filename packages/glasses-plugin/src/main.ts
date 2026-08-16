@@ -51,11 +51,29 @@ import { ShiftController, TELEMETRY_NOTICE } from "./shift";
  */
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || __REALTIME_URL__;
 
-/** Tenant = which retail world this launch belongs to ("gap" demo | "shopify"
- *  live). Carried by the launch URL, i.e. the QR code that opened us. */
-const TENANT =
-  new URLSearchParams(window.location.search).get("tenant")?.toLowerCase() || "gap";
-const TENANT_LABEL = TENANT === "shopify" ? "FUTURE BASICS · LIVE" : "GAP · DEMO";
+/**
+ * Tenant = which retail world this launch belongs to.
+ *
+ * Resolution order: the launch URL, then the phone's own stored choice, then
+ * the demo. The stored choice is the fix for the bug that made camera capture
+ * look broken for a month: **Even Hub gives no way to put a query parameter
+ * on the launch URL**, so on a real phone the tenant was always `gap` — and
+ * a store whose live slug is `cuesea` read as a store with the camera
+ * switched off. The selector card writes the choice and reloads; see
+ * `mountTenantCard`.
+ */
+const TENANT_KEY = "cue.tenant";
+const KNOWN_TENANTS: { slug: string; label: string }[] = [
+  { slug: "gap", label: "GAP · DEMO" },
+  { slug: "cuesea", label: "CUESEA · LIVE" },
+  { slug: "shopify", label: "FUTURE BASICS · LIVE" },
+];
+let TENANT =
+  new URLSearchParams(window.location.search).get("tenant")?.toLowerCase()
+  || (() => { try { return window.localStorage.getItem(TENANT_KEY) || ""; } catch { return ""; } })()
+  || "gap";
+let TENANT_LABEL =
+  KNOWN_TENANTS.find((t) => t.slug === TENANT)?.label || `${TENANT.toUpperCase()} · LIVE`;
 
 /**
  * This associate's preferences.
@@ -1473,6 +1491,59 @@ function mountPrefsCard(caps: Capabilities) {
 }
 
 /**
+ * The store selector — which tenant this phone belongs to.
+ *
+ * The highest-value small fix in the handoff, shipped at last: Even Hub
+ * offers no way to set a launch parameter, so without this card a real phone
+ * is forever the demo tenant — wrong roster, wrong store, and a camera flag
+ * that never matches the store that actually enabled it. The choice persists
+ * on the phone and the page relaunches into it, so every boot-time decision
+ * (capabilities, socket registration, roster) is made against the right
+ * world rather than patched afterwards.
+ */
+function mountTenantCard() {
+  const mount = document.getElementById("prefs-mount");
+  if (!mount) return;
+
+  const card = document.createElement("section");
+  card.className = "card prefs";
+  const title = document.createElement("h3");
+  title.textContent = "Store";
+  card.appendChild(title);
+
+  const row = prefRow("This phone works at",
+    "Changing it reloads the plugin into that store's world — roster, camera and floor settings included.");
+  const group = document.createElement("div");
+  group.className = "pref-seg";
+  group.setAttribute("role", "radiogroup");
+  group.setAttribute("aria-label", "STORE");
+  for (const t of KNOWN_TENANTS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pref-seg-item";
+    b.dataset.value = t.slug;
+    b.dataset.on = t.slug === TENANT ? "1" : "0";
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", String(t.slug === TENANT));
+    b.textContent = t.label;
+    b.addEventListener("click", () => {
+      if (t.slug === TENANT) return;
+      // Both halves matter: the store survives a cold launch (Even Hub's URL
+      // carries no parameter), the URL makes this launch pick it up now.
+      try { window.localStorage.setItem(TENANT_KEY, t.slug); } catch { /* private mode */ }
+      void bridge?.setLocalStorage(TENANT_KEY, t.slug);
+      const url = new URL(window.location.href);
+      url.searchParams.set("tenant", t.slug);
+      window.location.href = url.toString();
+    });
+    group.appendChild(b);
+  }
+  row.appendChild(group);
+  card.appendChild(row);
+  mount.appendChild(card);
+}
+
+/**
  * The capture card — the phone-page trigger for a scan.
  *
  * **Built only when the store has the camera on, and not built at all
@@ -1672,6 +1743,7 @@ async function main() {
     bridge,
     serverUrl: SERVER_URL,
     tenant: TENANT,
+    zone: () => prefs.zone,
     render: (lines, meta) => renderCue({ lines, meta, cardTitle: "SCAN" }),
     log,
     // Shares the voice pill on the phone page rather than adding a second one:
@@ -1898,6 +1970,7 @@ async function main() {
   const wasVoice = prefs.voice;
   prefs = effectivePrefs(stored, capabilities, TENANT);
   mountPrefsCard(capabilities);
+  mountTenantCard();
   updateVoicePill();
   // A stored preference the store does not permit was in force for the length
   // of the capability fetch, so the glass may be offering a gesture that has

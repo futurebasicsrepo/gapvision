@@ -197,12 +197,25 @@ const notice = (p) =>
   // `DeviceStatus` reaches the wire. The MockBridge pushes one on subscribe,
   // which is the only way this path is reachable without a phone — and a path
   // that can only be exercised on hardware is a path that rots.
-  const health = wire.sent.find((s) => s.event === "device:health");
-  check("the glasses' own status reaches the server", !!health,
-    JSON.stringify(wire.sent.map((s) => s.event)));
+  //
+  // Reaches it by either door: live as `device:health` when the socket beat
+  // the status, or inside `telemetry:replay` when the status beat the socket.
+  // The second is not a degraded case — buffering through an outage is the
+  // controller's whole job, and which door wins is a race this test must not
+  // depend on. What it asserts is that the record arrives, with the facts on
+  // it.
+  const live = wire.sent.find((s) => s.event === "device:health")?.payload;
+  const replayed = wire.sent
+    .filter((s) => s.event === "telemetry:replay")
+    .flatMap((s) => s.payload?.events || [])
+    .find((e) => e?.event === "device:health" || typeof e?.payload?.batteryPercent === "number"
+                 || typeof e?.batteryPercent === "number");
+  const health = live || replayed?.payload || replayed;
+  check("the glasses' own status reaches the server",
+    !!health, JSON.stringify(wire.sent.map((s) => s.event)));
   check("with a battery level and a serial on it",
-    typeof health?.payload?.batteryPercent === "number" && !!health?.payload?.serial,
-    JSON.stringify(health?.payload));
+    typeof health?.batteryPercent === "number" && !!health?.serial,
+    JSON.stringify(health));
 
   // A battery drop, pushed the way the host pushes one.
   await p.evaluate(() => (window).__cueEmitDeviceStatus({

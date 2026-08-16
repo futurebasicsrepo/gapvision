@@ -54,6 +54,7 @@ import base64
 import binascii
 import re
 
+from . import barcode as barcode_reader
 from . import cue as cue_format
 from .llm import VisionUnsupported, get_provider
 
@@ -111,12 +112,17 @@ NOT_AN_OBJECT = "NO_SUBJECT"
 
 
 def analyze(*, tenant: str, kind: str, image_base64: str, mime: str,
-            note: str | None, crm) -> dict:
+            note: str | None, crm, zone: str | None = None) -> dict:
     """One photograph in, one cue out.
 
     Returns exactly what `cue.build` produces — `{"lines": [...], "meta": [...]}`
     — plus a few scalars the lens ignores, so this renders through the existing
     lens path with no new card type.
+
+    `zone` is where the associate is standing (their own preference, sent by
+    the plugin). It is used for one thing: the direction line — `KNITWEAR →
+    DENIM WALL` beats `DENIM WALL` when you are not already there. Optional,
+    never stored, never matched against anything.
     """
     kind = (kind or "").strip().lower()
     if kind not in KINDS:
@@ -128,8 +134,22 @@ def analyze(*, tenant: str, kind: str, image_base64: str, mime: str,
             415, f"'{mime or 'unset'}' is not a supported image type. Send one "
                  f"of: {', '.join(ALLOWED_MIME)}.")
 
-    payload = _checked_payload(image_base64)
+    payload, raw = _checked_payload(image_base64)
     provider = get_provider()
+
+    # A barcode in frame settles the SKU question without a model: the
+    # decoder is exact, local, free and cannot hallucinate. The model is the
+    # fallback for tags a decoder cannot read — washed-out print, a
+    # handwritten style number, a care label. The raw bytes go out of scope
+    # right after this; they are never written anywhere.
+    if kind == "sku":
+        codes = barcode_reader.decode(raw)
+        del raw
+        if codes:
+            return _sku_answer(tenant, "zxing", codes[0], crm,
+                               source="BARCODE", zone=zone)
+    else:
+        del raw
 
     question = QUESTIONS[kind]
     if note:
@@ -157,14 +177,20 @@ def analyze(*, tenant: str, kind: str, image_base64: str, mime: str,
                     meta=["OBJECTS"])
 
     if kind == "sku":
-        return _sku_answer(tenant, provider.name, reading, crm)
+        return _sku_answer(tenant, provider.name, reading, crm,
+                           source="TAG READ", zone=zone)
     return _part_answer(tenant, provider.name, reading, crm)
 
 
 # --- the payload -------------------------------------------------------------
 
-def _checked_payload(image_base64: str) -> str:
-    """The base64 string, or a refusal that says what the ceiling is."""
+def _checked_payload(image_base64: str) -> tuple[str, bytes]:
+    """The base64 string and its decoded bytes, or a refusal.
+
+    The bytes are returned so the barcode decoder can read them; they still
+    never outlive the request — `analyze` drops them the moment the decode
+    attempt is done, and nothing on any path writes or logs them.
+    """
     payload = (image_base64 or "").strip()
     if not payload:
         raise VisionRefused(400, "image_base64 is required")
@@ -177,15 +203,11 @@ def _checked_payload(image_base64: str) -> str:
     except (binascii.Error, ValueError):
         raise VisionRefused(400, "image_base64 is not valid base64")
 
-    size = len(raw)
-    # Measured, then dropped. The decoded image has no reason to outlive this
-    # function — the provider is handed the base64 the caller already sent.
-    del raw
-    if size > MAX_IMAGE_BYTES:
-        raise VisionRefused(413, _too_big(size))
-    if size < 1024:
+    if len(raw) > MAX_IMAGE_BYTES:
+        raise VisionRefused(413, _too_big(len(raw)))
+    if len(raw) < 1024:
         raise VisionRefused(400, "That image is too small to read anything from.")
-    return payload
+    return payload, raw
 
 
 def _too_big(size: int) -> str:
@@ -201,46 +223,94 @@ def _short_reason(e: Exception) -> str:
 
 # --- SKU: grounded in what the floor actually holds ---------------------------
 
-def _sku_answer(tenant: str, provider_name: str, reading: str, crm) -> dict:
-    code = _identifier(reading)
-    items, have_records = _floor(crm)
+def _sku_answer(tenant: str, provider_name: str, reading: str, crm,
+                source: str = "TAG READ", zone: str | None = None) -> dict:
+    """A code — decoded or read — resolved against records, with a direction.
 
-    if not have_records:
-        # Empty and "not carried" are not the same claim, and this is the one
-        # place the difference is load-bearing: an associate holding a jean
-        # must not be told the store does not sell it because a product query
-        # came back empty.
-        return _out("sku", tenant, provider_name, grounded=False, sku=code,
-                    lines=["NO FLOOR RECORDS LOADED",
-                           f"CANT CONFIRM {code}" if code else "CANT CONFIRM IT",
-                           "CHECK THE POS"],
-                    meta=[])
+    `source` names how the code was obtained, and it goes in the meta strip
+    because it changes what a wrong answer means: `BARCODE` is exact (a miss
+    means the store has no record), `TAG READ` is a model's transcription (a
+    miss may mean it misread). An associate deciding whether to rescan or to
+    walk to the POS needs that distinction more than any other fact here.
+    """
+    code = _identifier(reading) if source != "BARCODE" else (reading or "").strip().upper()
 
     if not code:
         return _out("sku", tenant, provider_name, grounded=False, sku=None,
                     lines=["NO CODE READ", "MOVE CLOSER AND RETRY"], meta=[])
 
-    item = _match(code, items)
+    # Direct lookup first — exact, by SKU or barcode, against the live store.
+    # `looked` distinguishes "the adapter answered nothing" from "the adapter
+    # has no such method / could not answer", because those end differently:
+    # a live store that answered nothing is a real miss; an adapter that
+    # errored must not report the product as not carried.
+    item, looked = _lookup(crm, code)
+
+    if item is None and not looked:
+        items, have_records = _floor(crm)
+        if not have_records:
+            # Empty and "not carried" are not the same claim, and this is the
+            # one place the difference is load-bearing: an associate holding a
+            # jean must not be told the store does not sell it because a
+            # product query came back empty.
+            return _out("sku", tenant, provider_name, grounded=False, sku=code,
+                        lines=["NO FLOOR RECORDS LOADED",
+                               f"CANT CONFIRM {code}",
+                               "CHECK THE POS"],
+                        meta=[source])
+        item = _match(code, items)
+
     if item is None:
         # A real answer. The code was read and this floor has no record of it —
         # wrong store, an old tag, a transfer that never landed. Saying so beats
         # inventing a product, and beats a shrug.
         return _out("sku", tenant, provider_name, grounded=True, sku=code,
                     lines=["NOT IN FLOOR RECORDS", f"CODE {code}", "CHECK THE POS"],
-                    meta=[])
+                    meta=[source])
 
     stock = item.get("stock")
+    location = str(item.get("location") or "FLOOR")
     lines = [
         str(item.get("name") or code),
-        f"{cue_format.money(item.get('price'))} · {item.get('location') or 'FLOOR'}",
+        # The direction line. The arrow is the instruction — walk there — and
+        # it is in the lens charset (20px, verified). With the associate's own
+        # zone known and different, the line says the whole route.
+        f"{cue_format.money(item.get('price'))} · {_direction(zone, location)}",
     ]
     if isinstance(stock, int):
-        lines.append(f"{stock} ON HAND")
-    # Nothing in the meta strip: every fact worth having is already one of the
-    # three lines, and cue.py's rule is that an empty strip is honest while a
-    # padded one trains people to stop reading it.
+        size = item.get("size")
+        lines.append(f"{stock} ON HAND{f' IN {size}' if size else ''}")
     return _out("sku", tenant, provider_name, grounded=True,
-                sku=item.get("sku") or code, lines=lines, meta=[])
+                sku=item.get("sku") or code, lines=lines, meta=[source])
+
+
+def _direction(zone: str | None, location: str) -> str:
+    """`KNITWEAR → DENIM WALL`, or just `→ DENIM WALL` when we don't know
+    where the associate is standing — or the location alone when they are
+    already there, because directing somebody to where they are is noise."""
+    here = str(zone or "").strip()
+    there = location.strip()
+    if here and here.upper() != there.upper():
+        return f"{here} → {there}"
+    return f"→ {there}" if not here else there
+
+
+def _lookup(crm, code: str) -> tuple[dict | None, bool]:
+    """(record, the-adapter-actually-answered).
+
+    `lookup_code` is optional on a CRM adapter — the demo CRM and the Shopify
+    adapter both carry it; a future adapter that doesn't simply falls back to
+    the floor-inventory match. An adapter that *raises* is treated as not
+    having answered, never as having answered "no".
+    """
+    fn = getattr(crm, "lookup_code", None)
+    if not callable(fn):
+        return None, False
+    try:
+        item = fn(code)
+    except Exception:
+        return None, False
+    return (item, True) if item else (None, False)
 
 
 def _identifier(reading: str) -> str | None:

@@ -184,7 +184,7 @@ check("the affordance is absent when capabilities never arrived at all",
 // A label that drifts back to SHOUTING is the visible sign the control has
 // drifted back toward a surface that has no buttons.
 check("the control labels are written for a page, not for the glass",
-  V.captureControls(ON).every((c) => /^Scan a (tag|part)$/.test(c.label)),
+  V.captureControls(ON).every((c) => /^Scan a (tag or barcode|part)$/.test(c.label)),
   JSON.stringify(V.captureControls(ON).map((c) => c.label)));
 
 // --- which failure, not "something went wrong" ------------------------------

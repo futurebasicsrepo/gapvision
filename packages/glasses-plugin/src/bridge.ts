@@ -722,12 +722,19 @@ class MockBridge implements GlassesBridge {
     };
     // Deferred rather than synchronous: a caller that subscribes and then sets
     // up its own state would otherwise be handed a status before it is ready.
+    //
+    // Delivered to *this* subscriber alone, not broadcast. With two
+    // subscribers (the shift controller and the header's battery light) a
+    // broadcast delivers the same initial status twice to each — and the
+    // shift controller's repeat-window dedupe then swallows the copy that
+    // arrives after the socket is up, which cost the live `device:health`
+    // event a real test was watching for. One subscriber, one hello.
     setTimeout(() => {
       const status = toGlassesStatus({
         sn: "MOCK-G2-0001", connectType: "connected",
         batteryLevel: 78, isCharging: false, isWearing: true, isInCase: false,
       });
-      if (status) this.statusListeners.forEach((fn) => fn(status));
+      if (status && this.statusListeners.has(cb)) cb(status);
     }, 0);
     return () => this.statusListeners.delete(cb);
   }

@@ -147,7 +147,7 @@ const lens = lensOf(p);
 const ring = (a) => p.click(`[data-event="${a}"][data-source="ring"]`);
 
 check("camera on: the card offers a tag and a part",
-  (await cardButtons(p)()).join(" | ") === "Scan a tag | Scan a part",
+  (await cardButtons(p)()).join(" | ") === "Scan a tag or barcode | Scan a part",
   JSON.stringify(await cardButtons(p)()));
 
 // --- 6. and the glasses stay a display -------------------------------------

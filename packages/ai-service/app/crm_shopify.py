@@ -152,6 +152,20 @@ query floorProducts($first: Int!) {
 # any valid Admin token with no scope of its own, which is what makes it usable
 # as a connection test: a bad token fails here, and a token that is merely
 # missing a scope still answers and says which ones it has.
+#: One code, one variant. The search filter accepts `sku:` and `barcode:`
+#: terms, so a decoded EAN and a printed style number resolve through the same
+#: query — exact, against the live store, never against a cached page of 30.
+Q_VARIANT_LOOKUP = """
+query variantByCode($q: String!) {
+  productVariants(first: 5, query: $q) {
+    edges { node {
+      sku barcode price inventoryQuantity
+      selectedOptions { name value }
+      product { title handle totalInventory }
+    } }
+  }
+}"""
+
 Q_SCOPES = """
 query appScopes {
   currentAppInstallation { accessScopes { handle } }
@@ -387,6 +401,47 @@ class ShopifyCRM:
             return items[:3]
         except Exception:
             return []  # scope missing or API shape drift — degrade gracefully
+
+    # ---- one code, one variant ------------------------------------------
+    def lookup_code(self, code: str) -> dict | None:
+        """The variant this SKU or barcode names, or None.
+
+        This is what the phone-camera scan resolves against on a live store.
+        Exact by construction: the store's own search over `sku:` and
+        `barcode:`, not containment over whatever thirty products the floor
+        cache happens to hold. Raising is allowed — the caller treats an
+        error as "could not answer", which must never read as "not carried".
+        """
+        wanted = "".join(c for c in str(code or "").strip()
+                         if c.isalnum() or c in "-_./")
+        if not wanted:
+            return None
+
+        def fetch():
+            data = self.t.query(Q_VARIANT_LOOKUP,
+                                {"q": f"sku:{wanted} OR barcode:{wanted}"})
+            edges = (data.get("productVariants") or {}).get("edges") or []
+            if not edges:
+                return None
+            v = edges[0]["node"]
+            size = None
+            for opt in v.get("selectedOptions") or []:
+                if str(opt.get("name", "")).strip().lower() in ("size", "waist", "length"):
+                    size = str(opt.get("value", "")).strip()
+                    break
+            qty = v.get("inventoryQuantity")
+            return {
+                "sku": v.get("sku") or wanted,
+                "barcode": v.get("barcode"),
+                "name": (v.get("product") or {}).get("title") or wanted,
+                "price": float(v.get("price") or 0),
+                # The variant's own count — the size in the associate's hand —
+                # not the product total across every size and colour.
+                "stock": int(qty) if qty is not None else None,
+                "size": size,
+                "location": "Floor",  # per-zone via product metafield later
+            }
+        return self._cached(f"code:{wanted}", fetch)
 
     # ---- live floor inventory -------------------------------------------
     def floor_inventory(self) -> list[dict]:
