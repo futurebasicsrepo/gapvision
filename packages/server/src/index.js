@@ -56,6 +56,19 @@ const DEMO_TENANT = "gap";
 const associatesRoom = (tenant) => `associates:${tenant}`;
 const dashboardRoom = (tenant) => `dashboard:${tenant}`;
 
+/**
+ * The only text that may take over somebody's display.
+ *
+ * Kyle's decision, 2026-08-16: the urgent tier is reserved for the canned
+ * backup call. A typed message is by construction not the emergency — the
+ * sender stood still and composed it, while the person who actually needs
+ * help presses one phrase — so free text arrives as normal traffic however
+ * the client labelled it. This set is the whole vocabulary of the tier, and
+ * it lives on the server because the client's word for it is a request, not
+ * a fact.
+ */
+const URGENT_PHRASES = new Set(["NEED BACKUP"]);
+
 function freshState(tenant) {
   return {
     associates: new Map(), // socketId -> { name, zone, status }
@@ -122,6 +135,35 @@ function dashboardSnapshot(tenant) {
 function broadcastDashboard(tenant) {
   const t = (tenant || DEMO_TENANT).toLowerCase();
   io.to(dashboardRoom(t)).emit("dashboard:update", dashboardSnapshot(t));
+}
+
+/**
+ * Who else is on this floor — the roster, as the phone needs it.
+ *
+ * A manager already gets this inside `dashboard:update`, but an associate is
+ * not in the dashboard room and never sees that payload. Addressing a message
+ * to a person requires knowing which people exist, so the roster goes to the
+ * associates room too — trimmed to the three fields a picker needs.
+ *
+ * Deliberately not the dashboard snapshot: that carries the leaderboard, the
+ * voice log and every guest engagement in flight. A phone that only needs
+ * "who can I message" should not be handed the store's numbers to get it.
+ */
+function rosterOf(tenant) {
+  return [...stateFor(tenant).associates.values()].map((a) => ({
+    id: a.id, name: a.name, zone: a.zone,
+  }));
+}
+
+function broadcastRoster(tenant) {
+  const t = (tenant || DEMO_TENANT).toLowerCase();
+  io.to(associatesRoom(t)).emit("roster:update", { roster: rosterOf(t) });
+}
+
+/** Both audiences, for the events that change who is on the floor. */
+function broadcastPresence(tenant) {
+  broadcastDashboard(tenant);
+  broadcastRoster(tenant);
 }
 
 /**
@@ -326,13 +368,21 @@ io.on("connection", (socket) => {
     // which is itself the answer when an upload appears to have changed
     // nothing.
     socket.data.appVersion = appVersion || null;
+    // The name this socket sends under, pinned here and not read from any
+    // later payload — the same rule as the tenant, for the same reason. An
+    // associate's name comes off the roster entry below; a manager has no
+    // roster entry, so a Studio message would otherwise fall through to
+    // `from || "Unknown"` and put an unauthenticated string on somebody's
+    // glass. Studio registers with the signed-in user's name, so pinning it
+    // at register is what makes a manager's message attributable at all.
+    socket.data.displayName = name || null;
     if (role === "dashboard") {
       // A client switching views re-registers; drop any associate identity.
       socket.leave(associatesRoom(t));
       state.associates.delete(socket.id);
       socket.join(dashboardRoom(t));
       socket.emit("dashboard:update", dashboardSnapshot(t));
-      broadcastDashboard(t);
+      broadcastPresence(t);
     } else if (role === "associate") {
       socket.join(associatesRoom(t));
       state.associates.set(socket.id, {
@@ -344,7 +394,10 @@ io.on("connection", (socket) => {
         deviceModel: socket.data.deviceModel,
         gestures: [],
       });
-      broadcastDashboard(t);
+      broadcastPresence(t);
+      // Their own id back, so the phone can tell an addressed message apart
+      // from the room and leave itself out of its own roster picker.
+      socket.emit("roster:you", { id: socket.id, name: name || "Associate" });
     }
   });
 
@@ -594,12 +647,59 @@ io.on("connection", (socket) => {
     broadcastDashboard(t);
   });
 
-  /** Digital radio: associate-to-associate comms, mirrored to dashboard. */
-  socket.on("radio:send", ({ from, message, channel, priority } = {}) => {
+  /**
+   * The floor channel: one stream, where a message may carry an address.
+   *
+   * Without `to` this is the radio exactly as it was — everyone on this
+   * store's floor hears it, and the dashboard mirrors it. With `to` the same
+   * message reaches one person and nobody else, which is the whole of "direct
+   * messages": not a second system beside the radio, an address on the one
+   * that exists. The interrupt rules, the tenant partition and the sender's
+   * identity are shared by construction rather than reimplemented.
+   */
+  socket.on("radio:send", ({ from, message, channel, priority, to } = {}) => {
     const t = socket.data.tenant || DEMO_TENANT;
     const state = stateFor(t);
     const text = String(message ?? "").slice(0, 140).trim();
     if (!text) return;
+
+    // Who an address resolves to, and the tenant check that makes it safe.
+    //
+    // The roster covers associates. It deliberately does not cover managers —
+    // a dashboard socket has no roster entry — and looking only there would
+    // mean a manager could send a DM that could never be answered: the reply
+    // would resolve to nobody and be dropped, after the plugin had already
+    // cleared the message from the inbox. So the socket itself is the lookup,
+    // and the tenant is checked explicitly rather than implied by which map
+    // the id was found in.
+    const addressed = to != null && String(to) !== "";
+    const targetSocket = addressed ? io.sockets.sockets.get(String(to)) : null;
+    const sameTenant = targetSocket
+      && (targetSocket.data.tenant || DEMO_TENANT) === t;
+    const target = sameTenant
+      ? state.associates.get(String(to))
+        || { name: targetSocket.data.displayName || "Manager" }
+      : null;
+    if (addressed && !target) {
+      // Roster ids are socket ids and churn on every reconnect, so "that
+      // person is not on the floor any more" is an ordinary outcome rather
+      // than an error. It goes back to the sender visibly: a message that
+      // silently reached nobody is the one failure a floor cannot tolerate.
+      socket.emit("radio:undelivered", {
+        to: String(to), reason: "not_on_floor", message: text,
+      });
+      return;
+    }
+
+    const senderName =
+      // The roster name wins over anything the client sent. A name is what
+      // appears on someone else's glasses in the middle of a shift, and
+      // "who is asking for backup" is not a field to take on trust from a
+      // browser. A manager has no roster entry, so their name is the one
+      // pinned to the socket at register — pinned for the same reason the
+      // tenant is, so it cannot be restated per message.
+      state.associates.get(socket.id)?.name || socket.data.displayName || from || "Unknown";
+
     const entry = {
       // Message id and sender socket, so a client can recognise its own
       // message coming back. The glasses must not render what the wearer just
@@ -607,25 +707,67 @@ io.on("connection", (socket) => {
       // full log, so the echo stays and the plugin filters.
       id: `${socket.id}-${Date.now()}`,
       fromId: socket.id,
-      // The roster name wins over anything the client sent. A name is what
-      // appears on someone else's glasses in the middle of a shift, and
-      // "who is asking for backup" is not a field to take on trust from a
-      // browser. `from` survives only for the demo harness, which has no
-      // roster entry of its own.
-      from: state.associates.get(socket.id)?.name || from || "Unknown",
+      from: senderName,
       message: text,
       channel: channel || "floor",
-      // Two tiers, and only two. Anything unrecognised is normal — an unknown
-      // value must never be able to take over someone's display.
-      priority: priority === "urgent" ? "urgent" : "normal",
+      // Two tiers, and only two, and the second one is not the client's to
+      // claim. Urgent survives only for the canned backup call sent by
+      // somebody actually on the floor: unknown values, typed prose and
+      // anything from a manager's dashboard all arrive as normal, so an
+      // unrecognised value can never take over someone's display and neither
+      // can a keyboard.
+      priority:
+        priority === "urgent"
+        && state.associates.has(socket.id)
+        && URGENT_PHRASES.has(text.toUpperCase())
+          ? "urgent"
+          : "normal",
       at: new Date().toISOString(),
     };
+    if (addressed) {
+      entry.to = String(to);
+      entry.toName = target.name;
+    }
+    state.stats.radioMessages += 1;
+
+    if (addressed) {
+      // Two sockets and no rooms: the target, and the sender's own echo so
+      // their phone can log what they sent. Deliberately *not* the dashboard
+      // — Kyle's call, 2026-08-16. A broadcast is openly shared and mirroring
+      // it is right; an addressed message that feels private while a manager
+      // silently reads it is a trap, so a DM leaves nothing behind but the
+      // count. The body is not written to `radioLog` either, because that log
+      // is what the dashboard snapshot is built from.
+      io.to(String(to)).emit("radio:message", entry);
+      socket.emit("radio:message", entry);
+      socket.emit("radio:delivered", { id: entry.id, to: entry.to, toName: entry.toName });
+      broadcastDashboard(t);
+      return;
+    }
+
     state.radioLog.push(entry);
     if (state.radioLog.length > 200) state.radioLog.shift();
-    state.stats.radioMessages += 1;
     // One store's floor only. This line is the whole reason for the partition.
     io.to(associatesRoom(t)).emit("radio:message", entry);
     broadcastDashboard(t);
+  });
+
+  /**
+   * The roster, on request.
+   *
+   * The phone gets one pushed on every membership change, but a client that
+   * connects into a quiet store would otherwise wait for somebody else to
+   * arrive before it could address anybody.
+   */
+  socket.on("roster:list", () => {
+    // Registered sockets only. Without this the handler would answer a client
+    // that has not said who it is with the demo tenant's roster — and the
+    // plugin's own `roster:list` is buffered by socket.io and flushed before
+    // the connect handler runs, so an unguarded version really would hand a
+    // non-gap phone Gap's names and zones on every launch. A socket that has
+    // not registered gets nothing; the roster arrives at register anyway.
+    if (!socket.data.role) return;
+    socket.emit("roster:update", { roster: rosterOf(socket.data.tenant || DEMO_TENANT) });
   });
 
   /**
@@ -679,7 +821,9 @@ io.on("connection", (socket) => {
       socket.data.engagementId = null;
     }
     stateFor(socket.data.tenant).associates.delete(socket.id);
-    broadcastDashboard(socket.data.tenant);
+    // The roster goes out too: a phone holding a picker full of people who
+    // left would address messages to sockets that no longer exist.
+    broadcastPresence(socket.data.tenant);
   });
 });
 

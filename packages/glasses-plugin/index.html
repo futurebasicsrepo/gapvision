@@ -82,6 +82,36 @@
     .btn:focus-visible{outline:2px solid var(--sea-300);outline-offset:2px}
     .capture-state{font-family:var(--mono);font-size:10px;text-transform:uppercase;
       letter-spacing:.14em;color:var(--sea-200);margin-top:12px}
+    /* The Floor card. Same rules as the capture card — it has the same reader,
+       holding the same phone on the same floor. The one addition is the person
+       picker, which is a set of toggles rather than a <select>: a native picker
+       on a phone covers the screen with a modal wheel to choose between four
+       names, and the names are the thing worth seeing while you type. */
+    .floor-roster{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+    .floor-pick{min-height:44px;font-family:var(--sans);font-size:15px;
+      padding:8px 13px;border-radius:9px;margin:0;background:transparent;
+      border:1px solid rgba(143,199,240,.38);color:var(--paper)}
+    /* Sea fill for the chosen target, matching the primary control. Who a
+       message is about to reach must be readable at a glance, because the
+       difference between "the floor" and "one person" is the whole feature. */
+    .floor-pick.selected{background:var(--sea-500);border-color:var(--sea-500)}
+    .floor-pick:focus-visible{outline:2px solid var(--sea-300);outline-offset:2px}
+    .floor-pick .meta{color:var(--sea-100);font-size:12.5px}
+    .floor-pick.selected .meta{color:rgba(255,255,255,.82)}
+    .floor-compose{display:flex;gap:8px;margin-top:12px}
+    .floor-input{flex:1;min-height:44px;font-family:var(--sans);font-size:16px;
+      padding:10px 12px;border-radius:9px;color:var(--paper);
+      background:rgba(6,26,54,.55);border:1px solid rgba(143,199,240,.28)}
+    .floor-input::placeholder{color:var(--sea-200)}
+    .floor-input:focus-visible{outline:2px solid var(--sea-300);outline-offset:1px}
+    .floor-compose .btn{flex:0 0 auto}
+    .floor-status{font-family:var(--mono);font-size:10px;text-transform:uppercase;
+      letter-spacing:.14em;color:var(--sea-200);margin-top:12px;min-height:12px}
+    /* Flame for a message that reached nobody. It is the one state on this
+       card an associate must not read past, and the only one they can act on
+       by sending it again. */
+    .floor-status.warn{color:var(--flame-300)}
+    .floor-empty{font-family:var(--sans);font-size:14px;color:var(--sea-200);margin:8px 0 0}
     /* The preferences card. Same rules as the capture card above it, because
        it is the same reader: an associate holding a phone at arm's length on a
        shop floor. Mono uppercase for anything the machine says (the saved
@@ -212,6 +242,13 @@
        gate has to hold when the fetch times out as firmly as when the store
        says no. Empty is the correct rendering of "we do not know yet". -->
   <div id="capture-mount"></div>
+
+  <!-- The Floor card — the typing half of floor comms, built by
+       `mountFloorCard` and gated on the tenant's `floor_comms` exactly as the
+       capture card is gated on the camera. The glass can say seven phrases
+       with a ring; a keyboard can say the other thing, and this is the only
+       surface in the product that has one. -->
+  <div id="floor-mount"></div>
 
   <!-- Preferences, built by `mountPrefsCard` in main.ts and for the same
        reason the capture card is built rather than written here: which

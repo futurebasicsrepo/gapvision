@@ -29,6 +29,8 @@
     "db:seed": "cd packages/ai-service && python -m app.seed",
     "test:spine": "node packages/server/test/spine-e2e.mjs",
     "test:tenants": "node packages/server/test/tenant-isolation.mjs",
+    "test:floor-dm": "node packages/server/test/floor-dm.mjs",
+    "test:floor-dm-browser": "node packages/glasses-plugin/test/floor-dm-browser.mjs",
     "test:dashboard": "node packages/web/test/dashboard-browser.mjs",
     "build:web": "npm run build --workspace=packages/web",
     "build:plugin": "npm run build --workspace=packages/glasses-plugin",
