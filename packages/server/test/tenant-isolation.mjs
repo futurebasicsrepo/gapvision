@@ -125,6 +125,45 @@ async function main() {
   check("the rebind attempt is logged, not silent",
     serverLog.join("").includes("ignored tenant 't_alpha'"));
 
+  // --- switching stores takes a new socket, and gets a clean one ------------
+  //
+  // A CueSea admin belongs to no tenant and picks a store in Studio. The
+  // pinning above is what makes that safe *and* what makes it awkward: the
+  // payload cannot move a socket, so the client reconnects instead. Both
+  // halves are asserted here, because the client-side fix is only correct if
+  // the server really does treat a reconnect as a fresh binding — if socket
+  // data survived, staff would silently keep reading the first store they
+  // opened.
+  const staff = await connect();
+  const staffSnaps = [];
+  staff.on("dashboard:update", (s) => staffSnaps.push(s));
+  staff.emit("register", { role: "dashboard", tenant: "t_alpha" });
+  await sleep(300);
+  check("staff looking at one store see that store's roster",
+    names(staffSnaps.at(-1)).includes("Alpha Ann"),
+    JSON.stringify(names(staffSnaps.at(-1))));
+
+  staff.emit("register", { role: "dashboard", tenant: "t_beta" });
+  await sleep(300);
+  check("restating the tenant on a live socket does not move it",
+    !names(staffSnaps.at(-1)).includes("Beta Ben"),
+    JSON.stringify(names(staffSnaps.at(-1))));
+
+  staff.close();
+  await sleep(150);
+  const staffAgain = await connect();
+  const againSnaps = [];
+  staffAgain.on("dashboard:update", (s) => againSnaps.push(s));
+  staffAgain.emit("register", { role: "dashboard", tenant: "t_beta" });
+  await sleep(300);
+  check("a reconnect binds to the newly chosen store",
+    names(againSnaps.at(-1)).includes("Beta Ben"),
+    JSON.stringify(names(againSnaps.at(-1))));
+  check("and carries nothing over from the store it was looking at before",
+    !names(againSnaps.at(-1)).includes("Alpha Ann"),
+    JSON.stringify(names(againSnaps.at(-1))));
+  staffAgain.close();
+
   // --- the open health route names no customers -----------------------------
   const health = await (await fetch(`${URL}/health`)).json();
   check("/health reports counts, not tenant slugs",
