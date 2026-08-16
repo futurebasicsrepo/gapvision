@@ -68,7 +68,7 @@ class BaseProvider:
         """
         raise VisionUnsupported(
             f"The '{self.name}' provider has no vision support. Set "
-            f"GAPVISION_LLM=grok (with XAI_API_KEY) to read images, or leave "
+            f"GAPVISION_LLM=grok (XAI_API_KEY) or anthropic (ANTHROPIC_API_KEY) to read images, or leave "
             f"tenants' camera_capture off."
         )
 
@@ -390,20 +390,89 @@ class GrokProvider(BaseProvider):
         return self._vision_chat(question, image_base64, mime)
 
 
-class AnthropicProvider(BaseProvider):
-    """Stub: wire with `pip install anthropic` + ANTHROPIC_API_KEY."""
+class AnthropicProvider(GrokProvider):
+    """Claude, over the Anthropic Messages API.
+
+    Config:
+        GAPVISION_LLM=anthropic
+        ANTHROPIC_API_KEY=sk-ant-...
+        CUE_LLM_MODEL=claude-haiku-4-5           (default; text answers)
+        CUE_VISION_MODEL=claude-haiku-4-5        (default; tag reading)
+
+    Subclasses GrokProvider on purpose: the prompts, the JSON digging, the
+    grounding rules and the mock fallback are the product's behaviour and are
+    identical across vendors — only the wire format differs, and that is all
+    this class carries. Swapping GAPVISION_LLM between `grok` and `anthropic`
+    is therefore a genuine A/B: same questions, same rules, different model.
+
+    Haiku by default for the same reason Grok's default is the non-reasoning
+    model: an associate is walking toward a customer, and the platform check
+    warns past 2.5s. Set CUE_LLM_MODEL to a Sonnet model if the floor's
+    answers are worth more latency. Still one urllib call, no SDK — a retail
+    deployment does not need another dependency tree to keep patched.
+    """
 
     name = "anthropic"
 
-    def generate_script(self, guest, recommendations):
-        raise RuntimeError(
-            textwrap.dedent(
-                """AnthropicProvider is stubbed. Install the sdk, set
-                ANTHROPIC_API_KEY, and implement generate_script() with a
-                prompt built from guest + recommendations. Return the same
-                dict shape as MockProvider."""
+    URL = "https://api.anthropic.com/v1/messages"
+    DEFAULT_MODEL = "claude-haiku-4-5"
+    DEFAULT_VISION_MODEL = "claude-haiku-4-5"
+    #: Messages API version header. A constant, not an env var: it changes
+    #: when this code changes, not when a deployment does.
+    API_VERSION = "2023-06-01"
+
+    def _key(self) -> str:
+        key = os.environ.get("ANTHROPIC_API_KEY")
+        if not key:
+            raise RuntimeError(
+                "GAPVISION_LLM=anthropic but ANTHROPIC_API_KEY is unset. Set "
+                "it on the ai-service, or set GAPVISION_LLM=mock."
             )
+        return key
+
+    def _post(self, body: dict, timeout: int) -> str:
+        req = urllib.request.Request(
+            self.URL, data=json.dumps(body).encode(), method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": self._key(),
+                "anthropic-version": self.API_VERSION,
+            },
         )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            out = json.loads(resp.read())
+        return "".join(
+            block.get("text", "") for block in out.get("content", [])
+            if block.get("type") == "text"
+        ).strip()
+
+    def _chat(self, system: str, user: str, *, max_tokens: int = 400) -> str:
+        return self._post({
+            "model": os.environ.get("CUE_LLM_MODEL", self.DEFAULT_MODEL),
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+            "max_tokens": max_tokens,
+            "temperature": 0.3,
+        }, self.TIMEOUT)
+
+    def _vision_chat(self, question: str, image_base64: str, mime: str,
+                     *, max_tokens: int = 120) -> str:
+        # Same system prompt as every provider — NO_SUBJECT for people, NONE
+        # for unreadable, codes verbatim — inherited from GrokProvider. The
+        # image rides in the request body and is never written anywhere else.
+        return self._post({
+            "model": os.environ.get("CUE_VISION_MODEL", self.DEFAULT_VISION_MODEL),
+            "system": self.VISION_SYSTEM,
+            "messages": [{"role": "user", "content": [
+                {"type": "image", "source": {
+                    "type": "base64", "media_type": mime, "data": image_base64}},
+                {"type": "text", "text": question},
+            ]}],
+            "max_tokens": max_tokens,
+            # Reading characters off a tag is not a task with a creative
+            # component. Anything above zero is a chance of a different digit.
+            "temperature": 0,
+        }, self.VISION_TIMEOUT)
 
 
 class OpenAIProvider(BaseProvider):

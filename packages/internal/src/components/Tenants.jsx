@@ -427,6 +427,38 @@ const TEST_HEADLINE = {
   http_error: "Shopify returned an error",
 };
 
+/**
+ * One switch on the systems board.
+ *
+ * Optimism is deliberately absent: the knob moves when the server has moved,
+ * and holds a lit "…" while the write is in flight. These switches are
+ * consent — a camera control that looks on before the store has agreed is
+ * the exact failure this panel exists to prevent — so honesty beats snap.
+ */
+function MissionSwitch({ on, label, desc, onChange }) {
+  const [busy, setBusy] = useState(false);
+  async function flip() {
+    if (busy) return;
+    setBusy(true);
+    try { await onChange(!on); } catch { /* surfaced by setPrivacy */ }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className={`mc-row ${on ? "on" : ""}`}>
+      <span className="mc-dot" />
+      <div className="mc-text">
+        <span className="mc-label">{label}</span>
+        <span className="mc-desc">{desc}</span>
+      </div>
+      <button type="button" role="switch" aria-checked={on} className="mc-switch"
+              disabled={busy} onClick={flip}>
+        <span className="mc-track"><span className="mc-knob" /></span>
+        <span className="mc-state">{busy ? "…" : on ? "ON" : "OFF"}</span>
+      </button>
+    </div>
+  );
+}
+
 function Check({ status, label, detail }) {
   return (
     <div className={`check ${status}`}>
@@ -464,16 +496,20 @@ function TenantDetail({ tenant, onChanged }) {
       onChanged();
     } catch (e) { setError(e.message); }
   }
-  /** Merge, never replace. `privacy` is a single jsonb column, so PATCHing a
-   *  bare `{store_transcripts}` would silently drop retention_days and the
-   *  opt-in tiers alongside it. */
+  /** Merge, never replace. `privacy` is a single jsonb column; the server now
+   *  merges too (jsonb `||`), so a partial patch can never wipe its siblings
+   *  whichever side sends it. Rethrows so a switch can hold its busy state
+   *  and show the failure where the finger is, not in the other card. */
   async function setPrivacy(patch) {
     try {
       await api.updateTenant(tenant.slug, {
         privacy: { ...(tenant.privacy || {}), ...patch },
       });
       onChanged();
-    } catch (e) { setError(e.message); }
+    } catch (e) {
+      setError(e.message);
+      throw e;
+    }
   }
 
   async function assignDevice(deviceId, userId) {
@@ -536,6 +572,11 @@ function TenantDetail({ tenant, onChanged }) {
       <div className="card span-6">
         <h3>{tenant.name} · hardware & terms</h3>
 
+        {/* The same error the people card shows. It used to render only over
+            there, so a refused privacy write reported itself in a different
+            card from the switch that was pressed — which reads as silence. */}
+        {error && <div className="notice error" style={{ marginBottom: 12 }}>{error}</div>}
+
         <div className="form-grid" style={{ marginBottom: 16 }}>
           <label className="field">
             <span>Billing plan</span>
@@ -555,58 +596,48 @@ function TenantDetail({ tenant, onChanged }) {
           their privacy posture but can't change either of these.
         </p>
 
-        {/* Privacy posture. Off by default and deliberately a little hard to
-            turn on: it is the difference between analytics and a record of
-            what staff said near customers. It lives here rather than nowhere
-            because it was previously only reachable by a hand-written PATCH,
-            which is not a control — it is a trapdoor. */}
-        <div className="form-grid" style={{ marginBottom: 10 }}>
-          <label className="field">
-            <span>Store what was said</span>
+        {/* Privacy posture, as a systems board: what this tenant has switched
+            on, each a plain on/off with its state visible from across the
+            room. These were dropdowns whose value the list endpoint never
+            supplied, so they rendered "off" whatever the database held — a
+            control that cannot show its own state reads as broken, because
+            it is. Sea when lit, per the colour law: a switch's state is a
+            measurement, not a thing CueSea says. */}
+        <div className="mc-board" style={{ marginBottom: 10 }}>
+          <MissionSwitch
+            on={!!(tenant.privacy || {}).camera_capture}
+            label="PHONE CAMERA"
+            desc="Scan tags, barcodes and parts with the phone that runs the Lens. Objects only — never people."
+            onChange={(v) => setPrivacy({ camera_capture: v })}
+          />
+          <MissionSwitch
+            on={!!(tenant.privacy || {}).store_transcripts}
+            label="TRANSCRIPTS"
+            desc="Keep what the floor asked and what CueSea answered. Off keeps intent and latency only."
+            onChange={(v) => setPrivacy({ store_transcripts: v })}
+          />
+          <MissionSwitch
+            on={!!(tenant.privacy || {}).shift_telemetry}
+            label="SHIFT TIMING"
+            desc="Hours worked and glasses battery. The one switch about staff rather than customers."
+            onChange={(v) => setPrivacy({ shift_telemetry: v })}
+          />
+          <div className="mc-row">
+            <span className="mc-dot" />
+            <div className="mc-text">
+              <span className="mc-label">RETENTION</span>
+              <span className="mc-desc">How long anything stored above is kept. Recorded, not yet enforced.</span>
+            </div>
             <select
-              value={(tenant.privacy || {}).store_transcripts ? "on" : "off"}
-              onChange={(e) => setPrivacy({ store_transcripts: e.target.value === "on" })}
-            >
-              <option value="off">off — intent and latency only</option>
-              <option value="on">on — keep questions and answers</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>Retention</span>
-            <select
+              className="mc-select"
               value={String((tenant.privacy || {}).retention_days ?? 90)}
-              onChange={(e) => setPrivacy({ retention_days: Number(e.target.value) })}
+              onChange={(e) => setPrivacy({ retention_days: Number(e.target.value) }).catch(() => {})}
             >
               {[30, 60, 90, 180, 365].map((d) => (
                 <option key={d} value={d}>{d} days</option>
               ))}
             </select>
-          </label>
-          {/* Same helper, and it matters here for the same reason: `privacy` is
-              one jsonb column, so a bare PATCH of {camera_capture} would drop
-              retention_days and the opt-in tiers on the way past. */}
-          <label className="field">
-            <span>Phone camera</span>
-            <select
-              value={(tenant.privacy || {}).camera_capture ? "on" : "off"}
-              onChange={(e) => setPrivacy({ camera_capture: e.target.value === "on" })}
-            >
-              <option value="off">off — no capture</option>
-              <option value="on">on — objects only</option>
-            </select>
-          </label>
-          {/* The one switch on this panel that is not about the customer. Same
-              helper for the same reason — `privacy` is one jsonb column. */}
-          <label className="field">
-            <span>Shift timing</span>
-            <select
-              value={(tenant.privacy || {}).shift_telemetry ? "on" : "off"}
-              onChange={(e) => setPrivacy({ shift_telemetry: e.target.value === "on" })}
-            >
-              <option value="off">off — no per-person rates</option>
-              <option value="on">on — hours worked and glasses battery</option>
-            </select>
-          </label>
+          </div>
         </div>
         <p className="meta" style={{ marginBottom: 16, lineHeight: 1.5 }}>
           With this on, the manager dashboard shows the question the floor asked
