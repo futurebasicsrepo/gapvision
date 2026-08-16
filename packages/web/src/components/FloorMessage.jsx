@@ -26,12 +26,20 @@ export default function FloorMessage({ roster, user }) {
   const [status, setStatus] = useState(null);
   const [listening, setListening] = useState(false);
   const recognition = useRef(null);
+  // A browser can be newer than the server it talks to. This build's broadcast
+  // receipt comes from a server that counts the floor; one that predates it
+  // answers a broadcast with nothing, and "Sending…" would stand forever and
+  // read as a hang. The wait ends either way.
+  const receiptTimer = useRef(null);
+  const settle = () => { if (receiptTimer.current) clearTimeout(receiptTimer.current); receiptTimer.current = null; };
+  useEffect(() => settle, []);
 
   // Receipts. "Delivered" is the honest word and the only one available: the
   // lens queues a message behind its unread count, so a "read" receipt would
   // either be a lie or need an acknowledgement instrument nobody asked for.
   useEffect(() => {
     const onDelivered = ({ toName, reach }) => {
+      settle();
       if (toName) return setStatus({ tone: "ok", text: `Delivered to ${toName}.` });
       // A broadcast's receipt is a count of glasses, and zero is the case that
       // must not read as success — it is the broadcast version of "they left".
@@ -43,8 +51,9 @@ export default function FloorMessage({ roster, user }) {
       }
       return setStatus({ tone: "ok", text: "Sent." });
     };
-    const onUndelivered = ({ reason }) =>
-      setStatus({
+    const onUndelivered = ({ reason }) => {
+      settle();
+      return setStatus({
         tone: "error",
         text: reason === "not_on_floor"
           ? "They're no longer on the floor — nothing was sent."
@@ -52,6 +61,7 @@ export default function FloorMessage({ roster, user }) {
             ? "Floor messages are switched off for this store, in Console."
             : "Not delivered.",
       });
+    };
     socket.on("radio:delivered", onDelivered);
     socket.on("radio:undelivered", onUndelivered);
     return () => {
@@ -127,6 +137,11 @@ export default function FloorMessage({ roster, user }) {
     // delivered. The server's receipt is a moment away and it is the only
     // thing that knows whether anybody was there to receive it.
     setStatus({ tone: "", text: targetName ? `Sending to ${targetName}…` : "Sending to the floor…" });
+    settle();
+    receiptTimer.current = setTimeout(() => {
+      receiptTimer.current = null;
+      setStatus({ tone: "ok", text: targetName ? `Sent to ${targetName}.` : "Sent to the floor." });
+    }, 4000);
   };
 
   const targetName = roster.find((r) => r.id === target)?.name;

@@ -1644,6 +1644,35 @@ function setFloorStatus(text: string, tone: "ok" | "warn" | "" = "") {
   el.className = tone ? `floor-status ${tone}` : "floor-status";
 }
 
+/**
+ * The "Sending…" line has to end, receipt or no receipt.
+ *
+ * A phone can be newer than the server it is talking to: this build's
+ * broadcast receipt arrives from a server that knows how to count the floor,
+ * and a deployment that predates it answers a broadcast with nothing at all.
+ * Left alone, the composer would sit mid-sentence forever and read as a hang —
+ * a worse failure than the missing count, and one caused entirely by shipping
+ * the two halves at different times.
+ *
+ * So the status degrades to what an older server's behaviour actually
+ * justifies: the message was sent, and we cannot say who got it.
+ */
+let floorReceiptTimer: ReturnType<typeof setTimeout> | null = null;
+
+function awaitFloorReceipt(fallback: string) {
+  if (floorReceiptTimer) clearTimeout(floorReceiptTimer);
+  floorReceiptTimer = setTimeout(() => {
+    floorReceiptTimer = null;
+    setFloorStatus(fallback, "");
+  }, 4000);
+}
+
+/** A receipt landed — whatever it said, the wait is over. */
+function floorReceiptArrived() {
+  if (floorReceiptTimer) clearTimeout(floorReceiptTimer);
+  floorReceiptTimer = null;
+}
+
 /** Redraw just the people, on every roster push. Rebuilding the whole card
  *  would take the keyboard away mid-sentence. */
 function renderFloorRoster() {
@@ -1787,6 +1816,7 @@ function mountFloorCard(caps: Capabilities) {
     // Deliberately "Sending", not "Sent": this line is written before anything
     // has been delivered, and only the receipt knows whether it was.
     setFloorStatus(`Sending to ${to}…`, "");
+    awaitFloorReceipt(floorTarget ? `Sent to ${to}.` : "Sent to the floor.");
     input.value = "";
   };
 
@@ -2176,6 +2206,7 @@ async function main() {
   // glass is for what other people said, not for confirmations of what you
   // said. The failure is the one that matters — see `radio:undelivered`.
   socket.on("radio:delivered", ({ toName, reach }: { toName?: string; reach?: number }) => {
+    floorReceiptArrived();
     if (toName) {
       setFloorStatus(`Delivered to ${toName}.`, "ok");
       log(`radio → delivered to ${toName}`);
@@ -2197,6 +2228,7 @@ async function main() {
   });
 
   socket.on("radio:undelivered", ({ reason, message }: { reason?: string; message?: string }) => {
+    floorReceiptArrived();
     // Roster ids churn on reconnect, so this is an ordinary outcome and not a
     // fault. It must be visible: a message the sender believes was delivered
     // and that reached nobody is the worst failure this feature has.
