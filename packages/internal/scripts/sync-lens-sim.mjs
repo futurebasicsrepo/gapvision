@@ -19,11 +19,24 @@
  * directory at *bundle* time. This runs before Vite and leaves a plain static
  * directory behind.
  *
- * **This never fails the Console build.** If the sim cannot be built — a
- * workspace that was not installed, a Vercel image that only installed this
- * package — the panel gets a page saying so and the deploy continues. A
- * console that will not deploy because a demo harness would not compile is a
- * worse outcome than a console with one panel that explains itself.
+ * **This never fails the Console build.** If the sim cannot be built, the panel
+ * gets a page saying so and the deploy continues. A console that will not
+ * deploy because a demo harness would not compile is a worse outcome than a
+ * console with one panel that explains itself.
+ *
+ * That safety net is not a substitute for the build working, and the first
+ * deploy proved why: Vercel installed only this package's dependencies, so
+ * `@cue/meta-lens`'s own `build` script died on `tsc: command not found`, the
+ * fallback fired, and Console shipped green while serving a placeholder — the
+ * exact "reported healthy, actually broken" shape this repo keeps running
+ * into. Two things came out of that:
+ *
+ *  · `vercel.json` installs the whole workspace, because that is what this
+ *    build actually needs rather than something to work around.
+ *  · This runs Vite directly instead of `npm run build`, so the sim does not
+ *    need TypeScript present to be *built*. Typechecking is real work but it
+ *    is CI's (`npm run test:meta`), and a deploy that fails on a typecheck it
+ *    could not run is a deploy that fails for the wrong reason.
  */
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -67,7 +80,11 @@ try {
   if (!existsSync(META)) {
     fallback("packages/meta-lens is not present in this checkout.");
   } else {
-    execFileSync("npm", ["run", "build"], { cwd: META, stdio: "inherit" });
+    // `npx vite build`, not `npm run build`: the package script typechecks
+    // first, and Vite is the only half of it this step needs. Resolution walks
+    // up to the workspace root, which is where the binary Console itself just
+    // used lives.
+    execFileSync("npx", ["vite", "build"], { cwd: META, stdio: "inherit" });
     if (!existsSync(join(DIST, "sim.html"))) {
       throw new Error("the build produced no sim.html");
     }
