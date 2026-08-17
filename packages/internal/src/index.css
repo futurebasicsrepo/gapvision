@@ -877,3 +877,12 @@ body::before {
   border-style: dashed; color: var(--slate-300);
   border-color: rgba(255, 255, 255, 0.22);
 }
+
+/* ---------- Lens Sim ----------
+   The sim draws a 600×600 lens plus a driver panel beside it and lays itself
+   out; Console gives it room and gets out of the way. Fixed height rather than
+   aspect-ratio: the panel inside is a fixed design, and a frame that reflows
+   with the card would crop the lens rather than scale it. */
+.lens-sim-wrap { border-radius: 12px; overflow: hidden; background: #05070A; }
+.lens-sim { display: block; width: 100%; height: 760px; border: 0; }
+@media (max-width: 900px) { .lens-sim { height: 1180px; } }

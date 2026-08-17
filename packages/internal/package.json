@@ -6,9 +6,10 @@
   "description": "CueSea Console — cuesea staff only. Deliberately a separate build from CueSea Studio so no customer ever receives this bundle.",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/sync-docs.mjs && vite build && node scripts/emit-routes.mjs",
+    "build": "node scripts/sync-docs.mjs && node scripts/sync-lens-sim.mjs && vite build && node scripts/emit-routes.mjs",
     "preview": "vite preview",
-    "docs:sync": "node scripts/sync-docs.mjs"
+    "docs:sync": "node scripts/sync-docs.mjs",
+    "lens-sim:sync": "node scripts/sync-lens-sim.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

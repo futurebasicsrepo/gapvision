@@ -25,3 +25,8 @@ packages/glasses-plugin/dist-test/
 # from build-plates.py — committing print files means the repo carries a
 # snapshot of a store layout that changes every time a fitting room is renamed.
 packages/brand/out/
+
+# Built into Console by scripts/sync-lens-sim.mjs from packages/meta-lens.
+# The source of truth is that package; this is a copy, and a copy in git is a
+# copy that goes stale.
+packages/internal/public/lens-sim/
