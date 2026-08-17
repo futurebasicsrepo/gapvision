@@ -848,3 +848,32 @@ body::before {
   padding: 6px 8px;
 }
 @media (pointer: coarse) { .mc-switch { min-height: 44px; } }
+
+/* ---------- Device provisioning ----------
+   The one-time token panel. Louder than a plain notice because what it holds
+   cannot be recovered: the token is stored hashed, so if this panel is
+   dismissed before the QR is scanned the only way forward is a reissue. */
+.notice.minted { border-color: var(--sea-500); background: rgba(30, 90, 110, 0.16); }
+
+/* White ground, always — a QR inverted by a dark theme does not scan, and the
+   panel it sits in is dark. The padding is the quiet zone's visual sibling;
+   the real quiet zone is drawn into the SVG itself. */
+.qr { display: block; background: #fff; border-radius: 6px; padding: 6px; }
+
+/* Long, unwrappable, and meant to be selected in one go. */
+.launch-url {
+  word-break: break-all; line-height: 1.5;
+  background: var(--slate-800); border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px; padding: 8px 10px;
+}
+
+.mint-form { display: grid; gap: 12px; max-width: 420px; margin-bottom: 12px; }
+
+/* A sim device is a real, attributable lens — and it is also a browser tab.
+   It reads as neither hardware nor a mistake: dashed, so a fleet list scanned
+   quickly never counts it as a pair of glasses. Demo traffic that looks like
+   the real thing is how a pilot's numbers get quietly wrong. */
+.pill[data-surface="sim"] {
+  border-style: dashed; color: var(--slate-300);
+  border-color: rgba(255, 255, 255, 0.22);
+}

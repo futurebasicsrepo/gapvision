@@ -111,6 +111,17 @@ def test_mint_returns_a_token_and_a_launch_url(mint):
     assert "tenant=d_alpha" in out["launch_url"]
 
 
+def test_a_g2_mint_carries_a_qr_and_the_others_do_not(mint):
+    """The QR is for the one surface you provision by pointing a camera at it.
+    It exists only in this response — the token is hashed, so there is nothing
+    to regenerate it from later, and no route that could."""
+    g2 = mint(surface="even-g2", label="QR pair")
+    assert g2["qr"] and all(set(row) <= {"0", "1"} for row in g2["qr"])
+    assert len(g2["qr"]) == len(g2["qr"][0])          # square matrix
+    assert mint(surface="mrbd", label="No QR")["qr"] is None
+    assert mint(surface="sim", label="No QR either")["qr"] is None
+
+
 def test_the_token_is_never_stored_in_the_clear(mint):
     from app import db
 

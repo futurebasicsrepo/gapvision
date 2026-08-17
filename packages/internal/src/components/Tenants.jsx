@@ -469,11 +469,182 @@ function Check({ status, label, detail }) {
   );
 }
 
+/**
+ * The three things a Cue lens can be, in the order somebody picks them.
+ *
+ * `sim` is last and reads as what it is. It is a first-class surface — a
+ * tenant onboarding before their hardware arrives gets a real, attributable
+ * lens in a browser tab, and everything downstream exercises the real pipeline
+ * — but a demo device that looks identical to a pair of glasses in a fleet
+ * list is how demo traffic ends up in a pilot's numbers with nobody noticing.
+ */
+const SURFACES = [
+  { id: "even-g2", label: "Even G2", note: "Sideloaded plugin. Scan the QR on the glasses." },
+  { id: "mrbd", label: "Meta Ray-Ban Display", note: "Launch URL, into Meta's preview share." },
+  { id: "sim", label: "Lens Sim", note: "A browser tab. Badged, and excludable from analytics." },
+];
+
+/** What a device is doing, as against what an admin decided about it. */
+const PRESENCE = {
+  active: { label: "on the floor", cls: "" },
+  idle: { label: "idle", cls: "muted" },
+  provisioned: { label: "never seen", cls: "muted" },
+  revoked: { label: "revoked", cls: "flame" },
+};
+
+/**
+ * A QR drawn from data, not from markup.
+ *
+ * The server sends rows of '0'/'1' rather than an SVG or a data URI, so there
+ * is nothing here to inject into the document — this draws rectangles. The
+ * quiet zone is four modules on every side because a QR without one does not
+ * scan reliably against a light card, and the browser is not going to add it.
+ */
+function Qr({ rows, size = 168 }) {
+  if (!rows?.length) return null;
+  const quiet = 4;
+  const side = rows.length + quiet * 2;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${side} ${side}`}
+         role="img" aria-label="Provisioning QR code" className="qr">
+      <rect width={side} height={side} fill="#fff" />
+      {rows.map((row, y) =>
+        [...row].map((bit, x) => (bit === "1" ? (
+          <rect key={`${x}-${y}`} x={x + quiet} y={y + quiet} width={1} height={1} fill="#000" />
+        ) : null)),
+      )}
+    </svg>
+  );
+}
+
+/**
+ * The one-time token panel.
+ *
+ * Same write-only discipline as the Connect Shopify panel, and for a stronger
+ * reason: this token is not merely secret, it is *unrecoverable*. It is stored
+ * hashed, so there is no route that could show it again and deliberately none
+ * that tries. The panel therefore says so before it is dismissed rather than
+ * after, and dismissing it takes a deliberate click.
+ */
+function MintedDevice({ minted, onDone }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(minted.launch_url);
+      setCopied(true);
+    } catch { /* a browser that refuses the clipboard still shows the URL */ }
+  };
+
+  return (
+    <div className="notice minted" style={{ marginBottom: 12 }}>
+      <strong>{minted.device.label || "New device"} is provisioned.</strong>
+      <p className="meta" style={{ margin: "8px 0 12px", lineHeight: 1.5 }}>
+        This is the only time this token exists anywhere. It is stored hashed,
+        so nothing — not this console, not the database, not us — can show it
+        again. Get it onto the glasses now; if it is lost, reissue.
+      </p>
+
+      {minted.qr && (
+        <div style={{ marginBottom: 12 }}>
+          <Qr rows={minted.qr} />
+        </div>
+      )}
+
+      <div className="ident launch-url" data-testid="launch-url">{minted.launch_url}</div>
+      <div className="btn-row" style={{ marginTop: 12 }}>
+        <button type="button" className="btn small" onClick={copy}>
+          {copied ? "Copied" : "Copy launch URL"}
+        </button>
+        <button type="button" className="btn small primary" onClick={onDone}>
+          Done — I have it
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Add glasses: which surface, what to call them, and who is wearing them. */
+function MintDevice({ tenant, users, onCancel, onMinted }) {
+  const [form, setForm] = useState({ surface: "even-g2", label: "", serial: "", user_id: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const surface = SURFACES.find((s) => s.id === form.surface);
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true); setError(null);
+    try {
+      onMinted(await api.mintDevice(tenant.slug, {
+        surface: form.surface,
+        label: form.label.trim() || null,
+        // Only the G2 has a serial to type. Sending an empty string for the
+        // others would claim the tenant's one nameless serial and collide with
+        // the next one.
+        serial: form.surface === "even-g2" && form.serial.trim() ? form.serial.trim() : null,
+        user_id: form.user_id || null,
+      }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="mint-form" onSubmit={submit}>
+      {error && <div className="notice error" style={{ marginBottom: 12 }}>{error}</div>}
+      <label className="field">
+        <span>Surface</span>
+        <select className="assign" value={form.surface} onChange={set("surface")}>
+          {SURFACES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </label>
+      <p className="meta" style={{ margin: "4px 0 12px" }}>{surface.note}</p>
+
+      <label className="field">
+        <span>Label</span>
+        <input className="input-inline" value={form.label} onChange={set("label")}
+               placeholder="Denim Wall pair 1" />
+      </label>
+      {form.surface === "even-g2" && (
+        <label className="field">
+          <span>Serial <span className="meta">(optional)</span></span>
+          <input className="input-inline" value={form.serial} onChange={set("serial")}
+                 placeholder="From the box" />
+        </label>
+      )}
+      <label className="field">
+        <span>Assign to <span className="meta">(optional)</span></span>
+        <select className="assign" value={form.user_id} onChange={set("user_id")}>
+          <option value="">— nobody yet —</option>
+          {(users || []).filter((u) => u.status === "active").map((u) => (
+            <option key={u.id} value={u.id}>{u.name}</option>
+          ))}
+        </select>
+      </label>
+
+      <div className="btn-row" style={{ marginTop: 12 }}>
+        <button className="btn primary small" type="submit" disabled={busy}>
+          {busy ? "Minting…" : "Mint device"}
+        </button>
+        <button className="btn ghost small" type="button" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
 function TenantDetail({ tenant, onChanged }) {
   const [users, setUsers] = useState(null);
   const [devices, setDevices] = useState(null);
   const [error, setError] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [minting, setMinting] = useState(false);
+  /** The mint response, held only until it is dismissed. It carries the one
+   *  copy of a token that exists, so it lives in a state variable and never in
+   *  the device list — a token that gets merged into rows is a token that ends
+   *  up re-rendered somewhere nobody meant it to be. */
+  const [minted, setMinted] = useState(null);
 
   const load = useCallback(() => {
     setError(null);
@@ -545,6 +716,29 @@ function TenantDetail({ tenant, onChanged }) {
       setError(e.message);
       load();
     }
+  }
+
+  /**
+   * A new token for a device that already exists.
+   *
+   * Reissue rather than delete-and-remint: the row carries who it is assigned
+   * to and everything already filed against it, and a pair that turns up in a
+   * drawer should come back as itself. It is also how a revoked device
+   * returns.
+   */
+  async function reissue(deviceId) {
+    setError(null);
+    try {
+      setMinted(await api.reissueDevice(deviceId));
+    } catch (e) { setError(e.message); }
+  }
+
+  async function revoke(deviceId) {
+    setError(null);
+    try {
+      await api.revokeDevice(deviceId);
+      load();
+    } catch (e) { setError(e.message); }
   }
 
   const admins = (users || []).filter((u) => u.role === "client_admin");
@@ -721,57 +915,123 @@ function TenantDetail({ tenant, onChanged }) {
           not ours to make for them — and with it on, the associate's own phone
           page says so on the line beside their name.
         </p>
+      </div>
 
-        {devices === null ? (
+      {/* Its own card, full width, and not a section of the terms card: six
+          columns of fleet do not fit in half a grid, and the first draft put
+          them there — device names wrapped to three lines and the state chip
+          fell off the right edge. */}
+      <div className="card span-12">
+        <div className="card-head">
+          <h3>{tenant.name} · devices</h3>
+          {!minting && !minted && (
+            <button className="btn small" onClick={() => setMinting(true)}>Add glasses</button>
+          )}
+        </div>
+        <p className="card-note">
+          Every lens carries an identity minted here — a G2 you sideload, a Meta
+          launch URL, or a browser tab. The token is shown once and stored
+          hashed, so a lost one is reissued rather than looked up.
+        </p>
+
+        {minted && (
+          <MintedDevice minted={minted} onDone={() => { setMinted(null); load(); }} />
+        )}
+
+        {minting ? (
+          <MintDevice
+            tenant={tenant} users={users}
+            onCancel={() => setMinting(false)}
+            onMinted={(m) => { setMinting(false); setMinted(m); }}
+          />
+        ) : devices === null ? (
           <div className="empty">Loading…</div>
         ) : !devices.length ? (
           <div className="empty">
-            No devices yet. A pair of glasses registers itself the first time it
-            connects — put them on and reload.
+            No devices yet. Mint one above — a tenant leaves onboarding with
+            their glasses already identified, hardware in hand or not.
           </div>
         ) : (
           <>
-            {devices.some((d) => !d.assigned_to) && (
+            {devices.some((d) => !d.assigned_to && d.presence !== "revoked") && (
               <div className="notice" style={{ marginBottom: 12 }}>
                 Hardware with nobody assigned records activity against the store
                 but not against a person, so it never reaches the leaderboard.
                 Pick a name to fix it.
               </div>
             )}
+            {/* The one row in a fleet worth reading: a token we withdrew that
+                is still being presented. That is a pair somebody still has. */}
+            {devices.some((d) => d.presence === "revoked" && d.last_seen_at) && (
+              <div className="notice" style={{ marginBottom: 12 }}>
+                A revoked device has been seen on the floor. It cannot register,
+                but somebody is still holding it.
+              </div>
+            )}
             <div className="table-wrap">
               <table className="table">
                 <thead>
-                  <tr><th>Serial</th><th>Model</th><th>Assigned to</th><th>Last seen</th></tr>
+                  <tr>
+                    <th>Device</th><th>Surface</th><th>Assigned to</th>
+                    <th>State</th><th>Last seen</th><th />
+                  </tr>
                 </thead>
                 <tbody>
-                  {devices.map((d) => (
-                    <tr key={d.id}>
-                      <td className="ident">{d.serial}</td>
-                      <td><span className="pill muted">{d.model}</span></td>
-                      <td>
-                        {/* Assigning is the whole job of this table, so it's a
-                            control rather than a value with an edit affordance
-                            hidden behind it. */}
-                        <select
-                          className="assign"
-                          value={d.user_id || ""}
-                          onChange={(e) => assignDevice(d.id, e.target.value)}
-                        >
-                          <option value="">— unassigned —</option>
-                          {/* Role is shown because it changes what the
-                              assignment does: the leaderboard ranks the sales
-                              floor, so hardware assigned to a manager records
-                              a name but never appears there. */}
-                          {(users || []).filter((u) => u.status === "active").map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.name}{u.role !== "associate" ? ` · ${u.role.replace("_", " ")}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td><span className="machine">{when(d.last_seen_at)}</span></td>
-                    </tr>
-                  ))}
+                  {devices.map((d) => {
+                    const state = PRESENCE[d.presence] || PRESENCE.provisioned;
+                    const surface = SURFACES.find((s) => s.id === d.surface);
+                    return (
+                      <tr key={d.id}>
+                        <td className="ident">
+                          {d.label || d.serial || "—"}
+                          {d.label && d.serial && (
+                            <div className="meta">{d.serial}</div>
+                          )}
+                        </td>
+                        <td>
+                          {/* `sim` reads distinct on purpose — a demo device
+                              that looks like a pair of glasses is how demo
+                              traffic ends up in a pilot's numbers. */}
+                          <span className="pill" data-surface={d.surface}>
+                            {surface?.label || d.surface}
+                          </span>
+                        </td>
+                        <td>
+                          {/* Assigning is a whole job of this table, so it's a
+                              control rather than a value with an edit affordance
+                              hidden behind it. */}
+                          <select
+                            className="assign"
+                            value={d.user_id || ""}
+                            onChange={(e) => assignDevice(d.id, e.target.value)}
+                          >
+                            <option value="">— unassigned —</option>
+                            {/* Role is shown because it changes what the
+                                assignment does: the leaderboard ranks the sales
+                                floor, so hardware assigned to a manager records
+                                a name but never appears there. */}
+                            {(users || []).filter((u) => u.status === "active").map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name}{u.role !== "associate" ? ` · ${u.role.replace("_", " ")}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td><span className={`pill ${state.cls}`}>{state.label}</span></td>
+                        <td><span className="machine">{when(d.last_seen_at)}</span></td>
+                        <td>
+                          <div className="btn-row">
+                            <button className="btn small ghost"
+                                    onClick={() => reissue(d.id)}>Reissue</button>
+                            {d.presence !== "revoked" && (
+                              <button className="btn small danger"
+                                      onClick={() => revoke(d.id)}>Revoke</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

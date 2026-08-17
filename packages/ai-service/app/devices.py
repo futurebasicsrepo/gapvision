@@ -88,6 +88,36 @@ def launch_url(surface: str, tenant_slug: str, token: str) -> str:
                  _base("CUE_LENS_URL", "https://lens.cuesea.ai") + "/g2") + "/" + q
 
 
+def qr_rows(url: str) -> list[str] | None:
+    """The provisioning QR, as a matrix of '0'/'1' rows.
+
+    Generated **here, at mint**, and nowhere else — the token is stored hashed,
+    so this is the only moment in the device's life when a QR of its launch URL
+    can be produced at all. There is no "show me that QR again" route to write,
+    because there is nothing left to write it from.
+
+    A matrix rather than an SVG or a data URI, for one reason: what Console
+    receives should be inert. Rows of two characters cannot carry markup, so the
+    console draws rectangles from data instead of injecting a document
+    fragment that arrived over the network into its own DOM.
+
+    Returns None rather than raising if segno is missing — a QR is a
+    convenience on top of a launch URL that is already in the response, and a
+    dependency that failed to install must not be the reason a device cannot be
+    provisioned.
+    """
+    try:
+        import segno
+    except ImportError:  # pragma: no cover - depends on the deployment
+        print("[cue] segno is not installed; minting without a QR", flush=True)
+        return None
+    # Error correction 'm': the same level the printed plates use, chosen there
+    # because a plate picks up scuffs. A screen does not, but matching keeps one
+    # answer to "how dense is a Cue QR".
+    return ["".join("1" if m else "0" for m in row)
+            for row in segno.make(url, error="m").matrix]
+
+
 # --- reading -----------------------------------------------------------------
 
 def presence(row: dict) -> str:
