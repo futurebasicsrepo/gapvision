@@ -77,8 +77,20 @@ def verify_password(password: str, encoded: str | None) -> bool:
 
 # --- tokens ------------------------------------------------------------------
 
-def _token_hash(token: str) -> str:
+def token_hash(token: str) -> str:
+    """The one hashing rule for opaque tokens in this service.
+
+    Session tokens, password links and device provision tokens all land here.
+    Deliberately plain SHA-256 and deliberately shared: these are 32 random
+    bytes, not a password, so there is nothing for a slow KDF to protect
+    against — and a second recipe in a second module is how one of them ends
+    up stored in a form somebody can read.
+    """
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+#: Older call sites in this module. Kept as a name, not a second implementation.
+_token_hash = token_hash
 
 
 def issue_token(user_id: str) -> tuple[str, datetime]:
@@ -262,6 +274,26 @@ def scope_tenant(principal: Principal, requested: str | None = None) -> str:
             raise HTTPException(status_code=404, detail="Unknown tenant")
         return tenant["id"]
     return principal["tenant_id"]
+
+
+def admin_tenant(principal: Principal, id_or_slug: str) -> dict:
+    """Resolve a tenant this principal may administer, or raise.
+
+    The named-tenant sibling of `scope_tenant`: used by routes that carry the
+    tenant in the path rather than a query string. CueSea staff reach any
+    tenant; everyone else reaches exactly their own and gets a 403 for anything
+    else, because a path they typed is a request they meant.
+
+    Lives here beside `scope_tenant` for the reason the admin router's
+    docstring gives: the failure mode is showing one retailer another
+    retailer's floor, so there is exactly one place to read.
+    """
+    tenant = resolve_tenant(id_or_slug)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Unknown tenant")
+    if principal.role != "cue_admin" and str(tenant["id"]) != str(principal.tenant_id):
+        raise HTTPException(status_code=403, detail="Not your tenant")
+    return tenant
 
 
 def resolve_tenant(id_or_slug: str) -> dict | None:

@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 
-from . import (analytics, crm_credentials, crm_provider, db, identity,
+from . import (analytics, crm_credentials, crm_provider, db, devices, identity,
                mailer, retention, secrets_box, shifts)
 from .identity import BearerHeader, current_user, require, scope_tenant
 
@@ -28,13 +28,12 @@ def _own_tenant(me, id_or_slug: str) -> dict:
     check as the tenant routes below, factored out because every credential
     route needs it and one of them getting it wrong hands a merchant's store to
     another merchant.
+
+    Now one line: the check moved to `identity` when the device routes needed
+    it too, so it sits beside `scope_tenant` rather than being copied next to
+    it.
     """
-    tenant = identity.resolve_tenant(id_or_slug)
-    if tenant is None:
-        raise HTTPException(status_code=404, detail="Unknown tenant")
-    if me.role != "cue_admin" and str(tenant["id"]) != str(me.tenant_id):
-        raise HTTPException(status_code=403, detail="Not your tenant")
-    return tenant
+    return identity.admin_tenant(me, id_or_slug)
 
 
 # --- tenants (CueSea staff) --------------------------------------------------
@@ -661,14 +660,10 @@ def list_devices(tenant: str | None = None, authorization: str | None = BearerHe
     me = current_user(authorization)
     require(me, "manager")
     tenant_id = scope_tenant(me, tenant)
-    return {"devices": db.query(
-        """
-        SELECT d.*, u.name AS assigned_to
-          FROM devices d LEFT JOIN users u ON u.id = d.user_id
-         WHERE d.tenant_id = %s ORDER BY d.model, d.serial
-        """,
-        (tenant_id,),
-    )}
+    # Through `devices.list_for_tenant`, not a raw `SELECT d.*`: since 011 that
+    # star includes `provision_token_hash`, and this route would have started
+    # handing out device credentials to every manager on the floor.
+    return {"devices": devices.list_for_tenant(tenant_id)}
 
 
 @router.post("/devices", status_code=201)
@@ -690,7 +685,10 @@ def create_device(req: DeviceCreate, authorization: str | None = BearerHeader):
         (tenant_id, req.user_id, req.model, req.serial, req.label,
          datetime.now(timezone.utc) if req.user_id else None),
     )
-    return {"device": row}
+    # The hardware path: a serial in your hand, no token. Kept because that is
+    # still how a G2 arrives from the box; the provisioning path that mints an
+    # identity is POST /tenants/{id}/devices in `routes_device`.
+    return {"device": devices.public(row)}
 
 
 @router.patch("/devices/{device_id}")
@@ -718,7 +716,7 @@ def update_device(device_id: str, req: DeviceUpdate,
     row = db.query_one(
         f"UPDATE devices SET {', '.join(sets)} WHERE id = %s RETURNING *", tuple(params)
     )
-    return {"device": row}
+    return {"device": devices.public(row)}
 
 
 # --- platform (CueSea staff only) --------------------------------------------

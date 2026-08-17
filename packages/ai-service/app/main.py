@@ -27,6 +27,8 @@ from .personas import match_products
 from .routes_admin import router as admin_router
 from .routes_analytics import ingest as ingest_router, router as analytics_router
 from .routes_auth import router as auth_router
+from .routes_device import (admin_router as device_admin_router,
+                            device_auth_router)
 from .routes_guest import (guest as guest_router,
                            ingest as guest_ingest_router,
                            router as guest_analytics_router)
@@ -202,6 +204,10 @@ def health():
 
 app.include_router(auth_router)
 app.include_router(admin_router)
+# Provisioning: minting device identities (bearer, tenant-scoped) and
+# redeeming them at register (service key). Separate module, same prefixes.
+app.include_router(device_admin_router)
+app.include_router(device_auth_router)
 app.include_router(analytics_router)
 app.include_router(ingest_router)
 # The guest surface: check-in config, the catalogue a request form

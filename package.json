@@ -52,6 +52,7 @@
     "test:cards": "npx esbuild packages/glasses-plugin/src/cards.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/cards.js && npx esbuild packages/glasses-plugin/src/layout.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/layout.js && node packages/glasses-plugin/test/cards.test.mjs",
     "docs:onepager": "python3 docs/employee-one-pager.py",
     "test:capabilities": "node packages/glasses-plugin/test/capabilities.test.mjs",
-    "test:vision-browser": "node packages/glasses-plugin/test/vision-browser.mjs"
+    "test:vision-browser": "node packages/glasses-plugin/test/vision-browser.mjs",
+    "test:devices": "cd packages/ai-service && python -m pytest tests/test_devices.py -q"
   }
 }
