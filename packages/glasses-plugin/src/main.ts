@@ -752,6 +752,37 @@ async function showRequest(r: GuestRequest) {
   });
 }
 
+/**
+ * A send that reached nobody, said on the glass.
+ *
+ * Confirmations belong on the phone — the glass is for what other people
+ * said, and a lens that congratulated its wearer on every message would be
+ * unusable. **Failures are the exception, and the ring is why.** A canned
+ * phrase sent from the floor menu is sent with no phone in hand: press
+ * NEED BACKUP into an empty store and, without this, nothing anywhere the
+ * associate is looking would say that nobody heard it. That is the single
+ * worst silence this product can produce.
+ *
+ * So: only failures, never successes. It takes the frame for four seconds
+ * and restores what was underneath, and it never displaces something that
+ * already owns the frame — an urgent message, a guest request or the ruler
+ * are all more important than the news that your own message missed.
+ */
+let onNotice = false;
+
+async function showNotice(lines: string[]) {
+  if (onUrgent || onRequest || onRuler) return;
+  onNotice = true;
+  await renderCue({ lines, facts: [], meta: [], moduleCount: 0 });
+  setTimeout(() => { if (onNotice) void dismissNotice(); }, 4000);
+}
+
+async function dismissNotice() {
+  if (!onNotice) return;
+  onNotice = false;
+  await restoreFrame();
+}
+
 /** Back to whatever was underneath — the guest card if there is one, idle if
  *  not. Used by every path that ends an interrupt. */
 async function restoreFrame() {
@@ -855,6 +886,10 @@ async function showIdle() {
   menuIndex = -1;
   onUrgent = null;
   onRequest = null;
+  // Idle is the bottom of every path, so it is where a stale notice flag would
+  // otherwise survive and make the next double press dismiss nothing instead
+  // of raising the exit dialog.
+  onNotice = false;
   cards = [];
   cardIndex = 0;
   cardFocus = false;
@@ -1055,7 +1090,7 @@ function onRootPage(): boolean {
   // that less likely than it was, which is not the same as it not happening.
   return !engaged && !resumable && cardIndex === 0 && voice.current === "idle"
     && vision.current === "idle"
-    && menuIndex < 0 && !onUrgent && !onRequest && !onRuler;
+    && menuIndex < 0 && !onUrgent && !onRequest && !onRuler && !onNotice;
 }
 
 /**
@@ -1079,6 +1114,10 @@ function onGesture(g: DecodedGesture) {
     ui.ringStatus.textContent = "ring active";
     ui.ringStatus.className = "pill live";
   }
+
+  // A notice is transient and owns nothing. Any press clears it and puts back
+  // what the associate was looking at, rather than making them wait it out.
+  if (onNotice) { void dismissNotice(); return; }
 
   switch (g.action) {
     case "click":
@@ -2219,6 +2258,8 @@ async function main() {
     if (reach === 0) {
       setFloorStatus("Nobody else is on the floor — nothing received it.", "warn");
       log("radio → reached nobody");
+      // On the glass too. A phrase sent from the ring has no phone in hand.
+      void showNotice(["NOBODY ON THE FLOOR", "NOTHING RECEIVED IT", ""]);
       return;
     }
     if (typeof reach === "number") {
@@ -2239,6 +2280,9 @@ async function main() {
         : "Not delivered.";
     setFloorStatus(why, "warn");
     log(`radio → UNDELIVERED (${reason}): ${message ?? ""}`);
+    void showNotice(reason === "floor_comms_off"
+      ? ["FLOOR MESSAGES ARE OFF", "NOTHING WAS SENT", ""]
+      : ["THEY LEFT THE FLOOR", "NOTHING WAS SENT", ""]);
   });
 
   socket.on("radio:message", (m: RadioMessage) => {

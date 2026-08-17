@@ -59,6 +59,42 @@ Four are new, and they are not equal in cost:
 | **PROMOS** | Current promotions. Per-tenant content with a start and end date, authored in Studio or pulled from the CRM. | Small if the copy is hand-authored per tenant; a project if it comes from Shopify's price rules. |
 | **SHIFT NOTES** / other | The "other useful information" slot. | Undefined until somebody names it. |
 
+### Two that are not widgets — Kyle, 17 Aug 2026
+
+**The AI assistant is an overlay on every module, not a card in the deck.**
+This is the right shape and it is worth saying why: voice is already
+context-sensitive — `focusSku` means "these" resolves to whatever the
+associate is looking at — so an assistant that lived *at* one position in
+the deck would be an assistant you had to navigate to before you could ask
+about the thing you were already reading. As an overlay it inherits the
+context instead: ask on the CUSTOMER card and the question is about that
+guest, ask on an INVENTORY card and it is about that garment.
+
+What that means for the build: the assistant is not a widget, cannot be
+reordered, and cannot be removed from the deck — it is a layer over
+whatever is showing, opened by the existing gesture. Two constraints ride
+with it. Its answer takes the frame (it already does), so returning must
+restore the widget underneath rather than the top of the deck. And the
+grounding rule does not relax because the surface moved: the model is still
+forbidden from estimating stock, sizes or prices, and "we don't carry that"
+stays the honest answer.
+
+**Barcode lookup is a capability with two entry points.** It exists today
+— photograph a tag, get price, count and location, answer on the glass —
+and Kyle's call is that it also belongs *inside* the INVENTORY widget
+rather than only on the phone's camera card. That is one lookup reachable
+two ways: from the phone, where the camera is, and from the widget, where
+the question usually starts. The scan itself must stay a phone action —
+aiming a camera is a hands-and-eyes job and the glasses have no camera —
+so what the widget offers is the trigger and the place the answer lands,
+not a second implementation.
+
+It is also the part of this product that is already category-neutral: a
+code resolves to a record with no sizing logic involved, which is why the
+market roadmap marks the non-apparel path as cheap to start. Putting it in
+the inventory widget makes that reachable in the flow rather than in a
+settings card.
+
 ## Where the configuration lives
 
 Two options, and they are not equivalent:
@@ -119,9 +155,93 @@ package, or anyone who has not expanded that drawer, sees buttons that
 appear not to work for two different reasons. Worth confirming against
 0.4.1 before treating it as a bug.
 
+## Decisions — Kyle, 17 Aug 2026
+
+Three of the four ruled on. Each one changes something in the sections
+above, and the consequences are written down here rather than discovered
+during the build.
+
+**Q2 — clock in/out rides `shift_telemetry`. Confirmed.**
+So the CLOCK widget is not offered at all to a store that has not switched
+shift telemetry on, and that is the *camera's* gate discipline rather than
+floor comms': built only when the store said yes, absent when we could not
+ask. Two things follow. The widget is not an independent consent surface —
+it draws the hours that switch already governs, and a store turning the
+switch off must lose the widget in the same motion. And the phone's
+existing telemetry notice, which tells an associate what their store is
+measuring beside their own name, becomes more important rather than less:
+a person clocking in on their glasses should be able to read what that
+records without opening a settings screen.
+
+Worth stating plainly, because the switch is doing double duty now: this
+widget is the one that makes CueSea legible as a workforce tool. That is a
+deliberate choice made once, here, rather than an accident of a feature
+list.
+
+**Q4 — to-do lists have three sources, not one.**
+A manager authors and assigns, an opening or closing shift arrives with its
+list already loaded, and an associate can write their own. That is three
+authors in one widget and they are not equal: an assigned task is somebody
+else's expectation of you, a preloaded one is the store's routine, and a
+personal one is a note to self. The lens should say which is which — the
+same discipline as `→ YOU` on an addressed message, and for the same reason:
+a list that blurs "the manager asked for this" into "I wrote this down" is
+a list people stop trusting.
+
+Two costs this exposes:
+
+- **Nothing today knows an opening shift from a closing one.** `shifts`
+  records when work started and stopped, not which shift it was, so
+  preloading by shift type needs that concept to exist — a schedule, or at
+  minimum a per-shift label somebody sets. This is the hidden half of Q4
+  and it is bigger than the widget.
+- **Completion is a write, and writes about staff are the sensitive kind.**
+  Ticking a personal note is nobody's business but the associate's. Ticking
+  a manager-assigned task is a record of that person's work, which is the
+  same category as the hours. Recommend: assigned-task completion is
+  reported, personal-list completion is not, and the split is enforced by
+  where the row lives rather than by a flag anybody can flip.
+
+**Q3 — turning widgets off is admin-only, in Studio.**
+Not the associate's switch, and not Console's. That changes the shape
+proposed above in a useful way: the store decides whether the deck exists,
+and the person decides what is in theirs and in what order. Feature, then
+layout — two questions, two owners.
+
+It also needs a surface that does not exist yet. Studio has no settings
+screen: a retailer's controls live in Console today, which is CueSea staff
+and cross-tenant. So this ruling implies a small **Settings** area in
+Studio gated on `client_admin`, which is worth doing — it is where the next
+store-level control will want to live too — but it is scope beyond the
+widget list and should be planned as such.
+
+Where the flag lives: `tenants.config.widgets`, defaulting on, beside
+`floor_comms` and read through `capabilities.for_tenant`. Same posture as
+floor comms — a capability that predates the control plane is on until a
+store says otherwise — and the same enforcement lesson: if the switch says
+off, the deck must actually be gone, not merely undrawn on one client.
+
+### Still open
+
+**Q1 — which widgets are in v1.** Unanswered. Proceeding on the
+recommendation unless Kyle says otherwise: the three that already exist
+(CUSTOMER, INVENTORY, MESSAGING) plus PROMOS, because it is read-only,
+per-tenant and needs no new consent conversation. TO DO lands next and
+carries the shift-type work with it; CLOCK last, behind the telemetry
+switch.
+
 ## Status
 
-Design only — not implemented. The work splits cleanly: the widget list and
-its phone screen first (it makes the existing three configurable and is
-worth shipping alone), then PROMOS, then the two that need a data model and
-a consent decision.
+Design agreed in part, 17 Aug 2026. Build order, now that the rulings
+constrain it:
+
+1. **The widget list itself** — per-person order and membership, the phone
+   screen, `config.widgets` as the store's master switch, enforced. Makes
+   the existing three configurable and is worth shipping alone.
+2. **Studio Settings (`client_admin`)** — the surface the master switch
+   needs, built small and built once.
+3. **PROMOS** — the first genuinely new widget, and the cheapest.
+4. **TO DO** — the manager's authoring screen, shift types, and the
+   three-source distinction on the glass.
+5. **CLOCK** — behind `shift_telemetry`, absent when the store has not
+   said yes.
