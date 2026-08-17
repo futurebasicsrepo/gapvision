@@ -69,6 +69,8 @@
     "test:pocket": "npm test --workspace=packages/pocket",
     "test:pocket-browser": "node packages/pocket/test/pocket-browser.mjs",
     "test:phone-byod": "node packages/server/test/phone-byod.mjs",
-    "test:phone": "cd packages/ai-service && python -m pytest tests/test_phone.py -q"
+    "test:phone": "cd packages/ai-service && python -m pytest tests/test_phone.py -q",
+    "test:connections": "node packages/internal/test/connections-browser.mjs",
+    "test:connections-api": "cd packages/ai-service && python -m pytest tests/test_connections.py -q"
   }
 }

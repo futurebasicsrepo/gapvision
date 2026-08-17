@@ -81,6 +81,32 @@ matching in both directions.
   tenants, voice success rate and p95 latency, unassigned devices, stranded
   engagements, credential key state and stale credential tests.
 
+### Cue Pocket — the associate's phone
+
+An installable PWA (`packages/pocket`) running the same card deck as the
+glasses, from the same `@cue/lens-core`: a thumb produces the same six gestures
+a Neural Band does, so nothing downstream of the input layer knows which
+surface it is on. Offline shell and a visible action queue, wake lock during an
+engagement, and add-to-home-screen coaching that differs per platform because
+iOS fires no install event and delivers Web Push only to an installed app.
+
+**Two kinds of phone, and they are not the same kind of thing.** A store
+handheld holds a provision token — the store's identity on that device — and is
+revoked as hardware. An associate's own phone holds *their* session, expiring
+at `CUE_SESSION_HOURS`, and never holds a provision token: disabling the person
+in Console ends it everywhere with no handset to chase. The combination
+personal-plus-provision-token is refused in three independent places (the boot
+decision, the realtime handshake, and `/api/auth/associate`, which creates no
+device row at all).
+
+Guests never reach disk. `store.ts` takes a whitelist of persistable keys with a
+reason each; the offline queue strips every action to its declared fields, so
+"claim request 41f3" persists and "claim Sarah Chen" cannot.
+
+Push handlers ship in the service worker and **nothing asks for permission
+yet** — that prompt is granted once, and asking before the server can deliver
+would burn it on a feature that does nothing.
+
 ### CueSea Studio — the retailer dashboard
 
 Manager sign-in, then one floor view: guests helped, attributed sales, assists
@@ -123,12 +149,13 @@ inline SVG built from the brand tokens, arranged around the thing people get
 wrong about this system: the service key never leaves our services, and the
 customer record never enters them.
 
-The left rail is ten panels in two groups:
+The left rail is eleven panels in two groups:
 
 | Panel | What it is for |
 |---|---|
 | **Health** | What the platform can prove about itself right now. |
 | **Tenants** | Every retailer, their people, their hardware, what they've used — and the switches: the privacy board, and a **Floor** board carrying floor messages. That one is enforced rather than advisory: off removes both composers *and* refuses delivery at the server, so the canned backup call goes quiet too. It fails open, unlike the camera — a store turning messaging off is a deliberate act and a service blip is not. |
+| **Connections** | Everything one store is plugged into, in two halves: the **systems** answers come from and the **surfaces** they show up on. It lists connectors that are *not* built, in the same list and the same words, with what each would give you and what it would take — and no button, because a button that files a feature request is the thing the panel refuses to be. The states are decided server-side from the adapter registry rather than from a literal, so a hopeful `"state": "available"` in the registry cannot ship a Connect button for a backend that would 503. The fleet half counts from `devices` and keeps "none set up" apart from "set up and nothing answering" — only the second is a fault. |
 | **CueSea staff** | Accounts with no tenant — us. Invite a colleague, change a role, end a session. |
 | **Plates** | Every printed door, how hard each is being used, and revocation. |
 | **Retention** | Each store's window, and what the last sweep actually deleted. |

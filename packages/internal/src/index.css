@@ -1065,3 +1065,58 @@ body::before {
   .table td .btn-row { flex-wrap: wrap; }
   .table .assign { max-width: 100%; width: 100%; }
 }
+
+/* --- Connections -------------------------------------------------------------
+ *
+ * One screen for "what is this store plugged into", in two halves: the systems
+ * answers come from, and the surfaces they show up on.
+ *
+ * The visual rule follows the editorial one. A connector that is not built is
+ * not a greyed-out tease with a dead button — it is an ordinary row carrying
+ * what it would give you and what it would take. So `planned` and `exploring`
+ * rows are styled identically to the rest and differ only in their tag, which
+ * is the honest amount of difference.
+ */
+.conn-summary { display: flex; gap: 40px; flex-wrap: wrap; margin-top: 14px; }
+
+.conn-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.conn {
+  padding: 14px 0; border-bottom: 1px solid var(--slate-600);
+}
+.conn:last-child { border-bottom: 0; padding-bottom: 0; }
+
+.conn-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.conn-name { font-size: 15px; font-weight: 600; color: var(--slate-100); }
+.conn-kind {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--slate-300); margin-left: auto;
+}
+
+.connections .tag {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.13em;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 999px;
+  border: 1px solid var(--slate-600); color: var(--slate-300); white-space: nowrap;
+}
+.connections .tag.on { color: var(--hud-400); border-color: rgba(53,229,133,.35); }
+/* The one row that wants attention: set up, and nothing answering. Same flame
+   the fleet list uses for a revoked pair that is still being carried. */
+.connections .tag.flame { color: var(--flame); border-color: rgba(255,107,44,.4); }
+.connections .tag.muted { color: var(--slate-300); }
+
+.conn-live { display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline; margin-top: 7px; }
+
+.conn-gives { list-style: none; margin: 8px 0 0; padding: 0; display: flex;
+              flex-wrap: wrap; gap: 6px 8px; }
+.conn-gives li {
+  font-size: 12px; color: var(--slate-200);
+  border: 1px solid var(--slate-600); border-radius: 6px; padding: 2px 8px;
+}
+.conn-note { color: var(--slate-300); font-size: 12.5px; line-height: 1.6;
+             margin: 9px 0 0; max-width: 72ch; }
+.conn-warn { color: var(--flame); font-size: 12.5px; line-height: 1.55;
+             margin: 8px 0 0; max-width: 72ch; }
+
+@media (max-width: 700px) {
+  .conn-summary { gap: 22px; }
+  .conn-kind { margin-left: 0; width: 100%; }
+}

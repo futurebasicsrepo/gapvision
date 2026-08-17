@@ -126,6 +126,11 @@ export const api = {
   // Invites landed with the mailbox. Resend covers the two real cases: the
   // first one expired (a week), and it went to a typo'd address.
   resendInvite: (id) => request(`/api/admin/users/${id}/invite`, { method: "POST" }),
+  // Everything one store is plugged into — systems and peripherals, in one
+  // read. Manager-and-up rather than admin: connecting a system is an admin
+  // act, but knowing whether the shop is answering is a shift question.
+  connections: (tenant) =>
+    request(`/api/admin/tenants/${encodeURIComponent(tenant)}/connections`),
   devices: (tenant) => request(`/api/admin/tenants/${encodeURIComponent(tenant)}/devices`),
   updateDevice: (id, body) => request(`/api/admin/devices/${id}`, { method: "PATCH", body }),
   // Minting returns the provision token, the launch URL derived from it, and

@@ -11,6 +11,7 @@ import Retention from "./components/Retention.jsx";
 import LensSim from "./components/LensSim.jsx";
 import Sales from "./components/Sales.jsx";
 import Marketing from "./components/Marketing.jsx";
+import Connections from "./components/Connections.jsx";
 import Architecture from "./components/Architecture.jsx";
 import Brand from "./components/Brand.jsx";
 import Doc from "./components/Doc.jsx";
@@ -33,6 +34,9 @@ const SECTIONS = [
     items: [
       { key: "health", name: "Health", hint: "services and checks" },
       { key: "tenants", name: "Tenants", hint: "retailers, people, billing" },
+      // Directly under Tenants: it answers "is this store actually plugged in
+      // and answering", which is the next question after opening a retailer.
+      { key: "connections", name: "Connections", hint: "systems in, surfaces out" },
       { key: "staff", name: "CueSea staff", hint: "us, and who can sign in" },
       { key: "plates", name: "Plates", hint: "printed doors, and revocation" },
       { key: "retention", name: "Retention", hint: "windows, and what was deleted" },
@@ -61,6 +65,7 @@ const TITLES = {
   health: ["Health", "What the platform can prove about itself right now."],
   staff: ["CueSea staff", "Accounts with no tenant. Invite a colleague, change a role, end a session."],
   tenants: ["Tenants", "Every retailer, their people, their hardware, what they've used."],
+  connections: ["Connections", "What this store is plugged into \u2014 the systems answers come from, and the surfaces they show up on."],
   retention: ["Retention", "Each store's window, and what the last sweep actually deleted."],
   plates: ["Plates", "Every printed door, how hard each is being used, and the one control that matters."],
   "lens-sim": ["Lens Sim", "The Meta lens, running the bundle the glasses run, with nothing to plug in."],
@@ -232,6 +237,7 @@ export default function App() {
           {view === "tenants" && <Tenants />}
           {view === "staff" && <Staff />}
           {view === "plates" && <Plates />}
+          {view === "connections" && <Connections />}
           {view === "retention" && <Retention />}
           {view === "lens-sim" && <LensSim />}
           {view === "sales" && <Sales />}

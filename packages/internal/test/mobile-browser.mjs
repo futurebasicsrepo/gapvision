@@ -124,7 +124,7 @@ async function open(label) {
   return true;
 }
 
-const PANELS = ["Health", "Tenants", "CueSea staff", "Plates", "Retention",
+const PANELS = ["Health", "Tenants", "Connections", "CueSea staff", "Plates", "Retention",
                 "Sales", "Marketing", "Architecture", "Brand"];
 
 for (const label of PANELS) {
