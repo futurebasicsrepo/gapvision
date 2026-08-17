@@ -152,6 +152,10 @@ class EngagementStart(BaseModel):
     associate_email: str | None = None
     device_serial: str | None = None
     device_model: str | None = None
+    #: The device this came through, resolved from a provision token at
+    #: register. Present only for a provisioned lens; the serial and email
+    #: paths remain for everything else.
+    device_id: str | None = None
     #: What the glasses showed to open this engagement. Stored as sent — see
     #: analytics.start_engagement for why it is not re-derived later.
     recommendations: list = []
@@ -319,6 +323,27 @@ def _user_in(tenant: dict, email: str | None) -> str | None:
 _MODELS = ("g2", "g1", "ring1")
 
 
+def _device_in_tenant(tenant: dict, device_id: str | None) -> dict | None:
+    """The device this write claims to come through, if it is really theirs.
+
+    The realtime server resolved this id from a provision token and would have
+    refused the register otherwise — but it arrives here as a string in a
+    request body, and a tenant check that exists upstream is not a tenant check
+    that exists. Re-read with the tenant in the WHERE clause: a mismatch turns
+    into an unattributed write rather than one retailer's engagement filed
+    against another retailer's hardware.
+    """
+    if not device_id:
+        return None
+    try:
+        return db.query_one(
+            "SELECT id, user_id FROM devices WHERE id = %s AND tenant_id = %s",
+            (device_id, tenant["id"]),
+        )
+    except Exception:
+        return None  # not a valid uuid
+
+
 def _associate(tenant: dict, *, device_serial: str | None,
                email: str | None, device_model: str | None = None) -> str | None:
     """Who did this — by the hardware first, by email second.
@@ -459,11 +484,18 @@ def ingest_engagement_start(req: EngagementStart, request: Request,
                             x_gapvision_key: str | None = KeyHeader):
     guard(request, req.tenant, x_gapvision_key)
     t = _ingest_tenant(req.tenant)
+    # A provisioned device answers "who" directly and correctly: the row it
+    # resolves to already carries an assignee, which is the binding that
+    # retires email-based attribution. The serial and email paths stay for the
+    # G2s in the field and the simulator, which have no token.
+    device = _device_in_tenant(t, req.device_id)
     row = analytics.start_engagement(
         t["id"], guest_ref=req.guest_ref, zone=req.zone,
-        associate_user_id=_associate(
-            t, device_serial=req.device_serial, email=req.associate_email,
-            device_model=req.device_model),
+        associate_user_id=(
+            str(device["user_id"]) if device and device.get("user_id")
+            else _associate(t, device_serial=req.device_serial,
+                            email=req.associate_email, device_model=req.device_model)),
+        device_id=str(device["id"]) if device else None,
         recommendations=req.recommendations, cue_lines=req.cue_lines,
     )
     return {"engagement_id": str(row["id"]), "started_at": row["started_at"]}
