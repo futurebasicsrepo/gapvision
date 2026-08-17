@@ -1,0 +1,76 @@
+{%- comment -%}
+  The surfaces.
+
+  Re-clothed for the minimal system, August 2026. This section was left over
+  from v1 (Abyss & Flame) and emitted `.feat`, `.stand`, `.surfaces` and
+  `.surface` — every one of which lives only in assets/cuesea.css, which no
+  template loads. It rendered as unstyled text and was not in the homepage
+  order, so nobody saw it. It now speaks the vocabulary the dark homepage
+  actually loads: sec / head / lede / grid / card / pane / meta, all of them
+  in cuesea-min.css. No new CSS.
+
+  Three surfaces, not four, and they are the ones that exist:
+  Even G2, Meta Ray-Ban Display, and the phone.
+{%- endcomment -%}
+
+<section class="sec pad" {% if section.settings.anchor != blank %}id="{{ section.settings.anchor | handle }}"{% endif %}>
+  <div class="head">
+    <div>
+      <span class="mono">{{ section.settings.eyebrow }}</span>
+      <h2 style="margin-top:12px">{{ section.settings.title }}</h2>
+    </div>
+    {%- if section.settings.standfirst != blank -%}
+      <p class="lede">{{ section.settings.standfirst }}</p>
+    {%- endif -%}
+  </div>
+
+  <div class="grid">
+    {%- for block in section.blocks -%}
+      <div class="card pane" {{ block.shopify_attributes }}>
+        <div class="meta">
+          <span>{{ block.settings.tag }}</span>
+          {%- if block.settings.lead -%}<span>shipping</span>{%- endif -%}
+        </div>
+        <h3>{{ block.settings.title }}</h3>
+        <p>{{ block.settings.body }}</p>
+      </div>
+    {%- endfor -%}
+  </div>
+
+  {%- if section.settings.footnote != blank -%}
+    <p class="mono" style="margin-top:28px;max-width:70ch;line-height:1.9">{{ section.settings.footnote }}</p>
+  {%- endif -%}
+</section>
+
+{% schema %}
+{
+  "name": "Surfaces",
+  "settings": [
+    { "type": "text", "id": "anchor", "label": "Anchor id", "default": "surfaces" },
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "one cue, three surfaces" },
+    { "type": "text", "id": "title", "label": "Title", "default": "the sentence is written once" },
+    { "type": "textarea", "id": "standfirst", "label": "Lede",
+      "default": "the cue is composed under the hardest constraint there is — three lines in a monochrome lens — and then it renders wherever the person is." },
+    { "type": "textarea", "id": "footnote", "label": "Footnote" }
+  ],
+  "blocks": [
+    { "type": "surface", "name": "Surface", "limit": 4,
+      "settings": [
+        { "type": "text", "id": "tag", "label": "Tag", "default": "in the glass" },
+        { "type": "checkbox", "id": "lead", "label": "Mark as shipping", "default": false },
+        { "type": "text", "id": "title", "label": "Title", "default": "cue lens" },
+        { "type": "textarea", "id": "body", "label": "Body" } ] }
+  ],
+  "presets": [{
+    "name": "Surfaces",
+    "blocks": [
+      { "type": "surface", "settings": { "tag": "in the glass · even g2", "lead": true, "title": "cue lens",
+        "body": "576 × 288, monochrome, every row the same size because 26px is the legibility floor on that display. sideloads through even hub. ring and temple for gestures, and a double press opens the mic." } },
+      { "type": "surface", "settings": { "tag": "in the glass · meta ray-ban display", "title": "cue lens",
+        "body": "600 × 600 in colour, running on the glasses themselves as a web app rather than through a phone bridge. the neural band drives it. no microphone on that path, so this surface reads rather than listens." } },
+      { "type": "surface", "settings": { "tag": "in the hand · no glasses needed", "title": "cue pocket",
+        "body": "an installable web app running the same card deck from the same core. a thumb makes the same six gestures a neural band does, so nothing below the input layer knows which surface it is on." } }
+    ]
+  }]
+}
+{% endschema %}
