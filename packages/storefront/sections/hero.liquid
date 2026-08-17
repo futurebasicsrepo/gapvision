@@ -1,0 +1,218 @@
+{%- comment -%}
+  Hero. The sentence on the left with the two things to do, the real HUD on
+  the right. The lens is drawn by snippets/lens.liquid to the 576 × 288
+  layout — header, fact rail, the card, footer, all one type size.
+{%- endcomment -%}
+
+{% style %}
+  /* the rail swapping guests should read as a repaint, not a fade */
+  .lx-rail{transition:opacity .18s linear}
+  .lx-rail.swap{opacity:.25}
+{% endstyle %}
+
+{%- assign b0 = section.blocks.first -%}
+
+<section class="hero pad" data-hero>
+  <div class="hero-grid">
+
+    <div class="hero-say">
+      <h1>{{ section.settings.line_one }}<br><em>{{ section.settings.line_two }}</em><br>{{ section.settings.line_three }}</h1>
+
+      {%- if section.settings.sub != blank -%}
+        <p class="sub">{{ section.settings.sub }}</p>
+      {%- endif -%}
+
+      <div class="hero-acts">
+        {%- if section.settings.cta_url != blank -%}
+          <a class="btn" href="{{ section.settings.cta_url }}">{{ section.settings.cta_label }}</a>
+        {%- endif -%}
+        {%- if section.settings.alt_url != blank -%}
+          <a class="btn ghost" href="{{ section.settings.alt_url }}">{{ section.settings.alt_label }}</a>
+        {%- endif -%}
+      </div>
+
+      {%- if section.settings.note != blank -%}
+        <p class="hero-note">{{ section.settings.note }}</p>
+      {%- endif -%}
+    </div>
+
+    <div class="hero-lens">
+      {%- render 'lens',
+            cycle: true,
+            lines: b0.settings.cue,
+            name: b0.settings.name,
+            facts: b0.settings.facts,
+            zone: b0.settings.room,
+            meta: b0.settings.meta,
+            clock: section.settings.clock -%}
+      {%- if section.settings.caption != blank -%}
+        <span class="mono">{{ section.settings.caption }}</span>
+      {%- endif -%}
+    </div>
+
+  </div>
+
+  <script type="application/json" data-lens-data>[
+    {%- for block in section.blocks -%}
+      {
+        "cue": {{ block.settings.cue | json }},
+        "room": {{ block.settings.room | json }},
+        "name": {{ block.settings.name | json }},
+        "facts": {{ block.settings.facts | json }},
+        "meta": {{ block.settings.meta | json }}
+      }{%- unless forloop.last -%},{%- endunless -%}
+    {%- endfor -%}
+  ]</script>
+</section>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>]/g, function(m){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m];
+    });
+  }
+
+  document.querySelectorAll('[data-hero]').forEach(function(sec){
+    var lens = sec.querySelector('[data-lens-cycle]');
+    var data = sec.querySelector('script[data-lens-data]');
+    if (!lens || !data) return;
+
+    var cues;
+    try { cues = JSON.parse(data.textContent); } catch (e) { return; }
+    if (!cues || !cues.length) return;
+
+    var line = lens.querySelector('.l'),
+        rail = lens.querySelector('[data-rail]'),
+        room = lens.querySelector('.room'),
+        meta = lens.querySelector('.lx-meta');
+
+    var i = 0, timer = null, running = false;
+
+    /* The rail is 168 of 576 — measured, not modelled, because the sizes are
+       why the rail exists and `BOTTOMS 28X30` has to arrive whole. A guest
+       whose name does not fit is shortened to first name + initial — the
+       middle case ("MARCUS WEB") reads as broken hardware, not as a name. */
+
+    /* The garment icons are read out of the lens's own <span class="lx-defs">
+       rather than pasted in here, so this pixel art exists once in the theme.
+       Same rule as snippets/lens.liquid: the fact decides, not its position,
+       because this rail also cycles hotel, service and trade cues where a
+       shirt icon beside "HIGH FLOOR" would be nonsense. */
+    var defs = lens.querySelector('.lx-defs');
+    function icDef(k){
+      var el = defs && defs.querySelector('[data-ic="' + k + '"]');
+      return el ? el.innerHTML : '';
+    }
+    var IC_SHIRT = icDef('shirt'), IC_PANTS = icDef('pants');
+
+    function iconFor(v){
+      var p = v.slice(0, 3).toUpperCase();
+      if (p === 'TOP') return IC_SHIRT;
+      if (p === 'BTM' || p === 'BOT') return IC_PANTS;
+      return '';
+    }
+
+    function paintRail(c){
+      if (!rail) return;
+      var html = '<b class="lx-name">' + esc(c.name) + '</b>';
+      String(c.facts || '').split(',').forEach(function(f){
+        f = f.trim();
+        if (f) html += '<i>' + iconFor(f) + '<span>' + esc(f) + '</span></i>';
+      });
+      rail.innerHTML = html;
+    }
+
+    function paintFurniture(c){
+      paintRail(c);
+      if (room) room.textContent = c.room || '';
+      if (meta) meta.textContent = c.meta || '';
+    }
+
+    function paint(c){
+      paintFurniture(c);
+      if (line) line.innerHTML = String(c.cue || '').replace(/\n/g, '<br>');
+    }
+
+    function type(text, done){
+      var n = 0;
+      (function step(){
+        if (n >= text.length){
+          line.innerHTML = text.replace(/\n/g, '<br>');
+          timer = setTimeout(done, 2900);
+          return;
+        }
+        n++;
+        line.innerHTML = text.slice(0, n).replace(/\n/g, '<br>') + '<span class="cur"></span>';
+        timer = setTimeout(step, text.charAt(n - 1) === '\n' ? 230 : 31);
+      })();
+    }
+
+    function run(){
+      var c = cues[i];
+      if (rail){
+        rail.classList.add('swap');
+        setTimeout(function(){ rail.classList.remove('swap'); }, 240);
+      }
+      paintFurniture(c);
+      type(String(c.cue || ''), function(){ i = (i + 1) % cues.length; run(); });
+    }
+
+    paint(cues[0]);
+    if (reduce || !('IntersectionObserver' in window)) return;
+
+    new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting){
+          if (!lens.hasAttribute('data-boot')) lens.setAttribute('data-boot', '');
+          if (!running){ running = true; clearTimeout(timer); run(); }
+        } else if (running){
+          running = false;
+          clearTimeout(timer);
+        }
+      });
+    }, {threshold:.3}).observe(lens);
+  });
+})();
+</script>
+
+{% schema %}
+{
+  "name": "Hero",
+  "settings": [
+    { "type": "text", "id": "line_one", "label": "Line one", "default": "a cue layer for" },
+    { "type": "text", "id": "line_two", "label": "Line two (grey)", "default": "every customer conversation" },
+    { "type": "text", "id": "line_three", "label": "Line three", "default": "retail · hospitality · field service" },
+    { "type": "textarea", "id": "sub", "label": "Subline",
+      "default": "one plain-language sentence, in the glass, in the second it matters. no cameras. no profiles. no dashboard." },
+    { "type": "header", "content": "Actions" },
+    { "type": "text", "id": "cta_label", "label": "Primary label", "default": "book a pilot" },
+    { "type": "url", "id": "cta_url", "label": "Primary link" },
+    { "type": "text", "id": "alt_label", "label": "Secondary label", "default": "see how it works" },
+    { "type": "url", "id": "alt_url", "label": "Secondary link" },
+    { "type": "text", "id": "note", "label": "Note under the actions",
+      "default": "one site · five people · twelve weeks · kill criteria agreed before week one" },
+    { "type": "header", "content": "The lens" },
+    { "type": "text", "id": "clock", "label": "Header clock", "default": "14·32" },
+    { "type": "text", "id": "caption", "label": "Caption under the lens",
+      "default": "576 × 288 · monochrome · every row the same size, because 26px is the floor" }
+  ],
+  "blocks": [
+    { "type": "cue", "name": "Cue", "limit": 6,
+      "settings": [
+        { "type": "text", "id": "name", "label": "Rail name",
+          "info": "Twelve characters render whole. Longer names shorten to first name + initial.",
+          "default": "SARAH CHEN" },
+        { "type": "text", "id": "facts", "label": "Rail facts",
+          "info": "Comma separated, in order: tier, points, top, bottom. A fact starting TOP or BTM gets its garment icon.",
+          "default": "ICON,4200 PTS,TOP M,BTM 28X30" },
+        { "type": "textarea", "id": "cue", "label": "The three lines",
+          "info": "Uppercase. Charset is A-Z 0-9 and · % $ £ € / + -. Keep each line under 30 characters.",
+          "default": "IN CART CASHSOFT CREW\nBOUGHT BARREL JEANS+\nOFFER IT IN SIZE M" },
+        { "type": "text", "id": "room", "label": "Zone (footer left)", "default": "DENIM WALL" },
+        { "type": "text", "id": "meta", "label": "Meta (footer right)", "default": "CUE 1/4 · 1.2S" } ] }
+  ]
+}
+{% endschema %}

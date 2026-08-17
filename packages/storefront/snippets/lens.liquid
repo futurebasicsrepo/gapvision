@@ -1,0 +1,84 @@
+{%- comment -%}
+  The Cue Lens HUD, drawn to the hardware rather than to taste.
+
+  Source of truth: packages/glasses-plugin/src/layout.ts and hero.ts.
+  • 576 × 288, monochrome green. DEFAULT_FRAME_W / DEFAULT_FRAME_H.
+  • Every row is 26px (ROW_H), because 26 is the legibility floor on the
+    G2 — so header, rail, cue and footer are all ONE size. The flatness
+    is the real constraint. Faking a type hierarchy here would be lying
+    about the product.
+  • The rail is unboxed (RAIL_BORDER = 0) and ends in a rule. The card on
+    the right carries the one drawn rectangle (CARD_BORDER = 1,
+    CARD_RADIUS = 8) — it is the object, not chrome.
+  • Garment icons ride beside the sizes: shirt on the top size, trousers
+    on the bottom, 16 × 16 on even-toolkit's grid discipline. They are
+    driven by the fact itself (TOP… / BTM… / BOTTOMS…) rather than by
+    position, because the rail also carries hotel, service and trade
+    cues where a shirt icon would be nonsense.
+  • Charset is [A-Z0-9 ·%$£€/+-]. Uppercase, and "1/4" not dots.
+  • Name first in the rail, then tier, points, sizes.
+
+  Params
+    lines   the cue — one row per line, separated by \n
+    name    rail name (≤ 12 chars renders whole)
+    facts   comma separated rail facts, in order: tier, points, top, bottom
+    zone    footer left
+    meta    footer right, e.g. "CUE 1/4 · 1.2S"
+    clock   header right, e.g. "14·32"
+    rail    false to drop the rail (idle / no guest)
+    cycle   true to mark this lens as driven by a section's cycler
+    class   extra classes
+{%- endcomment -%}
+
+{%- assign fact_list = facts | default: '' | split: ',' -%}
+{%- assign show_rail = true -%}
+{%- if rail == false -%}{%- assign show_rail = false -%}{%- endif -%}
+
+{%- capture ic_shirt -%}<svg class="lx-ic" viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true" focusable="false"><rect x="1" y="1" width="5" height="1"/><rect x="10" y="1" width="5" height="1"/><rect x="0" y="2" width="16" height="1"/><rect x="0" y="3" width="16" height="1"/><rect x="0" y="4" width="3" height="1"/><rect x="4" y="4" width="8" height="1"/><rect x="13" y="4" width="3" height="1"/><rect x="0" y="5" width="2" height="1"/><rect x="4" y="5" width="8" height="1"/><rect x="14" y="5" width="2" height="1"/><rect x="4" y="6" width="8" height="1"/><rect x="4" y="7" width="8" height="1"/><rect x="4" y="8" width="8" height="1"/><rect x="4" y="9" width="8" height="1"/><rect x="4" y="10" width="8" height="1"/><rect x="4" y="11" width="8" height="1"/><rect x="4" y="12" width="8" height="1"/><rect x="4" y="13" width="8" height="1"/><rect x="4" y="14" width="8" height="1"/></svg>{%- endcapture -%}
+{%- capture ic_pants -%}<svg class="lx-ic" viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true" focusable="false"><rect x="1" y="1" width="14" height="1"/><rect x="1" y="2" width="14" height="1"/><rect x="1" y="3" width="14" height="1"/><rect x="1" y="4" width="6" height="1"/><rect x="9" y="4" width="6" height="1"/><rect x="1" y="5" width="6" height="1"/><rect x="9" y="5" width="6" height="1"/><rect x="1" y="6" width="5" height="1"/><rect x="10" y="6" width="5" height="1"/><rect x="1" y="7" width="5" height="1"/><rect x="10" y="7" width="5" height="1"/><rect x="1" y="8" width="5" height="1"/><rect x="10" y="8" width="5" height="1"/><rect x="1" y="9" width="5" height="1"/><rect x="10" y="9" width="5" height="1"/><rect x="1" y="10" width="5" height="1"/><rect x="10" y="10" width="5" height="1"/><rect x="1" y="11" width="5" height="1"/><rect x="10" y="11" width="5" height="1"/><rect x="1" y="12" width="5" height="1"/><rect x="10" y="12" width="5" height="1"/><rect x="1" y="13" width="5" height="1"/><rect x="10" y="13" width="5" height="1"/><rect x="1" y="14" width="5" height="1"/><rect x="10" y="14" width="5" height="1"/></svg>{%- endcapture -%}
+
+<div class="lens {{ class }}" {% if cycle %}data-lens-cycle{% endif %} data-lens>
+  <span class="lx-raster" aria-hidden="true"></span>
+  <span class="lx-scan" aria-hidden="true"></span>
+
+  {%- comment -%}
+    One copy of each icon, for the cyclers that rebuild the rail in JS.
+    Reading them out of here is what keeps a second copy of this pixel art
+    from being pasted into a <script> and drifting.
+  {%- endcomment -%}
+  <span class="lx-defs" hidden aria-hidden="true"
+        ><span data-ic="shirt">{{ ic_shirt }}</span><span data-ic="pants">{{ ic_pants }}</span></span>
+
+  <div class="lens-in">
+    <div class="lx-head">
+      <span class="lx-mark">{% render 'mark', size: 20, arc: '#4BFF9A', cue: '#4BFF9A' %}</span>
+      <span class="lx-clock">{{ clock | default: '14·32' }}</span>
+    </div>
+
+    <div class="lx-body">
+      {%- if show_rail -%}
+        <div class="lx-rail" data-rail>
+          <b class="lx-name">{{ name | default: 'MAYA OKAFOR' }}</b>
+          {%- for f in fact_list -%}
+            {%- assign v = f | strip -%}
+            {%- assign up = v | upcase -%}
+            {%- assign p3 = up | slice: 0, 3 -%}
+            {%- if p3 == 'TOP' -%}
+              <i>{{ ic_shirt }}<span>{{ v }}</span></i>
+            {%- elsif p3 == 'BTM' or p3 == 'BOT' -%}
+              <i>{{ ic_pants }}<span>{{ v }}</span></i>
+            {%- else -%}
+              <i><span>{{ v }}</span></i>
+            {%- endif -%}
+          {%- endfor -%}
+        </div>
+      {%- endif -%}
+      <div class="lx-lines"><span class="l">{{ lines | newline_to_br }}</span></div>
+    </div>
+
+    <div class="lx-foot">
+      <span class="room">{{ zone }}</span>
+      <span class="lx-meta">{{ meta }}</span>
+    </div>
+  </div>
+</div>
