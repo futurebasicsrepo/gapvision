@@ -1,0 +1,19 @@
+{
+  "name": "@cue/lens-core",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The lens grammar and card deck, shared by every surface that renders a cue.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./deck": "./src/deck.ts",
+    "./grammar": "./src/grammar.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "test": "tsc -p tsconfig.test.json && node --test tests/deck.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
