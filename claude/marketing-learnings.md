@@ -51,6 +51,13 @@ to cost real money quietly. The four endpoints that fix it are specified in
 
 **Source:** building the Sales panel, 17 August 2026.
 
+> **Corrected the same day.** `deck_links` and `deck_leads` exist now, the
+> panel reads both, and the deck host forwards gated opens to the control
+> plane. The half that is still true: nothing joins a deck open to a tenant
+> that later signed, so "which pilot came from which send" remains unanswerable.
+> Left in place rather than deleted — the more useful fact is that we shipped a
+> sales tool before we could tell who we had sent anything to.
+
 ---
 
 ## How to add one
