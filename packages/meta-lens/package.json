@@ -1,7 +1,7 @@
 {
   "name": "@cue/meta-lens",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Cue Lens for Meta Ray-Ban Display — a Web App rendered on the glasses' 600x600 display.",
   "scripts": {
