@@ -372,6 +372,52 @@ body::after {
 .btn.danger:hover:not(:disabled) { border-color: var(--flame); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 
+/* ---------- Store settings ----------
+   A systems board, same grammar as Console's privacy switches: a state dot, a
+   machine-face label, and a switch lit sea when on. Sea and never hud green —
+   a switch's state is a measurement, not something CueSea is saying. */
+.set-row {
+  display: flex; align-items: center; gap: 12px; padding: 14px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.card .set-row:first-of-type { border-top: 0; }
+.set-dot {
+  flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+.set-row.on .set-dot { background: var(--sea-500); }
+.set-text { flex: 1; min-width: 0; }
+.set-label {
+  display: block; font-family: var(--mono); font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.14em; color: var(--slate-100);
+}
+.set-desc {
+  display: block; font-family: var(--sans); font-size: 13px; line-height: 1.5;
+  color: var(--slate-300); margin-top: 4px;
+}
+.set-switch {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 9px;
+  background: transparent; border: 0; cursor: pointer; padding: 0;
+  min-height: 44px;
+}
+.set-switch:disabled { cursor: default; }
+.set-track {
+  width: 42px; height: 24px; border-radius: 999px; padding: 3px;
+  background: rgba(255, 255, 255, 0.10); border: 1px solid rgba(255, 255, 255, 0.14);
+  display: block; transition: background 0.15s ease, border-color 0.15s ease;
+}
+.set-row.on .set-track { background: var(--sea-600); border-color: var(--sea-500); }
+.set-knob {
+  display: block; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--slate-100); transition: transform 0.15s ease;
+}
+.set-row.on .set-knob { transform: translateX(18px); }
+.set-state {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  color: var(--slate-300); min-width: 26px; text-align: left;
+}
+.set-switch:focus-visible { outline: 2px solid var(--sea-500); outline-offset: 3px; }
+
 /* ---------- Messaging the floor ----------
    The composer on the manager's dashboard. A pressed target button uses the
    primary fill, so who the message is about to reach is legible without

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Meta Ray-Ban Display Web App declarations -->
+  <meta name="description" content="cuesea — just-in-time guest cues for retail associates" />
+  <meta name="mrbd-web-app-capable" content="yes" />
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no" />
+  <title>cue lens</title>
+  <style>
+    /* The display is an additive waveguide: black is transparent, light is
+       expensive. Dark ground, hud green voice — the brand system's lens
+       grammar, unchanged from the G2. */
+    :root {
+      --ground: #000;
+      --hud-500: #52ff7a;   /* peak brightness: the one thing that matters */
+      --hud-300: #2fae51;   /* supporting voice */
+      --hud-100: #17662f;   /* chrome, borders at rest */
+      --focus: #52ff7a;
+      --mono: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 600px; height: 600px; overflow: hidden; }
+    body {
+      background: var(--ground);
+      color: var(--hud-300);
+      font-family: var(--mono);
+      text-transform: uppercase;
+      -webkit-font-smoothing: antialiased;
+    }
+    #app { width: 600px; height: 600px; padding: 28px 32px; display: flex; flex-direction: column; }
+
+    /* header: wordmark + status cluster */
+    .hdr { display: flex; justify-content: space-between; align-items: baseline;
+           font-size: 18px; letter-spacing: 0.22em; color: var(--hud-300); }
+    .hdr .cluster { letter-spacing: 0.08em; font-size: 16px; }
+
+    /* the card — one frame per display, border carries focus */
+    .card {
+      flex: 1; margin-top: 20px; border: 2px solid var(--hud-100);
+      border-radius: 14px; padding: 20px 22px; outline: none;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .card:focus { border-color: var(--focus); box-shadow: 0 0 24px rgba(82,255,122,.25); }
+    .card.clicked-in { border-width: 4px; border-color: var(--focus); }
+    .card .title { font-size: 17px; letter-spacing: 0.18em; color: var(--hud-300); margin-bottom: 14px; }
+    .card .body { flex: 1; overflow: hidden; }
+    /* 60-char grammar lines must fit the ~536px card body: 17px mono ≈ 10.2px
+       per glyph ≈ 52 chars — close; letter-spacing 0 and 16px floor covers 60.
+       Never clip a cue mid-word: the grammar owns length, the CSS owns fit. */
+    .card .line { font-size: 17px; line-height: 1.6; color: var(--hud-300); white-space: nowrap; overflow: hidden; letter-spacing: 0; }
+    .card .line.peak { color: var(--hud-500); font-size: 21px; }
+
+    /* the hero: real typography instead of the G2's pixel rail */
+    .hero { display: flex; gap: 28px; align-items: baseline; margin: 10px 0 6px; }
+    .hero .size { font-size: 64px; font-weight: 700; color: var(--hud-500); letter-spacing: 0.04em; }
+    .hero .slot { font-size: 15px; color: var(--hud-100); letter-spacing: 0.16em; }
+
+    /* meta strip + footer */
+    .meta { margin-top: 12px; font-size: 16px; color: var(--hud-300); letter-spacing: 0.1em; }
+    .foot { margin-top: 16px; font-size: 15px; color: var(--hud-100); letter-spacing: 0.14em;
+            display: flex; justify-content: space-between; }
+
+    /* idle clock — the Simple HUD move, at real type sizes now */
+    .idle-clock { font-size: 92px; font-weight: 700; color: var(--hud-500);
+                  text-align: center; margin: auto 0; letter-spacing: 0.06em; }
+    .idle-sub { text-align: center; font-size: 18px; color: var(--hud-300); letter-spacing: 0.2em; }
+    .hint { color: var(--hud-100); }
+
+    /* ================= meta mode — icons and logos by default =============
+       Color rule: green is the product's own voice, sea is everything
+       measured, flame is one per display — the thing that wants attention.
+       Values approximate brand 3.1; reconcile with brand.css on merge. */
+    :root { --sea-400: #4fb3ff; --sea-200: #2a6ea6; --flame: #ff7a3d; }
+
+    .name-row { display: flex; align-items: center; gap: 16px; margin-top: 14px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .mark svg { width: 34px; height: 34px; display: block; }
+    .word2 { font-size: 27px; font-weight: 700; text-transform: lowercase; letter-spacing: 0.02em; }
+    .word2 .cue { color: var(--hud-500); }
+    .word2 .sea { color: var(--sea-400); }
+
+    .mode-meta .cluster, .mode-meta .meta { color: var(--sea-400); }
+    .mode-meta .idle-sub { color: var(--sea-400); }
+
+    .chip { display: flex; align-items: center; gap: 7px; border: 1px solid var(--sea-400);
+            color: var(--sea-400); border-radius: 999px; padding: 3px 14px;
+            font-size: 14px; letter-spacing: 0.14em; }
+    .chip-icon svg { width: 15px; height: 15px; display: block; }
+
+    .mode-meta .hero { align-items: center; }
+    .hero-icon svg { width: 42px; height: 42px; display: block; color: var(--hud-100); }
+
+    .card .title { display: flex; align-items: center; gap: 10px; }
+    .title-icon svg { width: 20px; height: 20px; display: block; color: var(--hud-300); }
+
+    .row { display: flex; align-items: center; gap: 12px; }
+    .lines { display: flex; flex-direction: column; gap: 6px; }
+    .thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 8px;
+             border: 1px solid var(--hud-100); flex: none; }
+    .body.split { display: flex; align-items: center; gap: 20px; }
+    .show-hero { width: 156px; height: 156px; object-fit: cover; border-radius: 12px;
+                 border: 1px solid var(--flame); flex: none; }
+
+    /* flame: one per display — the recommendation that wants attention */
+    .mode-meta .card.attention { border-color: var(--flame); }
+    .mode-meta .card.attention:focus { border-color: var(--flame);
+      box-shadow: 0 0 24px rgba(255,122,61,.28); }
+    .mode-meta .card.attention .title { color: var(--flame); }
+  </style>
+</head>
+<body>
+  <div id="app" aria-live="polite"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

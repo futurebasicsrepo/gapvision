@@ -88,6 +88,15 @@ export const api = {
   // both what is waiting right now and the demand history.
   requests: (days = 7, t) => request(`/api/analytics/requests?days=${days}${tq(t)}`),
   tenants: () => request("/api/admin/tenants"),
+  // One store, with its `config` and `privacy` blobs. `client_admin` and above,
+  // and the service refuses a tenant that is not the caller's own — so Studio
+  // asking for "mine" is safe to send from a browser.
+  tenant: (idOrSlug) => request(`/api/admin/tenants/${encodeURIComponent(idOrSlug)}`),
+  // Merged server-side (jsonb `||`), so a patch naming one key cannot wipe its
+  // siblings even from a stale tab.
+  updateTenant: (idOrSlug, patch) =>
+    request(`/api/admin/tenants/${encodeURIComponent(idOrSlug)}`,
+            { method: "PATCH", body: patch }),
   users: (t) => request(`/api/admin/users${tq(t, true)}`),
   devices: (t) => request(`/api/admin/devices${tq(t, true)}`),
 };

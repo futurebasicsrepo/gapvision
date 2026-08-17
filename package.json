@@ -7,12 +7,16 @@
     "packages/server",
     "packages/web",
     "packages/glasses-plugin",
-    "packages/internal"
+    "packages/internal",
+    "packages/meta-lens"
   ],
   "scripts": {
     "dev:server": "npm run dev --workspace=packages/server",
     "dev:web": "npm run dev --workspace=packages/web",
     "dev:plugin": "npm run dev --workspace=packages/glasses-plugin",
+    "dev:meta": "npm run dev --workspace=packages/meta-lens",
+    "build:meta": "npm run build --workspace=packages/meta-lens",
+    "test:meta": "npm run test --workspace=packages/meta-lens",
     "dev:ai": "cd packages/ai-service && uvicorn app.main:app --reload --port 8000",
     "build": "npm run build --workspace=packages/web",
     "test:ai": "cd packages/ai-service && python -m pytest tests -q",
@@ -30,6 +34,9 @@
     "test:spine": "node packages/server/test/spine-e2e.mjs",
     "test:tenants": "node packages/server/test/tenant-isolation.mjs",
     "test:floor-dm": "node packages/server/test/floor-dm.mjs",
+    "test:widgets": "npx esbuild packages/glasses-plugin/src/widgets.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/widgets.js && node packages/glasses-plugin/test/widgets.test.mjs",
+    "test:widgets-browser": "node packages/glasses-plugin/test/widgets-browser.mjs",
+    "test:settings": "node packages/web/test/settings-browser.mjs",
     "test:floor-dm-browser": "node packages/glasses-plugin/test/floor-dm-browser.mjs",
     "test:dashboard": "node packages/web/test/dashboard-browser.mjs",
     "build:web": "npm run build --workspace=packages/web",

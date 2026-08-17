@@ -6,16 +6,22 @@ import Login from "./components/Login.jsx";
 import SetPassword from "./components/SetPassword.jsx";
 import ManagerDashboard from "./components/ManagerDashboard.jsx";
 import Dashboard from "./components/Dashboard.jsx";
+import Settings from "./components/Settings.jsx";
 import AssociateView from "./components/AssociateView.jsx";
 
 /** Which views a role may open. An associate has no business in here at all —
  *  their surface is the lens. */
 const VIEWS = {
   manager: ["floor"],
-  client_admin: ["floor"],
+  // Settings is the retailer's own admin, and only theirs. A manager runs the
+  // floor; deciding what the glasses offer the whole floor is a rank up. CueSea
+  // staff are deliberately absent: they have Console, and a second door into a
+  // retailer's configuration — from a surface where the store came out of a
+  // switcher — is how the wrong shop gets changed.
+  client_admin: ["floor", "settings"],
   cue_admin: ["floor"],
 };
-const LABELS = { floor: "Floor", simulator: "Simulator" };
+const LABELS = { floor: "Floor", settings: "Settings", simulator: "Simulator" };
 
 /** The one path this app answers on other than `/`. Read once, before React
  *  renders anything, because the answer cannot change without a navigation. */
@@ -133,6 +139,7 @@ export default function App() {
       </div>
 
       {view === "floor" && <ManagerDashboard user={user} />}
+      {view === "settings" && <Settings user={user} />}
       {view === "simulator" && (
         <>
           <p className="card-note" style={{ marginBottom: 12 }}>

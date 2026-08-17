@@ -26,6 +26,8 @@ import { buildCue, buildMenu, buildRuler, clockLabel, CUE_LINES, FACT_PX, IDLE_C
 import { fitsPx } from "./text";
 import { allLines, cardsFor, cueOf, money, type Card, type DisplayPayload,
          type Recommendation } from "./cards";
+import { DEFAULT_PREFS, WIDGETS, deckFrom, disabledWidgets, normalisePrefs,
+         type WidgetId, type WidgetPrefs } from "./widgets";
 import { heroClock, heroRail } from "./hero";
 import { markBytes } from "./mark";
 import { VoiceController, type VoiceResult, type VoiceState } from "./voice";
@@ -632,6 +634,46 @@ async function pushImages(
   return true;
 }
 
+/**
+ * The associate's deck — which widgets, in which order.
+ *
+ * Stored on the phone through the same host storage the four preferences use,
+ * because that is what exists today and it works with no network. The design
+ * doc's call is that this eventually lives on the *person* rather than the
+ * handset, so it follows somebody who picks up a different pair of glasses —
+ * `normalisePrefs` is written as a boundary for exactly that day, and treats a
+ * stored value as untrusted input rather than as our own state.
+ */
+const WIDGETS_KEY = "cue.pref.widgets";
+let widgetPrefs: WidgetPrefs = { ...DEFAULT_PREFS, order: [...DEFAULT_PREFS.order] };
+
+/**
+ * Whether the store permits a deck at all.
+ *
+ * Reads the same way floor comms does and for the same reason: a capability
+ * that predates the control plane is on until a retailer says otherwise, and a
+ * fetch we could not complete must not take the right-hand side away for the
+ * rest of a shift. Only an explicit `false` from a store we actually reached
+ * turns it off.
+ */
+function widgetsAllowed(): boolean {
+  return !(capabilities.known && capabilities.widgets === false);
+}
+
+async function loadWidgetPrefs() {
+  let raw: string | null = null;
+  try { raw = await bridge.getLocalStorage(WIDGETS_KEY); } catch { raw = null; }
+  try { widgetPrefs = normalisePrefs(raw ? JSON.parse(raw) : null); }
+  catch { widgetPrefs = normalisePrefs(null); }
+}
+
+/** Returns whether it landed. A layout that silently did not save is a layout
+ *  the associate will arrange twice. */
+async function saveWidgetPrefs(): Promise<boolean> {
+  try { return await bridge.setLocalStorage(WIDGETS_KEY, JSON.stringify(widgetPrefs)); }
+  catch { return false; }
+}
+
 /** Where scrolling has got to: 0 is the cue, 1..n the recommendations. */
 /**
  * The rail: what an associate glances at while already talking.
@@ -953,7 +995,14 @@ async function onDisplay(payload: DisplayPayload) {
   // waiting, clicking it opens the menu. Mid-engagement is exactly when
   // "covering your guest" needs answering, and this is how it is reached now
   // that scrolling down means "next card" — see onGesture.
-  cards = [...cardsFor(payload), { kind: "FLOOR", lines: [] }];
+  // The deck is the associate's now: `cardsFor` still says what each card
+  // holds, `deckFrom` says which of them appear and in what order, and the
+  // store's master switch can take the right side away entirely.
+  cards = deckFrom(
+    [...cardsFor(payload), { kind: "FLOOR", lines: [] }],
+    widgetPrefs,
+    widgetsAllowed(),
+  );
   cardIndex = 0;
   cardFocus = false;
   cardScroll = 0;
@@ -1661,6 +1710,162 @@ function mountTenantCard() {
 }
 
 /**
+ * The Widgets card — the deck, arranged by the person who reads it.
+ *
+ * Modelled on Even's own Dashboard → Widgets screen, because an associate has
+ * already met that pattern on the same phone: a list of what is on, each row
+ * movable, the off ones offered underneath. Deliberately **not** drag and
+ * drop — a shop floor is a moving, one-handed, gloved-in-winter environment
+ * and a drag target is the first thing to fail there. Up and down buttons say
+ * the same thing and can be hit at a walking pace.
+ *
+ * Built rather than written into `index.html`, like the capture and floor
+ * cards: a store with the deck switched off must have no arranging controls in
+ * the document at all, not merely hidden ones.
+ */
+function mountWidgetsCard() {
+  const mount = document.getElementById("widgets-mount");
+  if (!mount) return;
+  mount.replaceChildren();
+  if (!widgetsAllowed()) return;
+
+  const card = document.createElement("section");
+  card.className = "card widgets";
+
+  const title = document.createElement("h3");
+  title.textContent = "Widgets";
+  card.appendChild(title);
+
+  const blurb = document.createElement("p");
+  blurb.className = "capture-note";
+  blurb.textContent =
+    "What the right side of the glass holds, in the order you scroll it. "
+    + "The cue itself never moves — this is what sits beside it.";
+  card.appendChild(blurb);
+
+  const list = document.createElement("div");
+  list.className = "widget-list";
+  list.id = "widget-list";
+  card.appendChild(list);
+
+  const state = document.createElement("div");
+  state.className = "capture-state";
+  state.id = "widgets-state";
+  state.setAttribute("role", "status");
+  card.appendChild(state);
+
+  const say = (text: string) => { state.textContent = text; };
+
+  const commit = async (message: string) => {
+    render();
+    const ok = await saveWidgetPrefs();
+    say(ok ? message : "NOT SAVED — THE PHONE REFUSED THE WRITE");
+    // The glass follows immediately when there is something on it. An
+    // arrangement that only takes effect on the next guest is one an associate
+    // cannot check, and checking is the whole reason they opened this.
+    if (engaged && lastDisplay) void onDisplay(lastDisplay);
+  };
+
+  function render() {
+    list.replaceChildren();
+
+    widgetPrefs.order.forEach((id, i) => {
+      const spec = WIDGETS.find((w) => w.id === id);
+      if (!spec) return;
+      const row = document.createElement("div");
+      row.className = "widget-row";
+      row.dataset.widget = id;
+
+      const text = document.createElement("div");
+      text.className = "widget-text";
+      const label = document.createElement("span");
+      label.className = "widget-label";
+      label.textContent = spec.label;
+      const desc = document.createElement("span");
+      desc.className = "widget-desc";
+      desc.textContent = spec.blurb;
+      text.append(label, desc);
+      row.appendChild(text);
+
+      const controls = document.createElement("div");
+      controls.className = "widget-controls";
+
+      const move = (delta: number) => {
+        const next = i + delta;
+        if (next < 0 || next >= widgetPrefs.order.length) return;
+        const order = [...widgetPrefs.order];
+        [order[i], order[next]] = [order[next], order[i]];
+        widgetPrefs = { order };
+        void commit(`${spec.label.toUpperCase()} MOVED`);
+      };
+
+      const up = document.createElement("button");
+      up.type = "button";
+      up.className = "widget-move";
+      up.textContent = "↑";
+      up.setAttribute("aria-label", `Move ${spec.label} up`);
+      up.disabled = i === 0;
+      up.addEventListener("click", () => move(-1));
+
+      const down = document.createElement("button");
+      down.type = "button";
+      down.className = "widget-move";
+      down.textContent = "↓";
+      down.setAttribute("aria-label", `Move ${spec.label} down`);
+      down.disabled = i === widgetPrefs.order.length - 1;
+      down.addEventListener("click", () => move(1));
+
+      const off = document.createElement("button");
+      off.type = "button";
+      off.className = "widget-off";
+      off.textContent = "Remove";
+      off.addEventListener("click", () => {
+        widgetPrefs = { order: widgetPrefs.order.filter((w) => w !== id) };
+        void commit(`${spec.label.toUpperCase()} REMOVED`);
+      });
+
+      controls.append(up, down, off);
+      row.appendChild(controls);
+      list.appendChild(row);
+    });
+
+    if (!widgetPrefs.order.length) {
+      const empty = document.createElement("p");
+      empty.className = "floor-empty";
+      // Not an error. An empty deck is a legitimate choice — the cue and the
+      // rail are a complete product — and saying so is better than an
+      // accusing blank.
+      empty.textContent = "No widgets. The glass shows the cue and the rail only.";
+      list.appendChild(empty);
+    }
+
+    const off = disabledWidgets(widgetPrefs);
+    if (off.length) {
+      const heading = document.createElement("p");
+      heading.className = "widget-heading";
+      heading.textContent = "Not showing";
+      list.appendChild(heading);
+
+      for (const spec of off) {
+        const add = document.createElement("button");
+        add.type = "button";
+        add.className = "btn btn-ghost widget-add";
+        add.textContent = `Add ${spec.label}`;
+        add.addEventListener("click", () => {
+          widgetPrefs = { order: [...widgetPrefs.order, spec.id as WidgetId] };
+          void commit(`${spec.label.toUpperCase()} ADDED`);
+        });
+        list.appendChild(add);
+      }
+    }
+  }
+
+  render();
+  mount.appendChild(card);
+  say("");
+}
+
+/**
  * The Floor card — the phone half of floor comms.
  *
  * The glass can say seven canned phrases with a ring, and that is right for
@@ -2347,6 +2552,8 @@ async function main() {
       `voice=${capabilities.voice} floor=${capabilities.floor_comms}`);
   mountCaptureCard(capabilities);
   mountFloorCard(capabilities);
+  await loadWidgetPrefs();
+  mountWidgetsCard();
   // Said before anything is sent, deliberately. If the first record of a shift
   // reaches the server before the sentence reaches the page, there is a window
   // — however short — in which somebody is being measured and their own phone

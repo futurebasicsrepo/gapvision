@@ -70,6 +70,12 @@ export interface Capabilities {
   shift_telemetry: boolean;
   voice: boolean;
   floor_comms: boolean;
+  /** Whether this store's associates get the right-hand deck at all. Kyle's
+   *  call, 17 Aug 2026: an admin decision made in Studio, while the *order* of
+   *  the widgets is the associate's own. Like `floor_comms` it is unenforced
+   *  in the closed direction — see the reader in main.ts — because a fetch we
+   *  could not complete must not take the deck away for a whole shift. */
+  widgets: boolean;
 }
 
 /**
@@ -85,6 +91,7 @@ export const NO_CAPABILITIES: Capabilities = { known: false,
   shift_telemetry: false,
   voice: false,
   floor_comms: false,
+  widgets: false,
 };
 
 /** Don't hold the HUD hostage to a slow store network. */
@@ -125,6 +132,7 @@ export async function fetchCapabilities(
       shift_telemetry: body.shift_telemetry === true,
       voice: body.voice === true,
       floor_comms: body.floor_comms === true,
+      widgets: body.widgets === true,
     };
   } catch {
     return { ...NO_CAPABILITIES };

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cue lens — simulator</title>
+  <style>
+    /* The Lens Sim: a hardware-free replica of the Meta Ray-Ban Display
+       experience. Left, the right-lens 600×600 render exactly as the glasses
+       runtime draws it (it IS the same app). Right, the driver: guest
+       signals, the Neural Band as buttons. Embeds into Console as-is. */
+    :root {
+      --slate-950: #0b0f14; --slate-900: #11171f; --slate-800: #1a2330;
+      --slate-edge: #253243; --ink: #e8eef5; --muted: #7e8ea1;
+      --hud: #52ff7a; --sea: #4fb3ff; --flame: #ff7a3d;
+      --mono: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--slate-950); color: var(--ink);
+           font-family: Inter, system-ui, sans-serif; min-height: 100vh;
+           display: flex; align-items: center; justify-content: center; padding: 28px; }
+    .sim { display: flex; gap: 36px; align-items: center; flex-wrap: wrap; justify-content: center; }
+
+    /* the glasses: a suggestion of the frame, honest about the one display */
+    .glasses { position: relative; }
+    .temple { position: absolute; top: 40px; right: -60px; width: 64px; height: 16px;
+              background: var(--slate-800); border: 1px solid var(--slate-edge);
+              border-radius: 0 8px 8px 0; }
+    .lens-frame { width: 640px; height: 640px; border-radius: 48px;
+                  border: 3px solid var(--slate-edge); background: #000;
+                  padding: 17px; box-shadow: 0 24px 80px rgba(0,0,0,.55); }
+    .lens-frame iframe { width: 600px; height: 600px; border: 0; border-radius: 32px; background: #000; }
+    .glasses .tag { position: absolute; left: 24px; bottom: -30px; font-family: var(--mono);
+                    font-size: 11px; letter-spacing: .18em; color: var(--muted); text-transform: uppercase; }
+
+    /* driver */
+    .driver { width: 340px; display: flex; flex-direction: column; gap: 18px; }
+    .panel { background: var(--slate-900); border: 1px solid var(--slate-edge);
+             border-radius: 14px; padding: 16px; }
+    .panel h3 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+                color: var(--muted); margin-bottom: 12px; }
+    button { font: inherit; font-size: 13px; font-weight: 600; color: var(--ink);
+             background: var(--slate-800); border: 1px solid var(--slate-edge);
+             border-radius: 9px; padding: 9px 13px; cursor: pointer; }
+    button:hover { border-color: var(--sea); }
+    button:active { transform: translateY(1px); }
+    .guests { display: flex; flex-direction: column; gap: 8px; }
+    .guests button { display: flex; justify-content: space-between; }
+    .guests .tier { color: var(--sea); font-weight: 500; }
+    .idle-btn { width: 100%; margin-top: 8px; color: var(--muted); }
+
+    /* the band: D-pad + select/back, labeled with what the wrist does */
+    .band { display: grid; grid-template-columns: repeat(3, 64px); gap: 8px; justify-content: center; }
+    .band button { height: 48px; font-size: 17px; }
+    .band .select { color: var(--hud); border-color: var(--hud); }
+    .band .back { color: var(--flame); }
+    .band-hint { margin-top: 10px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+    .band-hint b { color: var(--ink); font-weight: 600; }
+    kbd { font-family: var(--mono); font-size: 11px; background: var(--slate-800);
+          border: 1px solid var(--slate-edge); border-radius: 5px; padding: 1px 6px; }
+  </style>
+</head>
+<body>
+  <div class="sim">
+    <div class="glasses">
+      <div class="temple"></div>
+      <div class="lens-frame"><iframe id="lens" src="./index.html?mode=meta" title="cue lens"></iframe></div>
+      <div class="tag">META RAY-BAN DISPLAY · RIGHT LENS · 600×600 · SIMULATED</div>
+    </div>
+
+    <div class="driver">
+      <div class="panel">
+        <h3>Guest signal — opt-in beacon</h3>
+        <div class="guests" id="guests"></div>
+        <button class="idle-btn" id="idle">End · return to idle</button>
+      </div>
+
+      <div class="panel">
+        <h3>Neural band</h3>
+        <div class="band">
+          <span></span><button data-g="up">▲</button><span></span>
+          <button data-g="prev">◀</button><button class="select" data-g="select">◉</button><button data-g="next">▶</button>
+          <span></span><button data-g="down">▼</button><button class="back" data-g="back">↩</button>
+        </div>
+        <div class="band-hint">
+          <b>◀ ▶</b> cycle the deck · <b>◉</b> pinch (select) · <b>↩</b> back<br/>
+          <b>▲ ▼</b> at idle switches <b>classic ↔ meta</b>; inside a card, scrolls it.<br/>
+          Keyboard works too when the lens has focus: <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>Enter</kbd><kbd>Esc</kbd>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    const lens = document.getElementById("lens");
+    const post = (m) => lens.contentWindow.postMessage(m, location.origin);
+
+    // Product art placeholder — swap for Shopify CDN featuredImage URLs.
+    const ph = (label, hue) => "data:image/svg+xml;utf8," + encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="hsl(${hue},30%,22%)"/><rect x="12" y="12" width="136" height="136" fill="none" stroke="hsl(${hue},60%,55%)" stroke-width="3" rx="10"/><text x="80" y="88" font-family="monospace" font-size="20" fill="hsl(${hue},70%,70%)" text-anchor="middle">${label}</text></svg>`);
+
+    // The mock-CRM trio, shaped exactly like the AI service's payload.
+    const GUESTS = [
+      { label: "Sarah Chen", tier: "Icon", payload: {
+        cue: { lines: ["Sarah Chen", "Left the CashSoft Crew Sweater in their cart", "Offer it in size M"] },
+        guest: { name: "Sarah Chen", tier: "Icon", points: 4200,
+          sizes: { tops: "M", bottoms: "28x30" },
+          open_cart: [
+            { name: "CashSoft Crew Sweater", price: 69.95, image: ph("SWTR", 150) },
+            { name: "Mid Rise Vintage Slim Jeans", price: 79.95, image: ph("JEAN", 210) },
+            { name: "Icon Denim Jacket", price: 98, image: ph("JKT", 220) } ],
+          purchase_history: [{ name: "Organic Cotton Vintage Tee", price: 24.95 }],
+          orders: { count: 6, last_at: "JUL 12" } },
+        recommendations: [
+          { name: "High Rise Barrel Jeans", price: 89.95, location: "Denim Wall", image: ph("BRRL", 205), stock: 9 },
+          { name: "Heavyweight Relaxed Tee", price: 29.95, location: "Essentials", image: ph("TEE", 90) } ],
+        zone: "Denim Wall", latency_s: 0.4 } },
+      { label: "Marcus Webb", tier: "Enthusiast", payload: {
+        cue: { lines: ["Marcus Webb", "Runs athleisure and logo pieces", "Walk him to the active zone"] },
+        guest: { name: "Marcus Webb", tier: "Enthusiast", points: 860,
+          sizes: { tops: "XL", bottoms: "36x32" },
+          open_cart: [],
+          purchase_history: [
+            { name: "Vintage Soft Arch Logo Hoodie", price: 59.95 },
+            { name: "Vintage Soft Joggers", price: 49.95 } ],
+          orders: { count: 2, last_at: "JUN 03" } },
+        recommendations: [
+          { name: "Heavyweight Logo Hoodie", price: 69.95, location: "Active Zone", image: ph("HOOD", 20), stock: 22 } ],
+        zone: "Active Zone", latency_s: 0.5 } },
+      { label: "Priya Nair", tier: "Core", payload: {
+        cue: { lines: ["Priya Nair", "Two workwear pieces waiting in her cart", "Offer the linen blazer in S"] },
+        guest: { name: "Priya Nair", tier: "Core", points: 120,
+          sizes: { tops: "S", bottoms: "26x28" },
+          open_cart: [
+            { name: "Relaxed Linen Blazer", price: 128, image: ph("BLZR", 260) },
+            { name: "Poplin Shirt", price: 54.95, image: ph("SHRT", 30) } ],
+          purchase_history: [{ name: "365 High Rise Trousers", price: 89.95 }],
+          orders: { count: 1, last_at: "MAY 21" } },
+        recommendations: [
+          { name: "Poplin Shirt", price: 54.95, location: "New Arrivals", image: ph("SHRT", 30), stock: 17 } ],
+        zone: "New Arrivals", latency_s: 0.4 } },
+    ];
+
+    const list = document.getElementById("guests");
+    for (const g of GUESTS) {
+      const b = document.createElement("button");
+      b.innerHTML = `<span>${g.label}</span><span class="tier">${g.tier}</span>`;
+      b.addEventListener("click", () => post({ type: "cue:display", payload: g.payload }));
+      list.appendChild(b);
+    }
+    document.getElementById("idle").addEventListener("click", () => post({ type: "cue:idle" }));
+    document.querySelectorAll("[data-g]").forEach((b) =>
+      b.addEventListener("click", () => post({ type: "cue:gesture", gesture: b.dataset.g })));
+  </script>
+</body>
+</html>

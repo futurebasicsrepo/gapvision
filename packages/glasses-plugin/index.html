@@ -112,6 +112,28 @@
        by sending it again. */
     .floor-status.warn{color:var(--flame-300)}
     .floor-empty{font-family:var(--sans);font-size:14px;color:var(--sea-200);margin:8px 0 0}
+    /* The Widgets card. Up/down rather than drag: a shop floor is one-handed
+       and moving, and a drag target is the first affordance to fail there. */
+    .widget-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+    .widget-row{display:flex;align-items:center;gap:10px;padding:10px 0;
+      border-top:1px solid rgba(143,199,240,.12)}
+    .widget-list .widget-row:first-child{border-top:0}
+    .widget-text{flex:1;min-width:0}
+    .widget-label{display:block;font-family:var(--sans);font-size:16px;
+      font-weight:600;letter-spacing:-.01em;color:var(--paper)}
+    .widget-desc{display:block;font-family:var(--sans);font-size:13px;
+      line-height:1.4;color:var(--sea-100);margin-top:2px}
+    .widget-controls{display:flex;gap:6px;flex:0 0 auto}
+    .widget-move{min-width:44px;min-height:44px;margin:0;font-size:17px;
+      background:transparent;border:1px solid rgba(143,199,240,.38);color:var(--paper)}
+    .widget-move:disabled{opacity:.32}
+    .widget-off{min-height:44px;margin:0;font-family:var(--sans);font-size:14px;
+      background:transparent;border:1px solid rgba(143,199,240,.24);color:var(--sea-100)}
+    .widget-move:focus-visible,.widget-off:focus-visible,.widget-add:focus-visible{
+      outline:2px solid var(--sea-300);outline-offset:2px}
+    .widget-heading{font-family:var(--mono);font-size:10px;text-transform:uppercase;
+      letter-spacing:.14em;color:var(--sea-200);margin:14px 0 2px}
+    .widget-add{width:100%;margin:0}
     /* The preferences card. Same rules as the capture card above it, because
        it is the same reader: an associate holding a phone at arm's length on a
        shop floor. Mono uppercase for anything the machine says (the saved
@@ -249,6 +271,12 @@
        with a ring; a keyboard can say the other thing, and this is the only
        surface in the product that has one. -->
   <div id="floor-mount"></div>
+
+  <!-- The Widgets card — the deck the associate arranges, built by
+       `mountWidgetsCard` and gated on the store's `widgets` capability the
+       same way the floor card is gated on `floor_comms`. A store with the
+       deck switched off has no arranging controls in the document at all. -->
+  <div id="widgets-mount"></div>
 
   <!-- Preferences, built by `mountPrefsCard` in main.ts and for the same
        reason the capture card is built rather than written here: which

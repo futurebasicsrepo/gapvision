@@ -120,7 +120,7 @@ def test_capabilities_returns_switches_not_a_privacy_posture(client, auth_header
     assert r.status_code == 200, r.text
     body = r.json()
     assert set(body) == {"camera_capture", "shift_telemetry", "voice",
-                         "floor_comms", "known"}, (
+                         "floor_comms", "widgets", "known"}, (
         f"the capability contract changed: {sorted(body)}")
     assert all(isinstance(v, bool) for v in body.values()), (
         f"a client can only branch on booleans: {body}")
