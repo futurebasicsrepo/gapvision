@@ -55,6 +55,7 @@
     "test:vision-browser": "node packages/glasses-plugin/test/vision-browser.mjs",
     "test:devices": "cd packages/ai-service && python -m pytest tests/test_devices.py -q",
     "test:device-register": "node packages/server/test/device-register.mjs",
-    "test:devices-console": "node packages/internal/test/devices-browser.mjs"
+    "test:devices-console": "node packages/internal/test/devices-browser.mjs",
+    "test:lens-sim": "node packages/internal/test/lens-sim-browser.mjs"
   }
 }

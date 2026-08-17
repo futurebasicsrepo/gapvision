@@ -8,6 +8,7 @@ import Tenants from "./components/Tenants.jsx";
 import Staff from "./components/Staff.jsx";
 import Plates from "./components/Plates.jsx";
 import Retention from "./components/Retention.jsx";
+import LensSim from "./components/LensSim.jsx";
 import Architecture from "./components/Architecture.jsx";
 import Brand from "./components/Brand.jsx";
 import Doc from "./components/Doc.jsx";
@@ -33,6 +34,9 @@ const SECTIONS = [
       { key: "staff", name: "CueSea staff", hint: "us, and who can sign in" },
       { key: "plates", name: "Plates", hint: "printed doors, and revocation" },
       { key: "retention", name: "Retention", hint: "windows, and what was deleted" },
+      // Last in Platform rather than under Reference: it is a thing you drive,
+      // not a thing you read.
+      { key: "lens-sim", name: "Lens Sim", hint: "the Meta lens, no hardware" },
     ],
   },
   {
@@ -53,6 +57,7 @@ const TITLES = {
   tenants: ["Tenants", "Every retailer, their people, their hardware, what they've used."],
   retention: ["Retention", "Each store's window, and what the last sweep actually deleted."],
   plates: ["Plates", "Every printed door, how hard each is being used, and the one control that matters."],
+  "lens-sim": ["Lens Sim", "The Meta lens, running the bundle the glasses run, with nothing to plug in."],
   architecture: ["Architecture", "The system, the decisions behind it, and what's still missing."],
   features: ["What CueSea does", "Read off the code, not the roadmap — and honest about the difference."],
   onboarding: ["Onboarding a retailer", "Console only. No terminal, no code."],
@@ -220,6 +225,7 @@ export default function App() {
           {view === "staff" && <Staff />}
           {view === "plates" && <Plates />}
           {view === "retention" && <Retention />}
+          {view === "lens-sim" && <LensSim />}
           {view === "architecture" && <Architecture />}
           {view === "features" && (
             <div className="card span-12"><Doc source={featuresMd} /></div>
