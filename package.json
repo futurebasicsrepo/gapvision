@@ -7,12 +7,16 @@
     "packages/server",
     "packages/web",
     "packages/glasses-plugin",
-    "packages/internal"
+    "packages/internal",
+    "packages/meta-lens"
   ],
   "scripts": {
     "dev:server": "npm run dev --workspace=packages/server",
     "dev:web": "npm run dev --workspace=packages/web",
     "dev:plugin": "npm run dev --workspace=packages/glasses-plugin",
+    "dev:meta": "npm run dev --workspace=packages/meta-lens",
+    "build:meta": "npm run build --workspace=packages/meta-lens",
+    "test:meta": "npm run test --workspace=packages/meta-lens",
     "dev:ai": "cd packages/ai-service && uvicorn app.main:app --reload --port 8000",
     "build": "npm run build --workspace=packages/web",
     "test:ai": "cd packages/ai-service && python -m pytest tests -q",
