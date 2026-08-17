@@ -18,7 +18,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import db, devices, identity
+from . import db, devices, identity, preflight
 from .auth import KeyHeader, guard
 from .identity import BearerHeader, current_user, require
 
@@ -31,6 +31,12 @@ class DeviceMint(BaseModel):
     label: str | None = None
     serial: str | None = None
     user_id: str | None = None
+    #: Mint anyway, after the preflight said the launch URL serves the wrong
+    #: app. Exists because an operator mid-migration may know something the
+    #: check cannot — and because a guard with no override is a guard somebody
+    #: disables in the environment, permanently, at 2am. Named for what it
+    #: does rather than "force".
+    despite_wrong_host: bool = False
 
 
 class DeviceAuth(BaseModel):
@@ -126,20 +132,65 @@ def mint_device(id_or_slug: str, req: DeviceMint,
         # because the foreign key would have allowed it.
         raise HTTPException(status_code=400, detail="No such person in this tenant")
 
+    # Ask the launch URL's origin which app it is, *before* minting — because
+    # the token does not exist yet, so there is nothing to burn if we stop
+    # here. Checking after the mint would leave a live credential behind every
+    # refusal.
+    url = devices.launch_url(req.surface, tenant["slug"], "preflight")
+    verdict = preflight.check(req.surface, url)
+    if verdict.blocks and not req.despite_wrong_host:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{verdict.detail} Nothing was minted. Point this surface's "
+                f"hostname at the right deployment, or mint anyway if you know "
+                f"better than this check."
+            ),
+        )
+
     device, token = devices.create(
         tenant["id"], tenant["slug"], surface=req.surface, label=req.label,
         serial=req.serial, user_id=req.user_id)
-    return _minted(tenant["slug"], device, token)
+    out = _minted(tenant["slug"], device, token)
+    # Carried on the success path too. "Reachable and correct" and "we could
+    # not ask" both mint, and an admin about to hold up a QR deserves to know
+    # which one they are in.
+    out["preflight"] = verdict.public()
+    return out
+
+
+class DeviceReissue(BaseModel):
+    despite_wrong_host: bool = False
 
 
 @admin_router.post("/devices/{device_id}/reissue")
-def reissue_device(device_id: str, authorization: str | None = BearerHeader):
+def reissue_device(device_id: str, req: DeviceReissue | None = None,
+                   authorization: str | None = BearerHeader):
     me = current_user(authorization)
     require(me, "client_admin")
     row = _device_or_404(me, device_id)
     tenant = db.query_one("SELECT slug FROM tenants WHERE id = %s", (row["tenant_id"],))
+
+    # The same guard as minting, because this is the same act: a reissue
+    # produces a live token and puts it in a QR. Checking the mint alone would
+    # leave the recovery path — the one an admin reaches for *because*
+    # something already went wrong — as the unguarded way to burn a token.
+    url = devices.launch_url(row["surface"], tenant["slug"], "preflight")
+    verdict = preflight.check(row["surface"], url)
+    if verdict.blocks and not (req and req.despite_wrong_host):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{verdict.detail} No new code was issued, and the old one is "
+                f"untouched. Point this surface's hostname at the right "
+                f"deployment, or reissue anyway if you know better than this check."
+            ),
+        )
+
     device, token = devices.reissue(device_id)
-    return _minted(tenant["slug"], device, token)
+    out = _minted(tenant["slug"], device, token)
+    out["preflight"] = verdict.public()
+    return out
 
 
 @admin_router.post("/devices/{device_id}/revoke")
