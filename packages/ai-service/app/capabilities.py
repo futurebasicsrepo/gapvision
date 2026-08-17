@@ -129,9 +129,10 @@ def exists(slug: str | None) -> bool:
 def for_tenant(slug: str | None) -> dict[str, bool]:
     """The whole switchboard, as booleans.
 
-    `voice` and `floor_comms` ship enabled for every tenant — they predate the
-    control plane and no retailer has asked for them off — so they read as True
-    unless a tenant's `config` says otherwise. `camera_capture` and
+    `voice`, `floor_comms` and `widgets` ship enabled for every tenant — they
+    predate the control plane, or in the widgets' case ship on because the deck
+    is what the product already showed — so they read as True unless a tenant's
+    `config` says otherwise. `camera_capture` and
     `shift_telemetry` are the opposite posture and read from `privacy`, where
     the defaults-off decisions live.
 
@@ -145,4 +146,9 @@ def for_tenant(slug: str | None) -> dict[str, bool]:
         SHIFT_TELEMETRY: shift_telemetry(slug),
         "voice": cfg.get("voice") is not False,
         "floor_comms": cfg.get("floor_comms") is not False,
+        # The right-hand deck. Kyle's call, 17 Aug 2026: whether a store has
+        # widgets at all is an admin decision made in Studio, while their order
+        # is the associate's. Same posture and same default as floor comms —
+        # only an explicit False from a store we reached turns it off.
+        "widgets": cfg.get("widgets") is not False,
     }
