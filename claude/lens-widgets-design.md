@@ -59,6 +59,42 @@ Four are new, and they are not equal in cost:
 | **PROMOS** | Current promotions. Per-tenant content with a start and end date, authored in Studio or pulled from the CRM. | Small if the copy is hand-authored per tenant; a project if it comes from Shopify's price rules. |
 | **SHIFT NOTES** / other | The "other useful information" slot. | Undefined until somebody names it. |
 
+### Two that are not widgets — Kyle, 17 Aug 2026
+
+**The AI assistant is an overlay on every module, not a card in the deck.**
+This is the right shape and it is worth saying why: voice is already
+context-sensitive — `focusSku` means "these" resolves to whatever the
+associate is looking at — so an assistant that lived *at* one position in
+the deck would be an assistant you had to navigate to before you could ask
+about the thing you were already reading. As an overlay it inherits the
+context instead: ask on the CUSTOMER card and the question is about that
+guest, ask on an INVENTORY card and it is about that garment.
+
+What that means for the build: the assistant is not a widget, cannot be
+reordered, and cannot be removed from the deck — it is a layer over
+whatever is showing, opened by the existing gesture. Two constraints ride
+with it. Its answer takes the frame (it already does), so returning must
+restore the widget underneath rather than the top of the deck. And the
+grounding rule does not relax because the surface moved: the model is still
+forbidden from estimating stock, sizes or prices, and "we don't carry that"
+stays the honest answer.
+
+**Barcode lookup is a capability with two entry points.** It exists today
+— photograph a tag, get price, count and location, answer on the glass —
+and Kyle's call is that it also belongs *inside* the INVENTORY widget
+rather than only on the phone's camera card. That is one lookup reachable
+two ways: from the phone, where the camera is, and from the widget, where
+the question usually starts. The scan itself must stay a phone action —
+aiming a camera is a hands-and-eyes job and the glasses have no camera —
+so what the widget offers is the trigger and the place the answer lands,
+not a second implementation.
+
+It is also the part of this product that is already category-neutral: a
+code resolves to a record with no sizing logic involved, which is why the
+market roadmap marks the non-apparel path as cheap to start. Putting it in
+the inventory widget makes that reachable in the flow rather than in a
+settings card.
+
 ## Where the configuration lives
 
 Two options, and they are not equivalent:
