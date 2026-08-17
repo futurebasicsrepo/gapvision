@@ -53,6 +53,7 @@
     "docs:onepager": "python3 docs/employee-one-pager.py",
     "test:capabilities": "node packages/glasses-plugin/test/capabilities.test.mjs",
     "test:vision-browser": "node packages/glasses-plugin/test/vision-browser.mjs",
-    "test:devices": "cd packages/ai-service && python -m pytest tests/test_devices.py -q"
+    "test:devices": "cd packages/ai-service && python -m pytest tests/test_devices.py -q",
+    "test:device-register": "node packages/server/test/device-register.mjs"
   }
 }

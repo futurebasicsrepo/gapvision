@@ -212,6 +212,52 @@ function broadcastPresence(tenant) {
 }
 
 /**
+ * What renders this lens, in the one vocabulary the database accepts.
+ *
+ * The Meta lens has sent `mrbd-webapp` since 0.1.0 and there are builds in the
+ * field saying it; `devices.surface` says `mrbd`. Normalised here rather than
+ * in the lens, because a value already installed on somebody's glasses cannot
+ * be changed by editing the source.
+ */
+const SURFACES = new Set(["even-g2", "mrbd", "sim"]);
+
+function normaliseSurface(surface) {
+  const s = String(surface || "").toLowerCase();
+  if (s === "mrbd-webapp") return "mrbd";
+  return SURFACES.has(s) ? s : null;
+}
+
+/**
+ * Who is presenting this provision token — asked of the control plane, which
+ * is the only place that can answer.
+ *
+ * Three outcomes, and they are not the same:
+ *
+ *   an object   the token is good; the device (and the tenant it belongs to)
+ *               is in the reply, and the reply is the authority.
+ *   `null`      the service answered and said no. A refusal.
+ *   `undefined` we could not ask. Not a refusal — see the register handler.
+ */
+async function resolveDevice(token, tenant, meta) {
+  try {
+    const res = await fetch(`${AI_SERVICE_URL}/api/auth/device`, {
+      method: "POST",
+      headers: aiHeaders(AI_API_KEY),
+      body: JSON.stringify({ token, tenant, meta }),
+    });
+    if (res.status === 401 || res.status === 403) return null;
+    if (!res.ok) {
+      console.warn(`[cue] device auth → ${res.status}`);
+      return undefined;
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn(`[cue] device auth failed: ${err.message}`);
+    return undefined;
+  }
+}
+
+/**
  * Write an event to the control plane.
  *
  * Fire and forget, deliberately. An associate mid-conversation must not feel
@@ -344,6 +390,10 @@ async function enterGuest(socket, { guestId, zone, tenant, source } = {}) {
       associate_email: socket.data.email,
       device_serial: socket.data.deviceSerial,
       device_model: socket.data.deviceModel,
+      // The device→user binding that retires email-based attribution. Set only
+      // for a lens that registered with a provision token; the serial and email
+      // paths still carry every G2 in the field and the simulator.
+      device_id: socket.data.deviceId || null,
       // What the glasses are about to show. Sent here rather than derived
       // later because stock moves: "what did we suggest" and "what would we
       // suggest now" are different questions, and only the first is
@@ -390,10 +440,82 @@ async function enterGuest(socket, { guestId, zone, tenant, source } = {}) {
   }
 }
 
+/**
+ * Resolve a lens's provision token before it can emit anything.
+ *
+ * Two of the three surfaces have no serial to offer — the Meta lens is a URL,
+ * the Lens Sim is a browser tab — so what they carry instead is a token minted
+ * in Console, put in the socket handshake.
+ *
+ * **Here rather than in `register` for one reason: ordering.** Connection
+ * middleware runs before the first event is delivered, so there is no window
+ * in which a socket has emitted something while its identity is still being
+ * checked. Doing this inside `register` would have made that handler async,
+ * and an async handler on a realtime server means a later event can overtake
+ * an earlier one.
+ *
+ * A refused token does not reject the connection. It marks the socket and lets
+ * it connect: `connect_error` on a client with reconnection enabled is an
+ * infinite retry loop, and the lens needs a live socket to be told *why* it is
+ * not working.
+ */
+io.use(async (socket, next) => {
+  const token = socket.handshake?.auth?.token || null;
+  if (!token) return next();
+
+  const auth = socket.handshake.auth || {};
+  const device = await resolveDevice(token, auth.tenant, {
+    // Diagnostics, stamped onto the device row. Whitelisted and truncated at
+    // the far end — this is a blob written by whatever is on the other end of
+    // a socket.
+    surface: normaliseSurface(auth.surface),
+    app_version: auth.app_version,
+    mode: auth.mode,
+    ua: socket.handshake?.headers?.["user-agent"],
+  });
+
+  if (device === null) {
+    // Answered, and the answer was no: unknown, revoked, retired, or a token
+    // pointed at the wrong shop. Which of those it was is deliberately not
+    // said, here or upstream.
+    socket.data.deviceRefused = true;
+  } else if (device === undefined) {
+    // Could not ask — the control plane is unreachable. Refusing here would
+    // take a shop floor's glasses offline because an analytics service
+    // blinked, and it would do it for a check that did not exist last week.
+    // So this degrades to exactly the pre-provisioning behaviour: the socket
+    // registers, unattributed, and the log says so.
+    console.warn("[cue] admitting a lens without device identity — auth unreachable");
+  } else if (device.device_id) {
+    socket.data.deviceId = device.device_id;
+    socket.data.deviceUserId = device.user_id || null;
+    socket.data.deviceSurface = device.surface || null;
+    // The tenant off the row. `register` binds from this in preference to the
+    // slug in its payload, which is what makes the token the authority rather
+    // than a second opinion.
+    socket.data.deviceTenant = device.tenant || null;
+  }
+  return next();
+});
+
 io.on("connection", (socket) => {
-  socket.on("register", ({ role, name, zone, email, deviceSerial, deviceModel, tenant,
-                          appVersion }) => {
+  socket.on("register", ({ role, name, zone, email, deviceSerial, deviceModel,
+                          tenant, appVersion, surface }) => {
+    // A lens whose token the control plane refused joins nothing — not the
+    // room, not the roster, not the floor. A lens that half-registers is a
+    // lens that hears other people's messages while its own store believes it
+    // was switched off.
+    if (socket.data.deviceRefused) {
+      socket.emit("register:refused", { reason: "not_provisioned" });
+      return;
+    }
+
     socket.data.role = role;
+    socket.data.surface = socket.data.deviceSurface || normaliseSurface(surface);
+    // The row outranks the payload. A device minted for one retailer that
+    // names another in its register lands in the retailer the row says.
+    if (socket.data.deviceTenant) tenant = socket.data.deviceTenant;
+
     // Register is where a socket picks its tenant. Older plugin builds don't
     // send one here and instead carry it on `beacon:guest-enter` / `voice:start`
     // — `bindTenant` accepts that and pins whichever arrives first, so a client

@@ -51,7 +51,7 @@ def _bump_usage(tenant_id: str, *, engagements: int = 0, voice: int = 0, stt_sec
 
 def start_engagement(
     tenant_id: str, *, guest_ref: str | None, zone: str | None,
-    associate_user_id: str | None = None,
+    associate_user_id: str | None = None, device_id: str | None = None,
     recommendations: list | None = None, cue_lines: list | None = None,
 ) -> dict:
     """Open an engagement, and record what the glasses showed to open it.
@@ -65,13 +65,14 @@ def start_engagement(
     row = db.query_one(
         """
         INSERT INTO engagements
-            (tenant_id, associate_user_id, guest_ref, zone, recommendations, cue_lines)
-        VALUES (%s, %s, %s, %s, %s::jsonb, %s)
+            (tenant_id, associate_user_id, device_id, guest_ref, zone,
+             recommendations, cue_lines)
+        VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
         RETURNING id, started_at
         """,
         # `%s::jsonb` with json.dumps is the convention this codebase already
         # uses for tenants.config and tenants.privacy — same shape, same place.
-        (tenant_id, associate_user_id, guest_ref, zone,
+        (tenant_id, associate_user_id, device_id, guest_ref, zone,
          json.dumps(recommendations or []), list(cue_lines or []) or None),
     )
     _bump_usage(tenant_id, engagements=1)

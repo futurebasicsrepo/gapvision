@@ -53,14 +53,21 @@ function header(mode: LensMode, cluster: string): HTMLDivElement {
   return h;
 }
 
-export function renderIdle(mode: LensMode, clock: string, tenantLabel: string, connected: boolean) {
+export function renderIdle(mode: LensMode, clock: string, tenantLabel: string,
+                           connected: boolean, refused = false) {
   const root = app();
   root.className = `mode-${mode}`;
   root.innerHTML = "";
   root.appendChild(header(mode, connected ? clock : "OFFLINE"));
   const card = el("card");
   card.appendChild(el("idle-clock", clock));
-  card.appendChild(el("idle-sub", "AWAITING GUEST SIGNAL"));
+  // A lens whose token the control plane refused will never receive a guest,
+  // and "AWAITING GUEST SIGNAL" on a quiet afternoon looks exactly like a lens
+  // that is working. Say which one it is, in the words the person wearing it
+  // can act on.
+  card.appendChild(refused
+    ? el("idle-sub", "NOT PROVISIONED · SEE YOUR MANAGER")
+    : el("idle-sub", "AWAITING GUEST SIGNAL"));
   root.appendChild(card);
   const foot = el("foot");
   foot.appendChild(el("", tenantLabel));

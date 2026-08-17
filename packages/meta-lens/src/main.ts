@@ -18,6 +18,9 @@ import { initialMode, toggleMode } from "./mode.js";
 import { renderDeck, renderIdle } from "./render.js";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:4000";
+/** Which build is on the glasses. Reported at handshake, and the answer to
+ *  "did that upload actually change anything". */
+const APP_VERSION = "0.2.0";
 
 const params = new URLSearchParams(location.search);
 for (const k of ["t", "tenant", "zone"]) {
@@ -34,13 +37,17 @@ let connected = false;
 let mode: LensMode = initialMode(params);
 let deck: DeckState | null = null;
 let payload: DisplayPayload | null = null;
+/** The control plane refused this lens's provision token. Sticky for the life
+ *  of the page: reconnecting does not re-mint a token, so a lens that flips
+ *  back to "awaiting guest signal" on the next connect would be lying. */
+let refused = false;
 
 const clock = () =>
   new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 
 function paint() {
   if (deck && payload) renderDeck(mode, deck, payload, clock());
-  else renderIdle(mode, clock(), TENANT_LABEL, connected);
+  else renderIdle(mode, clock(), TENANT_LABEL, connected, refused);
 }
 
 // Idle clock ticks on the minute only — no wire traffic, no busy repaints.
@@ -119,7 +126,16 @@ function main() {
     // WebSocket support on the glasses runtime is undocumented; fetch is not.
     // Start on polling and let socket.io upgrade if the runtime allows it.
     transports: ["polling", "websocket"],
-    auth: { token: TOKEN, tenant: TENANT },
+    // Identity travels in the handshake, not in `register`. The server resolves
+    // the provision token in connection middleware — before any event is
+    // delivered — so a lens is never half-identified while it is already
+    // talking. `surface`, the build and the mode ride along because that
+    // handshake is also the device heartbeat, and Console's fleet view is only
+    // as useful as what the last register said.
+    auth: {
+      token: TOKEN, tenant: TENANT,
+      surface: "mrbd-webapp", app_version: APP_VERSION, mode,
+    },
   });
 
   socket.on("connect", () => {
@@ -135,6 +151,13 @@ function main() {
   });
   socket.on("disconnect", () => {
     connected = false;
+    paint();
+  });
+  socket.on("register:refused", () => {
+    // Unknown, revoked, retired, or minted for another shop — the server
+    // deliberately does not say which, and there is nothing this lens could do
+    // differently if it knew.
+    refused = true;
     paint();
   });
   socket.on("glasses:display", (p: DisplayPayload) => {
