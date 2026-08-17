@@ -27,6 +27,7 @@ REQUIRED_SCOPES = ("read_customers", "read_orders", "read_products")
 OPTIONAL_SCOPES = {
     "read_inventory": "live floor stock counts",
     "read_all_orders": "order history older than 60 days",
+    "write_draft_orders": "floor checkout links",
 }
 
 # A merchant admin supplies this string and the service then fetches it. Without
