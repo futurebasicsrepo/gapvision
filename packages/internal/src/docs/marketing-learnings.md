@@ -71,6 +71,43 @@ question rather than a copy one. It is on a public page either way.
 **Source:** `templates/index.json` (hero caption, hardware `s1`) vs
 `sections/hero.liquid` schema default vs `README.md`.
 
+> **Resolved the same day.** `576 × 288` is the number the product actually
+> renders to, and there were three witnesses to it against one: the plugin, the
+> simulator, and `snippets/lens.liquid`'s own header comment, which cites
+> `claude/lens-hud.md` at plugin 0.1.9 and says *"576 × 288, monochrome green"*
+> — in the very file that draws the lens the marketing page shows. The site now
+> says 576 × 288 in both places. The `640 × 350` appears to have been typed into
+> the theme editor rather than derived from anything.
+
+## 17 August 2026 · The site was a year behind the build, and nobody could see it
+
+**Fact, and the expensive kind.** The store site pitched one pair of glasses
+with a mocked lens. Shipped and unmentioned: Cue Pocket, floor comms with
+addressing, and the camera look-up. Built and unmentioned: the Meta Ray-Ban
+Display lens. The homepage was last true some time before three of the four
+landed.
+
+This is the **mirror image** of the entry above about the deck outrunning the
+code, and it is worth keeping both, because they look like opposite mistakes
+and have one cause: *nothing joins a shipped feature to the sentence that sells
+it.* A deck written in the present tense outruns the build; a site nobody
+revisits falls behind it. Both are invisible until somebody reads the page with
+the repo open beside them.
+
+Worse than invisible in one place: the site claimed **"no cameras"** as a
+headline fact. That was true when it was written and stopped being true when
+the look-up shipped — and it is the single claim a privacy-minded merchant is
+most likely to test. It now reads "never a face · the camera reads objects, not
+people", which is both true and a stronger thing to say.
+
+The cheap mechanism, if we want one: FEATURES.md already has a *Works today*
+section, and the site has surfaces and capability sections. Whatever adds a row
+to the first should be what adds a card to the second.
+
+**Source:** the v9 content pass, 17 August 2026, checked against `FEATURES.md`,
+`packages/pocket/README.md`, `packages/meta-lens/README.md`,
+`app/vision.py` and `app/barcode.py`.
+
 ## 17 August 2026 · The known-edges section is the cheapest trust we can buy
 
 **Hypothesis, not yet tested against a merchant.** The customer deck carries a

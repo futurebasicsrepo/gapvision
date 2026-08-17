@@ -1,0 +1,91 @@
+{%- comment -%}
+  A capability, with the lens that shows it.
+
+  A general section for "here is a thing the product does now": a head, a real
+  lens on the left rendered by snippets/lens, and the points that matter on the
+  right. Used twice on the homepage — floor comms, and the camera look-up.
+
+  Everything here is drawn with classes cuesea-min.css already loads
+  (sec / head / lede / two / grid / card / pane / mono), so it needs no
+  stylesheet of its own. The lens is the same snippet the hero uses, drawn to
+  576 × 288 at one type size — the constraint is the product, so the marketing
+  page renders it honestly rather than prettily.
+
+  Keep cue lines inside the display charset: A-Z 0-9 and · % $ £ € / + -.
+  Anything outside it is a glyph the G2 may not have, and a marketing page that
+  shows the lens rendering something the hardware cannot is a lie in a picture.
+{%- endcomment -%}
+
+<section class="sec pad" {% if section.settings.anchor != blank %}id="{{ section.settings.anchor | handle }}"{% endif %}>
+  <div class="head">
+    <div>
+      <span class="mono">{{ section.settings.eyebrow }}</span>
+      <h2 style="margin-top:12px">{{ section.settings.title }}</h2>
+    </div>
+    {%- if section.settings.lede != blank -%}
+      <p class="lede">{{ section.settings.lede }}</p>
+    {%- endif -%}
+  </div>
+
+  <div class="two">
+    <div>
+      {%- render 'lens',
+            lines: section.settings.cue,
+            name: section.settings.name,
+            facts: section.settings.facts,
+            zone: section.settings.zone,
+            meta: section.settings.meta,
+            clock: section.settings.clock,
+            rail: section.settings.rail -%}
+      {%- if section.settings.caption != blank -%}
+        <span class="mono" style="display:block;margin-top:13px">{{ section.settings.caption }}</span>
+      {%- endif -%}
+    </div>
+
+    <div class="grid" style="grid-template-columns:1fr">
+      {%- for block in section.blocks -%}
+        <div class="card pane" {{ block.shopify_attributes }}>
+          <h3>{{ block.settings.title }}</h3>
+          <p>{{ block.settings.body }}</p>
+        </div>
+      {%- endfor -%}
+    </div>
+  </div>
+
+  {%- if section.settings.footnote != blank -%}
+    <p class="mono" style="margin-top:28px;max-width:70ch;line-height:1.9">{{ section.settings.footnote }}</p>
+  {%- endif -%}
+</section>
+
+{% schema %}
+{
+  "name": "Capability",
+  "settings": [
+    { "type": "text", "id": "anchor", "label": "Anchor id" },
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "the floor" },
+    { "type": "text", "id": "title", "label": "Title", "default": "one channel, with a name on it" },
+    { "type": "textarea", "id": "lede", "label": "Lede" },
+    { "type": "header", "content": "The lens" },
+    { "type": "textarea", "id": "cue", "label": "The three lines",
+      "info": "Uppercase. Charset is A-Z 0-9 and · % $ £ € / + -. Keep each line under 30 characters.",
+      "default": "BRING A 32 TO FIT 3\nFROM TOM R\nUNREAD 1" },
+    { "type": "text", "id": "name", "label": "Rail name", "default": "AMARA K" },
+    { "type": "text", "id": "facts", "label": "Rail facts", "info": "Comma separated. Ten characters each.",
+      "default": "FLOOR,DENIM,UNREAD 1" },
+    { "type": "checkbox", "id": "rail", "label": "Show the fact rail", "default": true },
+    { "type": "text", "id": "zone", "label": "Zone (footer left)", "default": "DENIM WALL" },
+    { "type": "text", "id": "meta", "label": "Meta (footer right)", "default": "DM · NOW" },
+    { "type": "text", "id": "clock", "label": "Header clock", "default": "14·32" },
+    { "type": "text", "id": "caption", "label": "Caption under the lens" },
+    { "type": "header", "content": "The points" },
+    { "type": "textarea", "id": "footnote", "label": "Footnote" }
+  ],
+  "blocks": [
+    { "type": "point", "name": "Point", "limit": 4,
+      "settings": [
+        { "type": "text", "id": "title", "label": "Title" },
+        { "type": "textarea", "id": "body", "label": "Body" } ] }
+  ],
+  "presets": [{ "name": "Capability" }]
+}
+{% endschema %}
