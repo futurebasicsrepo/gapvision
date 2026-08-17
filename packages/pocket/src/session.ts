@@ -35,9 +35,7 @@ export interface SignInResult {
   user: Person;
 }
 
-const AI_URL: string =
-  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_AI_URL ||
-  "http://localhost:8000";
+import { SERVER_URL } from "./config.js";
 
 export class SignInError extends Error {
   constructor(message: string, readonly retryable: boolean) {
@@ -48,7 +46,7 @@ export class SignInError extends Error {
 export async function signIn(email: string, password: string): Promise<SignInResult> {
   let res: Response;
   try {
-    res = await fetch(`${AI_URL}/auth/login`, {
+    res = await fetch(`${SERVER_URL}/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -83,7 +81,7 @@ export async function signIn(email: string, password: string): Promise<SignInRes
 export async function signOut(token: string | null): Promise<void> {
   if (!token) return;
   try {
-    await fetch(`${AI_URL}/auth/logout`, {
+    await fetch(`${SERVER_URL}/auth/logout`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}` },
     });
@@ -101,7 +99,7 @@ export async function signOut(token: string | null): Promise<void> {
  * JWTs. `null` means sign in again; a thrown error means we could not ask.
  */
 export async function whoAmI(token: string): Promise<Person | null> {
-  const res = await fetch(`${AI_URL}/auth/me`, {
+  const res = await fetch(`${SERVER_URL}/auth/me`, {
     headers: { authorization: `Bearer ${token}` },
   });
   if (res.status === 401 || res.status === 403) return null;

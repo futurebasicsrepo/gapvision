@@ -29,7 +29,10 @@ node packages/pocket/test/pocket-browser.mjs  # 25, against vite preview
 the dev server directly — which is the only way to feel the gestures.
 
 Needs the realtime server (`npm run dev:server`) and the AI service
-(`npm run dev:ai`). Set `VITE_SERVER_URL` and `VITE_AI_URL` for anything else.
+(`npm run dev:ai`). **One** base URL, `VITE_SERVER_URL` — everything, sign-in
+included, goes through the realtime server, which proxies `/auth` upstream and
+attaches the service key. A static client cannot hold that key, which is why
+Console and Studio work the same way.
 
 ## The rule this package was asked for
 
