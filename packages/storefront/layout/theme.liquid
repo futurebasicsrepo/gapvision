@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="{{ request.locale.iso_code }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="canonical" href="{{ canonical_url }}">
+  {%- if settings.favicon != blank -%}
+    <link rel="icon" type="image/png" href="{{ settings.favicon | image_url: width: 64 }}">
+  {%- endif -%}
+
+  <title>{{ page_title }}{% unless page_title contains shop.name %} — {{ shop.name }}{% endunless %}</title>
+  {%- if page_description -%}<meta name="description" content="{{ page_description | escape }}">{%- endif -%}
+
+  {% render 'fonts' %}
+  {{ 'cuesea-min.css' | asset_url | stylesheet_tag }}
+  {{ 'cuesea-motion.css' | asset_url | stylesheet_tag }}
+  {{ 'cuesea-lens.css' | asset_url | stylesheet_tag }}
+  {{ 'cuesea-studio.css' | asset_url | stylesheet_tag }}
+  {{ 'cuesea-console.css' | asset_url | stylesheet_tag }}
+  {{ 'cuesea-nav.css' | asset_url | stylesheet_tag }}
+  {{ 'cuesea-mobile.css' | asset_url | stylesheet_tag }}
+  {{ 'cuesea-extra.css' | asset_url | stylesheet_tag }}
+  {%- unless template.name == 'index' -%}
+    {{ 'cuesea-interior.css' | asset_url | stylesheet_tag }}
+  {%- endunless -%}
+  {%- comment -%}
+    Last, deliberately. The consumer layer only raises scale and air, and it
+    re-asserts every phone rule it would otherwise outrank by load order.
+  {%- endcomment -%}
+  {{ 'cuesea-consumer.css' | asset_url | stylesheet_tag }}
+
+  {{ content_for_header }}
+</head>
+<body class="template-{{ template.name | handle }}">
+
+  <div class="amb" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="lines" aria-hidden="true"></div>
+
+  {% section 'bar' %}
+
+  <main id="main" role="main">
+    {{ content_for_layout }}
+  </main>
+
+  {% section 'foot' %}
+
+  <script>
+  (function(){
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function typeInto(el, text, done){
+      var n = 0, t = null;
+      (function step(){
+        if (n >= text.length){
+          el.innerHTML = text.replace(/\n/g, '<br>');
+          if (done) t = setTimeout(done, 2600);
+          return;
+        }
+        n++;
+        el.innerHTML = text.slice(0, n).replace(/\n/g, '<br>') + '<span class="cur"></span>';
+        t = setTimeout(step, text[n - 1] === '\n' ? 240 : 34);
+      })();
+      return function(){ clearTimeout(t); };
+    }
+
+    /* ── the bar ───────────────────────────── */
+    var bar = document.querySelector('.bar');
+    if (bar){
+      var ticking = false, tight = false;
+
+      function onScroll(){
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(function(){
+          var y = window.scrollY || document.documentElement.scrollTop;
+          var max = document.documentElement.scrollHeight - window.innerHeight;
+          var want = y > 40;
+          if (want !== tight){ tight = want; bar.classList.toggle('tight', tight); }
+          bar.style.setProperty('--prog', max > 0 ? Math.min(y / max, 1).toFixed(4) : 0);
+          ticking = false;
+        });
+      }
+
+      window.addEventListener('scroll', onScroll, {passive:true});
+      window.addEventListener('resize', onScroll, {passive:true});
+      onScroll();
+
+      if ('IntersectionObserver' in window){
+        var links = {}, sections = [];
+        bar.querySelectorAll('nav a[href*="#"]').forEach(function(a){
+          var id = (a.getAttribute('href') || '').split('#')[1];
+          if (!id) return;
+          var sec = document.getElementById(id);
+          if (!sec) return;
+          links[id] = a;
+          sections.push(sec);
+        });
+
+        if (sections.length){
+          var ioNav = new IntersectionObserver(function(list){
+            list.forEach(function(e){
+              if (!e.isIntersecting) return;
+              Object.keys(links).forEach(function(k){ links[k].classList.remove('here'); });
+              links[e.target.id].classList.add('here');
+            });
+          }, {rootMargin:'-45% 0px -50% 0px', threshold:0});
+          sections.forEach(function(s){ ioNav.observe(s); });
+        }
+      }
+    }
+
+    /* ── legacy cue box ──────────────────────── */
+    document.querySelectorAll('[data-cue-cycle]').forEach(function(box){
+      var data = box.querySelector('script[type="application/json"]');
+      if (!data) return;
+      var cues; try { cues = JSON.parse(data.textContent); } catch (e) { return; }
+      if (!cues.length) return;
+
+      var line = box.querySelector('.l'), room = box.querySelector('.room');
+      var i = 0, cancel = null, running = false;
+
+      function paint(c){ line.innerHTML = c.cue.replace(/\n/g, '<br>'); if (room) room.textContent = c.room; }
+      if (reduce) { paint(cues[0]); return; }
+
+      function run(){
+        var c = cues[i];
+        if (room) room.textContent = c.room;
+        cancel = typeInto(line, c.cue, function(){ i = (i + 1) % cues.length; run(); });
+      }
+
+      paint(cues[0]);
+      if (!('IntersectionObserver' in window)) { run(); return; }
+      new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+          if (e.isIntersecting && !running){ running = true; run(); }
+          else if (!e.isIntersecting && running){ running = false; if (cancel) cancel(); }
+        });
+      }, {threshold:.35}).observe(box);
+    });
+
+    /* ── rooms: the pinned lens follows the scroll ────── */
+    document.querySelectorAll('.rooms').forEach(function(sec){
+      var stage = sec.querySelector('[data-cue-stage]');
+      var entries = sec.querySelectorAll('.room-entry');
+      if (!stage || !entries.length) return;
+
+      var line = stage.querySelector('.l'), room = stage.querySelector('.room');
+      var active = -1, cancel = null;
+
+      function show(n, animate){
+        if (n === active) return;
+        active = n;
+        var el = entries[n];
+        entries.forEach(function(x){ x.classList.remove('on'); });
+        el.classList.add('on');
+        var text = el.getAttribute('data-cue') || '';
+        if (room) room.textContent = el.getAttribute('data-room') || '';
+        if (cancel) cancel();
+        if (animate && !reduce) cancel = typeInto(line, text);
+        else line.innerHTML = text.replace(/\n/g, '<br>');
+      }
+
+      show(0, false);
+      if (!('IntersectionObserver' in window)) return;
+
+      var io = new IntersectionObserver(function(list){
+        list.forEach(function(e){
+          if (!e.isIntersecting) return;
+          var n = Array.prototype.indexOf.call(entries, e.target);
+          if (n > -1) show(n, true);
+        });
+      }, {rootMargin:'-45% 0px -45% 0px', threshold:0});
+
+      entries.forEach(function(el){ io.observe(el); });
+    });
+
+    /* ── scroll reveal ──────────────────────── */
+    if (!reduce && 'IntersectionObserver' in window){
+      var io2 = new IntersectionObserver(function(list, obs){
+        list.forEach(function(e){
+          if (!e.isIntersecting) return;
+          var el = e.target;
+          setTimeout(function(){ el.classList.add('in'); },
+                     Math.min(parseInt(el.getAttribute('data-r'), 10) || 0, 6) * 60);
+          obs.unobserve(el);
+        });
+      }, {threshold:.12, rootMargin:'0px 0px -6% 0px'});
+
+      document.querySelectorAll('main > section').forEach(function(sec){
+        sec.querySelectorAll(':scope > *:not(.stick):not(.frames):not(.sd):not(.cn):not(.tl-rail), :scope > .frames > .frame, :scope > .slot')
+          .forEach(function(el, n){ el.setAttribute('data-r', n); io2.observe(el); });
+      });
+
+      setTimeout(function(){
+        document.querySelectorAll('[data-r]:not(.in)').forEach(function(el){
+          if (el.getBoundingClientRect().top < window.innerHeight) el.classList.add('in');
+        });
+      }, 2000);
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+"sections": {
+"hero": {"type":"hero","blocks":{
+  "c1":{"type":"cue","settings":{"name":"MAYA OKAFOR","facts":"ICON,4200 PTS,TOP M,BTM 28X30","cue":"IN CART CASHSOFT CREW\nBOUGHT BARREL JEANS+\nOFFER IT IN SIZE M","room":"DENIM WALL","meta":"CUE 1/4 · 1.2S"}},
+  "c2":{"type":"cue","settings":{"name":"J OSEI","facts":"GOLD,4TH STAY,HIGH FLOOR,LATE OUT","cue":"ARRIVING 14·40 · 2 NIGHTS\nASKED HIGH FLOOR TWICE\nOFFER 11TH BEFORE CHECK IN","room":"FRONT DESK","meta":"CUE 1/2 · 0.9S"}},
+  "c3":{"type":"cue","settings":{"name":"UNIT 3","facts":"CHILLER,3RD CALL,WARRANTY,90D LEFT","cue":"COMPRESSOR REPLACED TWICE\nSAME FAULT CODE E4\nCHECK THE LINE NOT THE PART","room":"PLANT ROOM","meta":"CUE 1/3 · 1.4S"}},
+  "c4":{"type":"cue","settings":{"name":"R DIAZ","facts":"NORTHWIND,40 SEATS,RENEWS MAR,£18K ARR","cue":"BOUGHT 40 SEATS LAST MARCH\nRENEWAL OPENS IN 31 DAYS\nOPEN WITH THE RENEWAL","room":"STAND 4","meta":"CUE 1/2 · 1.1S"}}},
+  "block_order":["c1","c2","c3","c4"],
+  "settings":{"line_one":"the answer,","line_two":"where the","line_three":"customer is.","sub":"your systems already know the answer. cuesea puts it in front of the person serving the customer — one plain sentence, in the second it matters. no cameras. no profiles. no dashboard.","cta_label":"book a pilot","cta_url":"/pages/contact","alt_label":"see how it works","alt_url":"/#how","note":"","clock":"14·32","caption":"640 × 350 · monochrome · every row the same size, because 26px is the floor"}},
+
+"statement": {"type":"statement","blocks":{
+  "k1":{"type":"fact","settings":{"value":"any sea","label":"read-only, no migration"}},
+  "k2":{"type":"fact","settings":{"value":"one cue","label":"three lines, two-second read"}},
+  "k3":{"type":"fact","settings":{"value":"under 500ms","label":"system to line of sight"}},
+  "k4":{"type":"fact","settings":{"value":"no cameras","label":"no biometrics, ever"}}},
+  "block_order":["k1","k2","k3","k4"],
+  "settings":{"anchor":"about","eyebrow":"what cuesea is","head_a":"your systems know everything.","head_b":"the room knows nothing.","col_one":"<p>every business already has the sea: point of sale, ecommerce, loyalty, service tickets, work orders, reservations, warranty history. the coat she almost bought in march. the compressor that failed twice last winter.</p>","col_two":"<p>it sits in systems the person doing the work cannot open, in dashboards nobody reads standing up, in reports that arrive on tuesday about a saturday. cuesea reads them where they already are and delivers one sentence into the line of sight of whoever is in the room — an associate, a host, a technician, a rep. one sentence they can say out loud exactly as written.</p>"}},
+
+"pipeline": {"type":"pipeline","settings":{"anchor":"how","eyebrow":"how it works","title":"currents in. one cue out.","lede":"read-only connections to the systems you already run. nothing migrates, nothing moves — and the cue lands in the second it is worth something.","src_one":"point of sale","src_two":"ecommerce","src_three":"loyalty + crm","engine":"depth","cue_one":"MAYA OKAFOR","cue_two":"HER SIZE CAME BACK TUESDAY","cue_meta":"£680 LTV · SIZE 10 · LAST IN 41D","who_one":"the associate","who_two":"the customer","moment":"the very right moment","footnote":"everything that does not survive the ranking is discarded. the associate sees one sentence, not a profile — and the customer never sees them look it up."}},
+
+"hardware": {"type":"hardware","blocks":{
+  "f1":{"type":"frame","settings":{"asset":"frame-rect.png","name":"rectangular","note":"two sizes · three finishes · prescription ready"}},
+  "f2":{"type":"frame","settings":{"asset":"frame-panto.png","name":"panto","note":"two sizes · three finishes · prescription ready"}},
+  "s1":{"type":"spec","settings":{"value":"640 × 350","label":"pixels per eye"}},
+  "s2":{"type":"spec","settings":{"value":"1,200","label":"nits peak brightness"}},
+  "s3":{"type":"spec","settings":{"value":"27.5°","label":"field of view"}},
+  "s4":{"type":"spec","settings":{"value":"36g","label":"on the face"}}},
+  "block_order":["f1","f2","s1","s2","s3","s4"],
+  "settings":{"anchor":"glass","eyebrow":"the glass","title":"she never sees you look it up","lede":"the cue arrives in the lens, not in a pocket. no glance away, no device between two people, no break in eye contact — because eye contact is the entire job.","footnote":"frames shown for illustration. cue lens is a surface, not a device — the layer runs on whichever glass an operator standardises on."}},
+
+"ask": {"type":"ask","blocks":{
+  "a1":{"type":"run","settings":{"question":"do you have these in a 32","intent":"stock","answer":"NOT SIZED 32\nCOMES IN S M L\n2 IN M ON DENIM WALL","name":"MAYA OKAFOR","facts":"ICON,4200 PTS,TOP M,BTM 28X30","room":"DENIM WALL","meta":"ASK · 2.9S","ms":2900}},
+  "a2":{"type":"run","settings":{"question":"what has she bought before","intent":"history","answer":"BARREL JEANS · MAR\nCASHSOFT CREW · JAN\nCART OPEN 6 DAYS","name":"MAYA OKAFOR","facts":"ICON,4200 PTS,TOP M,BTM 28X30","room":"DENIM WALL","meta":"ASK · 2.6S","ms":2600}},
+  "a3":{"type":"run","settings":{"question":"where is the linen shirt","intent":"location","answer":"LINEN SHIRT\nFRONT TABLE 2\n6 ON FLOOR · £58","name":"MAYA OKAFOR","facts":"ICON,4200 PTS,TOP M,BTM 28X30","room":"FRONT TABLE","meta":"ASK · 2.4S","ms":2400}},
+  "a4":{"type":"run","settings":{"question":"do you have the tweed blazer","intent":"open","answer":"WE DON'T CARRY THAT\nNOTHING TWEED ON FLOOR\nASK ME SOMETHING ELSE","name":"MAYA OKAFOR","facts":"ICON,4200 PTS,TOP M,BTM 28X30","room":"DENIM WALL","meta":"ASK · 2.2S","ms":2200}}},
+  "block_order":["a1","a2","a3","a4"],
+  "settings":{"anchor":"ask","eyebrow":"the ask","title":"press once. ask out loud.","lede":"a double press opens the mic. the endpointer closes it when you stop talking rather than running to a cap — so the answer arrives in about three seconds, in the same glass, without a phone coming out.","intents":"stock, location, price, history, recommend, open","body":"<p>six intents, detected from the transcript. inventory by size with the nearest available sizes in the same sizing scheme, floor location, price, the guest's own record — their sizes, their open cart, their points and tier, what they have bought before — and recommendations matched against what is actually on the floor, excluding what they already own.</p><p>“do you have these in a 32” resolves “these” to whatever is on the lens at that moment.</p>","honest":"naming a garment the floor does not carry gets “we don't carry that”, not a confident answer about something else. answers are grounded in records we hold; the model is forbidden from estimating stock, sizes or prices, and an outage says “model unavailable” rather than guessing."}},
+
+"lineup": {"type":"lineup","blocks":{
+  "r1":{"type":"room","settings":{"room":"sales floor","source":"pos + loyalty","cue":"MAYA OKAFOR\nHER SIZE CAME BACK TUESDAY","title":"the returning customer","body":"she left without it in march. the associate greets her by name and walks straight to the rail."}},
+  "r2":{"type":"room","settings":{"room":"hotel lobby","source":"pms","cue":"J. OSEI · ARRIVING\n4TH STAY — ASKS HIGH FLOOR","title":"the fourth stay","body":"the host offers the floor before the guest has to ask for it a fourth time."}},
+  "r3":{"type":"room","settings":{"room":"service call","source":"work orders","cue":"UNIT 3 · COMPRESSOR\nREPLACED TWICE SINCE JAN","title":"the third callout","body":"the technician stops replacing the part and starts finding the cause."}},
+  "r4":{"type":"room","settings":{"room":"trade floor","source":"crm + badge","cue":"R. DIAZ · NORTHWIND\nBOUGHT 40 SEATS LAST MARCH","title":"the badge scan","body":"the rep opens with the renewal instead of the introduction."}},
+  "r5":{"type":"room","settings":{"room":"fitting room","source":"ecommerce cart","cue":"CART OPEN 6 DAYS\nSAME JACKET, SIZE 8","title":"the open cart","body":"the thing she has been thinking about all week is forty feet away."}},
+  "r6":{"type":"room","settings":{"room":"service desk","source":"tickets","cue":"3RD VISIT THIS MONTH\nSAME FAULT, NOT RESOLVED","title":"the repeat visit","body":"nobody has to be told the history by the person living it."}}},
+  "block_order":["r1","r2","r3","r4","r5","r6"],
+  "settings":{"anchor":"rooms","eyebrow":"the rooms","title":"the room changes. the cue doesn't.","lede":"three lines, sized to a two-second read. same constraint whether the person is holding a jacket, a room key or a torque wrench.","caption":"one surface · every room","footnote":"cues shown are illustrative. each is assembled from records the operator already holds, and each carries an id that the resulting sale, booking or resolved call is measured against."}},
+
+"studio": {"type":"studio","blocks":{
+  "s1":{"type":"stat","settings":{"label":"guests helped","values":"18,112,441"}},
+  "s2":{"type":"stat","settings":{"label":"attributed sales","values":"2140,13980,52310","prefix":"£"}},
+  "s3":{"type":"stat","settings":{"label":"assists","values":"6,38,151"}},
+  "s4":{"type":"stat","settings":{"label":"questions asked","values":"23,164,690"}},
+  "p1":{"type":"person","settings":{"name":"amara k","initials":"AK","role":"associate","values":"7,41,163","here":true}},
+  "p2":{"type":"person","settings":{"name":"tom r","initials":"TR","role":"associate","values":"5,33,141","here":true}},
+  "p3":{"type":"person","settings":{"name":"priya n","initials":"PN","role":"supervisor","values":"4,26,118","here":true}},
+  "p4":{"type":"person","settings":{"name":"dev o","initials":"DO","role":"associate","values":"2,19,96","here":false}},
+  "g1":{"type":"guest","settings":{"cue":"IN CART CASHSOFT CREW\nBOUGHT BARREL JEANS+\nOFFER IT IN SIZE M","offered":"cashsoft crew · barrel jean · linen shirt","when":"14·32 · denim wall · amara k"}},
+  "g2":{"type":"guest","settings":{"cue":"CART OPEN 6 DAYS\nSAME JACKET SIZE 8\nIT IS ON FRONT TABLE","offered":"quilted jacket","when":"13·58 · front table · tom r"}},
+  "q1":{"type":"qa","settings":{"q":"do you have these in a 32","a":"not sized 32 — comes in s, m, l. two in m on the denim wall.","intent":"stock"}},
+  "q2":{"type":"qa","settings":{"q":"what has she bought before","a":"barrel jeans in march, cashsoft crew in january. cart open six days.","intent":"history"}},
+  "q3":{"type":"qa","settings":{"q":"do you have the tweed blazer","a":"we don't carry that. nothing tweed on the floor today.","intent":"open"}}},
+  "block_order":["s1","s2","s3","s4","p1","p2","p3","p4","g1","g2","q1","q2","q3"],
+  "settings":{"anchor":"studio","eyebrow":"cue studio","title":"the floor, while it is still the floor","lede":"manager sign-in, then one view. what happened, who was on the floor, and — where the retailer has turned transcripts on — the exact three lines each associate read, and the answer we gave to every question.","store":"gap · oxford street","ranges":"today, 7 days, 30 days","h_floor":"on the floor now","h_board":"leaderboard","h_guests":"recent guests — what cue actually said","h_qa":"questions asked, and what we answered","note":"recent guests and questions ride the tenant's store_transcripts setting — off by default, and toggled in cue console rather than by a hand-written api call. the cue is stored as sent rather than re-derived, because stock moves and a cue re-rendered a week later is not the cue anyone read. leaderboard weights are configurable per tenant, so the bar is relative to the best performer in the window."}},
+
+"console": {"type":"console","disabled":true,"blocks":{
+  "n1":{"type":"nav","settings":{"label":"health","hint":"live state","group":"platform","active":true}},
+  "n2":{"type":"nav","settings":{"label":"tenants","hint":"every retailer","group":"platform"}},
+  "n3":{"type":"nav","settings":{"label":"people + devices","hint":"roster and glasses","group":"platform"}},
+  "n4":{"type":"nav","settings":{"label":"connect shopify","hint":"scopes and fingerprints","group":"platform"}},
+  "n5":{"type":"nav","settings":{"label":"architecture","hint":"how a cue travels","group":"reference"}},
+  "n6":{"type":"nav","settings":{"label":"brand","hint":"one source of truth","group":"reference"}},
+  "h1":{"type":"check","settings":{"name":"schema state","hint":"migrations 8 · applied","state":"ok","verdict":"ok","ms":700}},
+  "h2":{"type":"check","settings":{"name":"credential key","hint":"cue_cred_key present · 0 sealed rows","state":"ok","verdict":"ok","ms":950}},
+  "h3":{"type":"check","settings":{"name":"tenants without an admin","hint":"1 retailer has none of its own","state":"warn","verdict":"warn","ms":1250}},
+  "h4":{"type":"check","settings":{"name":"stranded engagements","hint":"none open past shift end","state":"ok","verdict":"ok","ms":1500}},
+  "h5":{"type":"check","settings":{"name":"staff who can sign in","hint":"4 accounts with a password set","state":"ok","verdict":"ok","ms":1800}},
+  "h6":{"type":"check","settings":{"name":"retention","hint":"days stored · nothing deletes on them yet","state":"warn","verdict":"warn","ms":2100}},
+  "h7":{"type":"check","settings":{"name":"voice success · 24h","hint":"97.4% · p95 1.9s","state":"ok","verdict":"ok","ms":2450}},
+  "h8":{"type":"check","settings":{"name":"unassigned devices","hint":"2 glasses registered, no owner","state":"warn","verdict":"warn","ms":2800}},
+  "h9":{"type":"check","settings":{"name":"app.cuesea.ai","hint":"probed from this browser · 200","state":"ok","verdict":"ok","ms":3300}},
+  "h10":{"type":"check","settings":{"name":"ai service","hint":"no-cors probe · opaque by design","state":"unknown","verdict":"unknown","ms":3900}},
+  "t1":{"type":"note","settings":{"title":"unknown is never a pass","body":"a check we cannot read reports unknown, not ok. a health panel that turns silence into a tick is worse than having no panel at all."}},
+  "t2":{"type":"note","settings":{"title":"the retention row is hard-coded to warn","body":"retention days are stored, and until the sweep actually deletes on them the console will not imply a promise the code does not keep.","flag":true}},
+  "t3":{"type":"note","settings":{"title":"passing rows are sea, not green","body":"a wall of green ticks trains you to stop reading them. flame is reserved for the rows that want attention — the same discipline the lens uses."}}},
+  "block_order":["n1","n2","n3","n4","n5","n6","h1","h2","h3","h4","h5","h6","h7","h8","h9","h10","t1","t2","t3"],
+  "settings":{"anchor":"console","eyebrow":"cue console","title":"staff only — and not because of a role check","lede":"cue console is its own build on its own origin. a retailer's admin never receives the code, not just the data — panel names, endpoint paths and internal labels are never served from the app they sign into, and a test scans that bundle to prove it. the role check inside is courtesy, not the boundary.","g_platform":"platform","g_reference":"reference","badge":"cue console · staff","panel_title":"platform health","panel_note":"two sources · not awaited together","checking_label":"checking","boundary_label":"the thing people get wrong","boundary":"the service key never leaves our services, and the customer record never enters them."}},
+
+"timeline": {"type":"timeline","blocks":{
+  "p1":{"type":"phase","settings":{"label":"setup"}},
+  "t1":{"type":"slot","settings":{"when":"week 1","title":"connect the sea","detail":"read-only credentials, no migration, no data leaves your systems","kind":"us"}},
+  "t2":{"type":"slot","settings":{"when":"week 1","title":"first cue","detail":"rendered against your real records, reviewed before anyone wears anything","kind":"us"}},
+  "t3":{"type":"slot","settings":{"when":"week 2","title":"agree the kill criteria","detail":"what would make us stop, written down before we start","kind":"together"}},
+  "p2":{"type":"phase","settings":{"label":"measure"}},
+  "t4":{"type":"slot","settings":{"when":"weeks 3–4","title":"five people, one site","detail":"volunteers only, matched control group on the same shifts","kind":"you"}},
+  "t5":{"type":"slot","settings":{"when":"weekly","title":"readout","detail":"basket, attach rate, opt-in rate, and how it feels to wear","kind":"together"}},
+  "t6":{"type":"slot","settings":{"when":"week 6","title":"stop or widen","detail":"the honest checkpoint. most of the answer is already visible here","kind":"you"}},
+  "p3":{"type":"phase","settings":{"label":"proof"}},
+  "t7":{"type":"slot","settings":{"when":"week 12","title":"attributed lift, or none","detail":"every sale carries the cue that preceded it, so the number is not an opinion","kind":"together"}}},
+  "block_order":["p1","t1","t2","t3","p2","t4","t5","t6","p3","t7"],
+  "settings":{"anchor":"pilot","eyebrow":"the pilot","title":"twelve weeks, start to proof","lede":"kill criteria agreed before week one. a matched control group on the same shifts. weekly readouts you can stop at any point."}},
+
+"close": {"type":"close","settings":{"anchor":"pilot-cta","eyebrow":"one site. five people. twelve weeks.","line_one":"book","line_two":"a pilot","cta":"book a pilot","url":"/pages/contact","note":"or just ask what it costs. kr@cuesea.ai"}}
+},
+"order": ["hero","statement","lineup","hardware","ask","pipeline","studio","console","timeline","close"]
+}
