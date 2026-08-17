@@ -34,15 +34,14 @@ import { detect } from "./platform.js";
 import { installHint, watchForInstall } from "./install.js";
 import { ScreenWake } from "./wake.js";
 import * as session from "./session.js";
+import { SERVER_URL } from "./config.js";
 import {
   type Chrome, deckScreen, idleScreen, notice, paint, settingsScreen, signInScreen, strip,
 } from "./render.js";
 
 const APP_VERSION = "0.1.0";
 const SURFACE = "phone";
-const SERVER_URL =
-  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SERVER_URL ||
-  "http://localhost:4000";
+
 
 /**
  * What the server said, in words an associate can act on.

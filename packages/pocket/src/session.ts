@@ -35,25 +35,7 @@ export interface SignInResult {
   user: Person;
 }
 
-/**
- * The realtime server, not the AI service.
- *
- * Everything the browser tier touches goes through `packages/server`, which
- * proxies `/auth`, `/api/admin` and `/api/analytics` upstream and attaches the
- * service key on the way (`proxy.js` PASSTHROUGH). Console and Studio have
- * always worked this way, for the reason the proxy's own docstring gives: a
- * static client cannot hold the AI service key.
- *
- * Pocket briefly called the AI service directly on its own `VITE_AI_URL`. That
- * would have needed the control plane exposed to the public internet and
- * CORS-opened to a phone's origin, to gain nothing — and it would have been
- * discovered as "sign-in does not work in production", after launch.
- *
- * One base URL, the same one the socket uses.
- */
-const AI_URL: string =
-  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SERVER_URL ||
-  "http://localhost:4000";
+import { SERVER_URL } from "./config.js";
 
 export class SignInError extends Error {
   constructor(message: string, readonly retryable: boolean) {
@@ -64,7 +46,7 @@ export class SignInError extends Error {
 export async function signIn(email: string, password: string): Promise<SignInResult> {
   let res: Response;
   try {
-    res = await fetch(`${AI_URL}/auth/login`, {
+    res = await fetch(`${SERVER_URL}/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -99,7 +81,7 @@ export async function signIn(email: string, password: string): Promise<SignInRes
 export async function signOut(token: string | null): Promise<void> {
   if (!token) return;
   try {
-    await fetch(`${AI_URL}/auth/logout`, {
+    await fetch(`${SERVER_URL}/auth/logout`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}` },
     });
@@ -117,7 +99,7 @@ export async function signOut(token: string | null): Promise<void> {
  * JWTs. `null` means sign in again; a thrown error means we could not ask.
  */
 export async function whoAmI(token: string): Promise<Person | null> {
-  const res = await fetch(`${AI_URL}/auth/me`, {
+  const res = await fetch(`${SERVER_URL}/auth/me`, {
     headers: { authorization: `Bearer ${token}` },
   });
   if (res.status === 401 || res.status === 403) return null;
