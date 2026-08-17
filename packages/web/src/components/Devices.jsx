@@ -26,6 +26,14 @@ import { api } from "../api.js";
 const SURFACES = [
   { id: "even-g2", label: "Glasses", note: "A pair of Even G2s. Scan the code with them." },
   { id: "mrbd", label: "Meta glasses", note: "Meta Ray-Ban Display. Opened from a link." },
+  {
+    id: "phone",
+    label: "Store phone or handheld",
+    // Studio's own words for the same rule Console states in its own. A shop's
+    // admin is the person most likely to be standing in a stockroom with a new
+    // hire's own phone in their hand, so this is where saying it counts.
+    note: "A phone or handheld the store owns. Scan the code with it. Do not set one up on somebody's own phone — they sign in with their own account instead, and turning them off in People ends it everywhere.",
+  },
   { id: "sim", label: "Browser tab", note: "For training and trying things. Not real hardware." },
 ];
 
@@ -207,9 +215,19 @@ function Minted({ minted, onDone }) {
       <strong>{minted.device.label || "Your new lens"} is ready.</strong>
       <p style={{ margin: "8px 0 12px", lineHeight: 1.5 }}>
         This is the only time this code is shown. It is stored scrambled, so
-        nobody — not you, not us — can bring it back. Set the glasses up now; if
+        nobody — not you, not us — can bring it back. Set the device up now; if
         it goes missing, use <em>New code</em>.
       </p>
+      {minted.device.surface === "phone" && (
+        // Said again at the moment of the act. This code is the shop's own
+        // identity — whatever scans it answers as this store. On a phone that
+        // goes home in somebody's pocket, that is the shop leaving with them.
+        <p className="warn" style={{ margin: "0 0 12px", lineHeight: 1.5 }}>
+          Scan this with a device the <strong>store owns</strong>. If this is
+          somebody's own phone, close this and have them sign in instead —
+          nothing on this screen belongs on it.
+        </p>
+      )}
       {minted.qr && <div style={{ marginBottom: 12 }}><Qr rows={minted.qr} /></div>}
       <div className="launch-url" data-testid="launch-url">{minted.launch_url}</div>
       <div className="btn-row" style={{ marginTop: 12 }}>

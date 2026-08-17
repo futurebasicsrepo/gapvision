@@ -10,9 +10,8 @@
  *
  * Both voices share the deck model; this module only decides paint.
  */
-import type { DisplayPayload, LensMode } from "./types.js";
-import { type DeckState, contentOf, titleOf, VISIBLE_ROWS } from "./deck.js";
-import { joinMeta } from "./grammar.js";
+import type { DisplayPayload, LensMode } from "@cue/lens-core";
+import { type DeckState, contentOf, titleOf, VISIBLE_ROWS, joinMeta } from "@cue/lens-core";
 import { CARD_ICON, MARK, SHIRT, STAR, TROUSERS } from "./icons.js";
 
 const app = () => document.getElementById("app")!;

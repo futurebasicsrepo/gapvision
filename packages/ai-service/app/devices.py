@@ -30,8 +30,21 @@ from urllib.parse import quote
 
 from . import db, identity
 
-#: What renders the lens. Matches the CHECK in 011.
-SURFACES = ("even-g2", "mrbd", "sim")
+#: What renders the lens. Matches the CHECK in 011, extended by 013.
+#:
+#: `phone` means a **store-owned handheld** and nothing else. An associate's own
+#: phone never appears in this table: it authenticates as a person through
+#: `auth_tokens`, so revoking them in Console revokes it, and nobody has to
+#: chase a handset that left with somebody who quit. The distinction is the
+#: whole reason the phone surface was safe to add — see migration 013.
+SURFACES = ("even-g2", "mrbd", "sim", "phone")
+
+#: Surfaces provisioned by pointing a camera at a screen. A QR is the natural
+#: medium when the device has a camera and no keyboard worth typing a token
+#: into, which is true of the G2 and true of every phone; a Meta launch URL
+#: goes through Meta's own share flow and the sim is a browser tab somebody
+#: already has open.
+QR_SURFACES = ("even-g2", "phone")
 
 #: How long after a register a device still counts as on the floor. Registers
 #: are re-sent on reconnect and hourly, so this is "we heard from it recently",
@@ -78,6 +91,13 @@ def launch_url(surface: str, tenant_slug: str, token: str) -> str:
     q = f"?t={quote(token)}&tenant={quote(tenant_slug)}"
     if surface == "mrbd":
         return _base("CUE_LENS_URL", "https://lens.cuesea.ai") + "/" + q
+    if surface == "phone":
+        # Its own origin, not Console's. Pocket is an installable app on a
+        # device that leaves the building, and giving it the staff origin would
+        # put a service-worker scope and a home-screen icon for `internal.` on
+        # a handset — a same-origin foothold on the admin surface for the sake
+        # of saving a DNS record.
+        return _base("CUE_POCKET_URL", "https://pocket.cuesea.ai") + "/" + q
     if surface == "sim":
         # Served under Console's own origin: the sim's postMessage bridge is
         # same-origin-only on purpose, and a page that can iframe the lens

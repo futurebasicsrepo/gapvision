@@ -39,6 +39,18 @@ class DeviceAuth(BaseModel):
     meta: dict | None = None
 
 
+class AssociateAuth(BaseModel):
+    """A *person's* session, presented by the realtime server on their behalf.
+
+    The BYOD counterpart of `DeviceAuth`. Same caller, same service key, same
+    single-401 posture — and deliberately a separate model and a separate
+    route, because conflating "this handset is the store" with "this person is
+    signed in" is exactly the mistake the phone surface exists to avoid.
+    """
+    session: str
+    tenant: str | None = None
+
+
 def _device_or_404(me, device_id: str) -> dict:
     """A device this principal may administer.
 
@@ -61,17 +73,17 @@ def _device_or_404(me, device_id: str) -> dict:
 def _minted(tenant_slug: str, device: dict, token: str) -> dict:
     """The one response that carries a token, and everything derived from it.
 
-    The QR is only for `even-g2`, because that is the only surface whose
-    provisioning medium is a thing you point a camera at. A Meta launch URL
-    goes into Meta's preview share flow and a sim URL goes into a browser tab;
-    a QR beside either would be an affordance for something nobody does.
+    The QR goes to the surfaces whose provisioning medium is a thing you point
+    a camera at — the G2, and a phone. A Meta launch URL goes into Meta's
+    preview share flow and a sim URL goes into a browser tab; a QR beside
+    either would be an affordance for something nobody does.
     """
     url = devices.launch_url(device["surface"], tenant_slug, token)
     return {
         "device": device,
         "token": token,
         "launch_url": url,
-        "qr": devices.qr_rows(url) if device["surface"] == "even-g2" else None,
+        "qr": devices.qr_rows(url) if device["surface"] in devices.QR_SURFACES else None,
     }
 
 
@@ -173,4 +185,64 @@ def authenticate_device(req: DeviceAuth, request: Request,
         "surface": row["surface"],
         "tenant": row["tenant_slug"],
         "label": row.get("label"),
+    }
+
+
+@device_auth_router.post("/associate")
+def authenticate_associate(req: AssociateAuth, request: Request,
+                           x_gapvision_key: str | None = KeyHeader):
+    """Resolve a personal session for the realtime server.
+
+    This is how an associate's **own phone** connects. It holds no device
+    identity and never will — the thing it presents belongs to the person, not
+    to the shop, which is the entire point:
+
+      · An admin disabling someone in Console ends this in the next second,
+        because `auth_tokens` is revocable server-side. Nobody has to find a
+        handset.
+      · The session expires on its own (`CUE_SESSION_HOURS`, 12 by default —
+        roughly a shift). A phone that has been in a drawer since Friday holds
+        nothing usable on Monday without anyone having remembered anything.
+      · There is no store credential on the device to leave with them.
+
+    Returns the person and their tenant. No device_id, deliberately: activity
+    from a personal phone is attributed to a human being and to no hardware,
+    and inventing a synthetic device row here would put the thing we refused to
+    create back into the fleet list under a name nobody can revoke.
+
+    One 401 for every failure, same as the device door. Unknown token, expired,
+    revoked, disabled account, or a session pointed at the wrong shop — telling
+    them apart lets somebody holding a stolen token learn which shop it was.
+    """
+    guard(request, req.tenant, x_gapvision_key)
+
+    row = identity.resolve_token(req.session)
+    if row is None or row["status"] != "active":
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # An associate is the only role this door is for. A manager or an admin
+    # holding a valid Console session must not be able to point it at the
+    # realtime server and register as a lens on the floor — their surfaces are
+    # Studio and Console, and a signed-in admin appearing in the roster is a
+    # confusing thing that nobody asked for.
+    if row["role"] not in ("associate", "manager"):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    slug = row.get("tenant_slug")
+    if slug is None:
+        # CueSea staff have no tenant, so there is no floor for them to join.
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if req.tenant and req.tenant.lower() != slug.lower():
+        # The client named a shop that is not theirs. Refused rather than
+        # silently corrected: a phone asking for the wrong store is a phone
+        # whose state is wrong, and quietly landing it in the right one hides
+        # that from everybody.
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    return {
+        "user_id": str(row["id"]),
+        "name": row.get("name"),
+        "email": row.get("email"),
+        "role": row["role"],
+        "tenant": slug,
     }

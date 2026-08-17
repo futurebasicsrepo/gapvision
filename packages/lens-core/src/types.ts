@@ -4,10 +4,14 @@
  * optional and degrades to the cue lines alone, so server evolution never
  * breaks the lens.
  *
- * NOTE for the extraction pass: `Card`, `cueOf`, `cardsFor` mirror
- * packages/glasses-plugin/src/cards.ts (0.3.x). When this package lands in
- * the monorepo, lift the shared shapes into packages/lens-core and import
- * from there in both plugins — the logic must not fork.
+ * `Card`, `cueOf` and `cardsFor` began life in
+ * packages/glasses-plugin/src/cards.ts (0.3.x) and were mirrored into the Meta
+ * lens. They live here now, imported by every surface, because a mirrored copy
+ * is a fork that has not diverged yet.
+ *
+ * The G2 plugin still carries its own `cards.ts` against the Even container
+ * model; it is the next thing to come across, and until it does the two are
+ * kept in step by the shared suite rather than by memory.
  */
 
 export type CardKind = "CUE" | "CART" | "HISTORY" | "SIZES" | "SHOW" | "FLOOR";

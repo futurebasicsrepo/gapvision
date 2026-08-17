@@ -12,7 +12,7 @@ thing that knows what actually happened on the floor.
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import analytics, capabilities, db, identity, presence, shifts
+from . import analytics, capabilities, db, decks, identity, presence, shifts
 from .auth import KeyHeader, guard
 from .identity import BearerHeader, current_user, require, scope_tenant
 
@@ -548,3 +548,85 @@ def ingest_assist(req: AssistRecord, request: Request,
         t["id"], helper_user_id=helper, engagement_id=req.engagement_id, note=req.note
     )
     return {"assist_id": str(row["id"])}
+
+
+# --- decks: our own pipeline -------------------------------------------------
+#
+# `cue_admin` only, and that is a deliberate departure from the design note in
+# `claude/sales-deck.md`, which put these on the manager-and-up analytics rule
+# like everything else in this router.
+#
+# Everything else here is a retailer's own data, so manager-and-up is right.
+# These rows are **ours** — which investors opened the pre-seed deck, which
+# merchants we are chasing. Under the same rule, a customer's manager could read
+# our fundraise pipeline through an endpoint built for their floor numbers. The
+# isolation runs the other way from usual, which is exactly why it would have
+# shipped unnoticed.
+
+class DeckLead(BaseModel):
+    deck: str | None = None
+    name: str | None = None
+    email: str | None = None
+    firm: str | None = None
+    preparedFor: str | None = None
+    to: str | None = None
+    token: str | None = None
+    ref: str | None = None
+
+
+class DeckLink(BaseModel):
+    deck: str
+    token: str
+    preparedFor: str | None = None
+    gated: bool = True
+
+
+@ingest.post("/deck-lead", status_code=204)
+def ingest_deck_lead(req: DeckLead, request: Request,
+                     x_gapvision_key: str | None = KeyHeader):
+    """A gated open, from the deck host.
+
+    Service key, and **204 whatever happens** — the same posture the edge
+    function keeps, for the same reason: this call sits between a person and
+    the document they asked for, and a gate that traps a real investor behind a
+    500 costs more than a missed lead. A dropped row is recoverable from the
+    deck host's log; a reader who hit an error is not.
+    """
+    guard(request, None, x_gapvision_key)
+    try:
+        decks.record_lead(req.model_dump())
+    except Exception as exc:   # pragma: no cover - diagnostics only
+        print(f"[cue] deck lead dropped: {exc}", flush=True)
+    return None
+
+
+@router.get("/deck-leads")
+def get_deck_leads(days: int = 90, authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    return {"leads": decks.leads(days)}
+
+
+@router.get("/deck-links")
+def get_deck_links(days: int = 365, authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    return {"links": decks.links(days)}
+
+
+@router.post("/deck-links", status_code=201)
+def post_deck_link(req: DeckLink, authorization: str | None = BearerHeader):
+    """Record a link somebody built, so it is visible on their other machine.
+
+    This is what retires the panel's localStorage: a link made on a laptop
+    should be readable from a phone, and "Forget" should stop meaning "forget
+    on this device only".
+    """
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    if req.deck not in decks.DECKS:
+        raise HTTPException(status_code=400,
+                            detail=f"Deck must be one of {', '.join(decks.DECKS)}")
+    return {"link": decks.create_link(
+        deck=req.deck, token=req.token, prepared_for=req.preparedFor,
+        gated=req.gated, created_by=me["id"])}
