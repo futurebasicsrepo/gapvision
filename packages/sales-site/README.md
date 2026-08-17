@@ -37,12 +37,18 @@ vercel deploy --prod          # project: cuesea-sales
 # then add sales.cuesea.ai in Vercel, and a CNAME: sales → cname.vercel-dns.com
 ```
 
-Two environment variables, both optional and both worth setting:
+Four environment variables, all optional and all worth setting:
 
 | Where | Variable | Effect |
 |---|---|---|
-| this project | `LEAD_WEBHOOK_URL` | gated opens are forwarded there; without it they land in the runtime log |
+| this project | `CUE_AI_URL` | the AI service origin — gated opens become rows Console can read, inside the retention sweep |
+| this project | `CUE_API_KEY` | the service key for that call (`GAPVISION_API_KEY`'s value) |
+| this project | `LEAD_WEBHOOK_URL` | a second, independent destination, if you want one |
 | the Console project | `VITE_SALES_URL` | the origin the Sales panel builds every link from |
+
+Without `CUE_AI_URL` and `CUE_API_KEY` a lead still opens the deck and still
+lands in this project's runtime log — it just never becomes a row anybody can
+act on. The log is the fallback, not the system.
 
 Console defaults to `https://sales.cuesea.ai`, so if the domain above is what
 you use, `VITE_SALES_URL` is belt and braces rather than required.
