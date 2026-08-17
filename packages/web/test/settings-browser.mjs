@@ -39,7 +39,7 @@ const browser = await chromium.launch(
  * assumed, and `config` is mutated by the stub so a reload reflects the write
  * the way a real database would.
  */
-async function boot(role, { widgets } = {}) {
+async function boot(role, { widgets, thinSummary = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const state = { patches: [], config: widgets === undefined ? {} : { widgets } };
   const user = {
@@ -62,13 +62,18 @@ async function boot(role, { widgets } = {}) {
       body: JSON.stringify({ tenant: { id: "t1", slug: "gap", name: "Gap", config: state.config } }) });
   });
   // Everything the floor view asks for, shaped the way the real service shapes
-  // it — every field, not a plausible subset. The dashboard reads
-  // `summary.voice.total` and `summary.voice.stt_seconds` with no guard, so a
-  // payload missing either one throws inside render and blanks the whole app,
-  // nav included. That is worth knowing about the dashboard and is not this
-  // test's to fix; it is why these stubs are exhaustive rather than minimal.
+  // it — every field, not a plausible subset, because that is what these tests
+  // are meant to exercise.
+  //
+  // The dashboard used to *require* that: it read `summary.voice.total` and
+  // `summary.voice.stt_seconds` unguarded, so a payload missing either threw
+  // inside render and blanked the whole app, nav included. That is fixed —
+  // `ManagerDashboard` fills the shape once before reading it — and the last
+  // block in this file holds the fix down. These stubs stay exhaustive anyway:
+  // realistic input is the point, and a suite that only ever sends the thin
+  // payload would stop noticing if the real one changed.
   const FLOOR_STUBS = [
-    ["**/api/analytics/summary**", {
+    ["**/api/analytics/summary**", thinSummary ? { engagements: 0 } : {
       engagements: 0, associates_active: 0, sale_cents: 0, sales: 0, assists: 0,
       voice: { total: 0, ok: 0, avg_latency_ms: 0, stt_seconds: 0 },
     }],
@@ -162,6 +167,34 @@ const navLabels = (p) => p.$$eval(".view-switch button", (e) => e.map((x) => x.t
   // shop gets changed.
   check("CueSea staff are not offered Settings either",
     !(await navLabels(p)).includes("Settings"), (await navLabels(p)).join(","));
+  await ctx.close();
+}
+
+// --- 5. a summary that arrived incomplete ------------------------------------
+//
+// The failure this guards against is not a missing panel — it is a **white
+// page**. Five reads on the floor view walked into `summary.voice.*`, so a
+// payload without `voice` threw inside render and took the whole app down, nav
+// included: no error, no way to navigate anywhere else, nothing to do but
+// reload into the same thing.
+//
+// Not hypothetical. Studio deploys on Vercel and the AI service on Railway, on
+// separate pushes, so "the server always sends the whole shape" holds only
+// while the two are in step.
+{
+  const { p, ctx } = await boot("client_admin", { thinSummary: true });
+  const labels = await navLabels(p);
+  check("a summary missing fields does not blank the app",
+    labels.length > 0, `nav had ${labels.length} items: ${labels.join(",")}`);
+  check("and the rest of the surface is still reachable",
+    labels.includes("Settings"), labels.join(","));
+
+  // The floor still draws — degraded to zeroes rather than absent, because a
+  // field the server stopped sending is unknown, and unknown is not an outage.
+  await p.click('.view-switch button:has-text("Settings")');
+  await p.waitForSelector(".set-row", { timeout: 8_000 });
+  check("and Settings still works underneath it",
+    (await p.getAttribute(".set-switch", "aria-checked")) === "true");
   await ctx.close();
 }
 

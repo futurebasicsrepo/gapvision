@@ -107,7 +107,26 @@ export default function ManagerDashboard({ user }) {
     return () => socket.off("dashboard:update", onUpdate);
   }, [load, tenant, user]);
 
-  const s = data.summary;
+  // A summary that arrives *incomplete* is worse than one that never arrives.
+  // The `!s` guard below catches the second and draws "Floor unavailable"; the
+  // first walks straight into `s.voice.total`, throws inside render, and blanks
+  // the entire app — nav included, so there is no way out except a reload, and
+  // nothing on screen says why.
+  //
+  // "The server always sends the whole shape" is a version-skew assumption, not
+  // a guarantee: Studio deploys on Vercel and the AI service on Railway, on
+  // separate pushes. One rename lands them out of step for as long as it takes
+  // somebody to notice a white page.
+  //
+  // Filled once here rather than with `?.` at each of the five read sites,
+  // because the next field added is the one that gets forgotten.
+  const s = data.summary && {
+    engagements: 0, associates_active: 0, sale_cents: 0, sales: 0, assists: 0,
+    avg_engagement_seconds: 0,
+    ...data.summary,
+    voice: { total: 0, ok: 0, avg_latency_ms: 0, stt_seconds: 0,
+             ...(data.summary.voice || {}) },
+  };
   const rows = data.board?.rows || [];
   const maxScore = Math.max(1, ...rows.map((r) => r.score));
   const weights = data.board?.weights || {};
