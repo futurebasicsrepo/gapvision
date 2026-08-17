@@ -13,7 +13,7 @@
 import { io, type Socket } from "socket.io-client";
 import type { DisplayPayload, LensMode } from "./types.js";
 import { type DeckState, back, deckOf, move, select } from "./deck.js";
-import { onGesture } from "./input.js";
+import { onGesture, type LensGesture } from "./input.js";
 import { initialMode, toggleMode } from "./mode.js";
 import { renderDeck, renderIdle } from "./render.js";
 
@@ -60,7 +60,7 @@ function endEngagement() {
   paint();
 }
 
-onGesture((g) => {
+function handleGesture(g: LensGesture) {
   if (!deck) {
     // Idle owns the mode toggle — never mid-engagement, so one guest
     // interaction keeps one visual state end to end.
@@ -79,9 +79,30 @@ onGesture((g) => {
     const r = select(deck);
     deck = r.state;
     if (r.action === "end-engagement") return endEngagement();
-    if (r.action === "open-floor") socket.emit("floor:open");
+    if (r.action === "open-floor") socket?.emit("floor:open");
   }
   paint();
+}
+
+onGesture(handleGesture);
+
+/**
+ * Simulator bridge — a same-origin parent (the sim harness, or Console's
+ * embedded Lens Sim) drives the lens with no server and no hardware:
+ *   { type: "cue:display", payload }  engage with a DisplayPayload
+ *   { type: "cue:idle" }              return to idle
+ *   { type: "cue:gesture", gesture }  prev|next|up|down|select|back
+ * Same-origin only: cross-origin embedding hands lens control to any page
+ * that iframes us. Console embeds must serve the lens from their own origin
+ * (see the provisioning doc) rather than relax this.
+ */
+window.addEventListener("message", (e: MessageEvent) => {
+  if (e.origin !== location.origin) return;
+  const m = e.data as { type?: string; payload?: DisplayPayload; gesture?: LensGesture };
+  if (!m || typeof m !== "object") return;
+  if (m.type === "cue:display" && m.payload) (window as any).__cueDemo(m.payload);
+  else if (m.type === "cue:idle") (window as any).__cueDemo();
+  else if (m.type === "cue:gesture" && m.gesture) handleGesture(m.gesture);
 });
 
 /** Dev/demo hook: drive the lens without a server (browser console or a
