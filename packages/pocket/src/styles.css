@@ -1,0 +1,215 @@
+/*
+ * Pocket — a phone, held in one hand, in a shop, under retail lighting.
+ *
+ * Three constraints drive everything below and none of them apply to Studio:
+ *
+ *   · **One thumb.** Every control an associate uses during an engagement
+ *     lives in the bottom third. The top of a 6.7" phone is a two-handed
+ *     reach, and two hands are what the guest is standing there watching.
+ *   · **Arm's length, in motion.** Type is large by default. This is read
+ *     while walking, over a fixture, next to somebody talking.
+ *   · **Dark ground.** Same reason as the lens: a bright white rectangle held
+ *     between an associate and a customer is a wall. The slate ramp, not the
+ *     sea navy — v3.2 moved the product ground off navy so sea can mean
+ *     measurement.
+ */
+
+:root {
+  --slate-900: #141920;
+  --slate-800: #1A2029;
+  --slate-700: #222833;
+  --slate-600: #2F3540;
+  --slate-300: #899199;
+  --slate-200: #A5ABB3;
+
+  --flame: #FF6B2C;
+  --flame-600: #C2400A;
+  --flame-100: #FFE2D2;
+  --hud-400: #35E585;
+  --sea-300: #3E9BE8;
+
+  --paper: #FBF9F5;
+  --chalk: #F2EEE7;
+
+  --ground: var(--slate-900);
+  --surface: var(--slate-800);
+  --line: var(--slate-600);
+  --muted: var(--slate-300);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* The notch, the home indicator, and the rounded corners of every phone
+     shipped since 2017. Zero on everything else. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  /* dvh, not vh: on iOS Safari `100vh` is the height with the toolbar hidden,
+     so a full-height layout is permanently ~80px taller than the screen and
+     the action bar sits below the fold until the user scrolls. dvh is the one
+     unit that tracks the toolbar. */
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none; /* no rubber-band pull-to-refresh mid-swipe */
+}
+
+body {
+  background: var(--ground);
+  color: var(--chalk);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  /* A card surface driven by swipes must not also be a text-selection
+     surface: a long-press that highlights a guest's name is a callout menu
+     over the top of an engagement. Inputs opt back in below. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  /* Pointer Events only reach us for gestures the browser has not already
+     claimed. Without this, a horizontal swipe is a back-navigation on some
+     Android builds. */
+  touch-action: manipulation;
+}
+
+input, textarea { -webkit-user-select: text; user-select: text; }
+
+#app {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--safe-top) + 10px) calc(var(--safe-right) + 16px)
+           calc(var(--safe-bottom) + 12px) calc(var(--safe-left) + 16px);
+}
+
+/* --- the status strip ----------------------------------------------------- */
+
+.strip {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted);
+  flex: 0 0 auto; min-height: 22px;
+}
+.strip .wordmark { color: var(--chalk); letter-spacing: 0.24em; }
+.strip .spacer { flex: 1; }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--slate-600); flex: 0 0 auto; }
+.dot.live { background: var(--hud-400); }
+.dot.queued { background: var(--flame); }
+
+/* The queue counter. Deliberately not a toast: a toast is gone in four
+   seconds and this is a fact about the device that persists until it is not
+   true any more. */
+.pending { color: var(--flame); }
+
+/* --- the card ------------------------------------------------------------- */
+
+.stage { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; padding-top: 12px; }
+
+.card {
+  flex: 1 1 auto; min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow: hidden;
+}
+.card.clicked-in { border-color: var(--flame); border-width: 2px; padding: 19px; }
+
+.card .kicker {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted);
+}
+.card .rows { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex;
+              flex-direction: column; gap: 10px; justify-content: flex-start; }
+.card .row { font-size: 24px; line-height: 1.25; letter-spacing: -0.01em; }
+.card .row.lead { font-size: 30px; font-weight: 600; }
+.card .meta { font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em;
+              color: var(--muted); text-transform: uppercase; }
+
+/* Deck position, as dots rather than "3/5" — read at a glance, no counting. */
+.pips { display: flex; gap: 6px; justify-content: center; padding: 12px 0 4px; flex: 0 0 auto; }
+.pip { width: 6px; height: 6px; border-radius: 50%; background: var(--slate-600); }
+.pip.on { background: var(--flame); }
+
+/* --- the action bar: the bottom third, always ---------------------------- */
+
+.actions { flex: 0 0 auto; display: flex; gap: 10px; padding-top: 12px; }
+
+.btn {
+  flex: 1; min-height: 56px;             /* 56, not 44: gloves, and motion */
+  border: 1px solid var(--line); border-radius: 14px;
+  background: var(--slate-700); color: var(--chalk);
+  font-family: var(--sans); font-size: 17px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.btn:active { background: var(--slate-600); }
+.btn.primary { background: var(--flame); border-color: var(--flame); color: #1A0C04; }
+.btn.primary:active { background: var(--flame-600); color: var(--paper); }
+.btn.quiet { background: transparent; color: var(--muted); font-weight: 500; }
+.btn[disabled] { opacity: 0.45; }
+
+/* --- idle ----------------------------------------------------------------- */
+
+.idle { flex: 1; display: flex; flex-direction: column; justify-content: center;
+        align-items: center; gap: 14px; text-align: center; padding: 20px; }
+.idle .big { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; }
+.idle .sub { color: var(--muted); font-size: 16px; max-width: 30ch; }
+.idle .zone { font-family: var(--mono); font-size: 12px; letter-spacing: 0.18em;
+              text-transform: uppercase; color: var(--flame); }
+
+/* --- notices -------------------------------------------------------------- */
+
+.notice {
+  background: var(--slate-800); border: 1px solid var(--line); border-left: 3px solid var(--flame);
+  border-radius: 12px; padding: 12px 14px; font-size: 15px; color: var(--chalk);
+  display: flex; gap: 10px; align-items: flex-start; flex: 0 0 auto; margin-top: 10px;
+}
+.notice.calm { border-left-color: var(--sea-300); }
+.notice .x { color: var(--muted); font-size: 20px; line-height: 1; padding: 0 4px; cursor: pointer; }
+
+/* --- forms (sign-in) ------------------------------------------------------ */
+
+.form { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
+.form h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
+.form p.lede { color: var(--muted); font-size: 15px; margin-bottom: 6px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+               text-transform: uppercase; color: var(--muted); }
+.field input {
+  min-height: 52px; padding: 0 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--slate-800); color: var(--chalk);
+  /* 17px is the threshold below which iOS zooms the viewport on focus and
+     never zooms back. Anything smaller here breaks the layout permanently. */
+  font-size: 17px; font-family: var(--sans);
+}
+.field input:focus { outline: none; border-color: var(--flame); }
+.err { color: var(--flame-100); background: rgba(194, 64, 10, .25);
+       border-radius: 10px; padding: 10px 12px; font-size: 15px; }
+
+/* --- settings ------------------------------------------------------------- */
+
+.settings { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+            padding-top: 12px; -webkit-overflow-scrolling: touch; }
+.settings h2 { font-family: var(--mono); font-size: 12px; letter-spacing: 0.16em;
+               text-transform: uppercase; color: var(--muted); }
+.holds { background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+         padding: 14px 16px; font-size: 16px; line-height: 1.45; }
+.holds .mode { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+               text-transform: uppercase; color: var(--flame); display: block; margin-bottom: 6px; }
+.gaps { display: flex; flex-direction: column; gap: 8px; }
+.gaps li { list-style: none; color: var(--slate-200); font-size: 15px;
+           padding-left: 14px; position: relative; }
+.gaps li::before { content: "·"; position: absolute; left: 2px; color: var(--flame); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .card { transition: border-color .12s ease; }
+}

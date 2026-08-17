@@ -1,0 +1,23 @@
+{
+  "name": "@cue/pocket",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Cue Pocket \u2014 the associate's phone. An installable PWA that runs the same deck as the glasses.",
+  "scripts": {
+    "dev": "vite --port 5192",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 5192",
+    "icons": "python3 scripts/make-icons.py",
+    "test": "tsc -p tsconfig.test.json && node --test \"tests/*.test.mjs\"",
+    "test:browser": "node test/pocket-browser.mjs"
+  },
+  "dependencies": {
+    "@cue/lens-core": "*",
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0"
+  }
+}

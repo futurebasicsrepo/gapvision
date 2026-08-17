@@ -219,7 +219,7 @@ function broadcastPresence(tenant) {
  * in the lens, because a value already installed on somebody's glasses cannot
  * be changed by editing the source.
  */
-const SURFACES = new Set(["even-g2", "mrbd", "sim"]);
+const SURFACES = new Set(["even-g2", "mrbd", "sim", "phone"]);
 
 function normaliseSurface(surface) {
   const s = String(surface || "").toLowerCase();
@@ -253,6 +253,38 @@ async function resolveDevice(token, tenant, meta) {
     return await res.json();
   } catch (err) {
     console.warn(`[cue] device auth failed: ${err.message}`);
+    return undefined;
+  }
+}
+
+/**
+ * Who is presenting this *personal session* — the BYOD half of the handshake.
+ *
+ * An associate's own phone holds no device identity. It holds their session,
+ * the same one Studio and Console use, and so the same three outcomes apply as
+ * `resolveDevice`: an object, `null` for a refusal, `undefined` for "could not
+ * ask".
+ *
+ * Kept as a sibling rather than folded into `resolveDevice` because the two
+ * answer genuinely different questions — *which shop is this hardware* versus
+ * *who is holding this phone* — and a single function that returned either
+ * would be one `if` away from treating a person as a store.
+ */
+async function resolvePerson(session, tenant) {
+  try {
+    const res = await fetch(`${AI_SERVICE_URL}/api/auth/associate`, {
+      method: "POST",
+      headers: aiHeaders(AI_API_KEY),
+      body: JSON.stringify({ session, tenant }),
+    });
+    if (res.status === 401 || res.status === 403) return null;
+    if (!res.ok) {
+      console.warn(`[cue] associate auth → ${res.status}`);
+      return undefined;
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn(`[cue] associate auth failed: ${err.message}`);
     return undefined;
   }
 }
@@ -460,10 +492,54 @@ async function enterGuest(socket, { guestId, zone, tenant, source } = {}) {
  * not working.
  */
 io.use(async (socket, next) => {
-  const token = socket.handshake?.auth?.token || null;
+  const auth = socket.handshake?.auth || {};
+  const token = auth.token || null;
+  const personal = auth.session || null;
+
+  // ── The one combination that is never legitimate ────────────────────────
+  //
+  // A provision token says "this hardware is the store". A session says "this
+  // person is signed in". A socket offering both is claiming to be a store
+  // handheld *and* somebody's personal handset, which is precisely the state
+  // the phone surface was designed to make unreachable: a store credential
+  // living on a device that walks out of the building.
+  //
+  // It is refused here, in the server, rather than only in the client that
+  // ought never to send it — a rule kept in a client is a rule kept by
+  // whoever last edited that client.
+  if (token && personal) {
+    console.warn("[cue] refusing a socket presenting both a device token and a personal session");
+    socket.data.deviceRefused = true;
+    // Named distinctly. This is not "we do not know this device" — it is "this
+    // combination is not allowed", and the phone can only tell an associate
+    // something useful if the two arrive as different words.
+    socket.data.refusalReason = "conflicting_identity";
+    return next();
+  }
+
+  if (personal) {
+    const person = await resolvePerson(personal, auth.tenant);
+    if (person === null) {
+      socket.data.deviceRefused = true;
+      socket.data.refusalReason = "session_invalid";
+    } else if (person === undefined) {
+      // Same posture as the device path: an unreachable control plane must not
+      // take a shop floor offline. It registers unattributed, and says so.
+      console.warn("[cue] admitting a phone without a resolved person — auth unreachable");
+    } else if (person.user_id) {
+      socket.data.personId = person.user_id;
+      socket.data.personEmail = person.email || null;
+      socket.data.personName = person.name || null;
+      // No device id, deliberately. Activity from somebody's own phone is
+      // attributed to a human and to no hardware — see `/api/auth/associate`.
+      socket.data.deviceTenant = person.tenant || null;
+      socket.data.deviceSurface = "phone";
+    }
+    return next();
+  }
+
   if (!token) return next();
 
-  const auth = socket.handshake.auth || {};
   const device = await resolveDevice(token, auth.tenant, {
     // Diagnostics, stamped onto the device row. Whitelisted and truncated at
     // the far end — this is a blob written by whatever is on the other end of
@@ -479,6 +555,7 @@ io.use(async (socket, next) => {
     // pointed at the wrong shop. Which of those it was is deliberately not
     // said, here or upstream.
     socket.data.deviceRefused = true;
+    socket.data.refusalReason = "not_provisioned";
   } else if (device === undefined) {
     // Could not ask — the control plane is unreachable. Refusing here would
     // take a shop floor's glasses offline because an analytics service
@@ -506,7 +583,8 @@ io.on("connection", (socket) => {
     // lens that hears other people's messages while its own store believes it
     // was switched off.
     if (socket.data.deviceRefused) {
-      socket.emit("register:refused", { reason: "not_provisioned" });
+      socket.emit("register:refused",
+        { reason: socket.data.refusalReason || "not_provisioned" });
       return;
     }
 
@@ -528,7 +606,13 @@ io.on("connection", (socket) => {
     // fallback for the simulator and the dashboard's associate view, which do
     // have one. With neither, activity is still recorded against the tenant,
     // just unattributed.
-    socket.data.email = email || null;
+    // A resolved person outranks the payload, the same way the device row
+    // outranks the tenant slug above. `email` off a register frame is a string
+    // a client chose; on a phone that signed in, we already know who this is
+    // from a session the control plane vouched for. Attribution — which is the
+    // number the whole product is sold on — should not rest on the weaker of
+    // the two when we hold both.
+    socket.data.email = socket.data.personEmail || email || null;
     socket.data.deviceSerial = deviceSerial || null;
     socket.data.deviceModel = deviceModel || null;
     // Which build is on the glasses. Absent means a client older than 0.1.4,
@@ -542,7 +626,7 @@ io.on("connection", (socket) => {
     // `from || "Unknown"` and put an unauthenticated string on somebody's
     // glass. Studio registers with the signed-in user's name, so pinning it
     // at register is what makes a manager's message attributable at all.
-    socket.data.displayName = name || null;
+    socket.data.displayName = socket.data.personName || name || null;
     if (role === "dashboard") {
       // A client switching views re-registers; drop any associate identity.
       socket.leave(associatesRoom(t));
@@ -554,7 +638,7 @@ io.on("connection", (socket) => {
       socket.join(associatesRoom(t));
       state.associates.set(socket.id, {
         id: socket.id,
-        name: name || "Associate",
+        name: socket.data.displayName || "Associate",
         zone: zone || "Floor",
         status: "available",
         appVersion: socket.data.appVersion,
@@ -564,7 +648,7 @@ io.on("connection", (socket) => {
       broadcastPresence(t);
       // Their own id back, so the phone can tell an addressed message apart
       // from the room and leave itself out of its own roster picker.
-      socket.emit("roster:you", { id: socket.id, name: name || "Associate" });
+      socket.emit("roster:you", { id: socket.id, name: socket.data.displayName || "Associate" });
     }
   });
 

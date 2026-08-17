@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>cue pocket</title>
+  <meta name="description" content="cuesea — the floor, in your pocket" />
+
+  <!--
+    viewport-fit=cover plus the safe-area padding in styles.css is what keeps
+    the action bar clear of the home indicator on a notched iPhone. Without it
+    the primary button sits under the gesture bar, which is the single most
+    common way an installed web app announces that it is a web app.
+
+    user-scalable=no is a deliberate accessibility trade and not a casual one:
+    this is a card surface whose type is already large by design, and a
+    pinch-zoom mid-swipe leaves an associate stranded on a magnified corner of
+    a card with a guest waiting. Text size still follows the OS setting, which
+    is the accessibility control that actually gets used on a phone.
+  -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#141920" />
+
+  <!--
+    iOS reads none of the manifest's install metadata. These four tags are the
+    entire difference between "a bookmark that opens Safari" and "an app with
+    no URL bar", and Web Push on iOS only exists for the second one.
+  -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="cue" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <div id="app" aria-live="polite"></div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

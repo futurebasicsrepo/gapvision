@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2020", "DOM"],
+    "strict": true,
+    "outDir": ".test-dist",
+    "rootDir": "src",
+    "skipLibCheck": true,
+    "esModuleInterop": true
+  },
+  "include": ["src/identity.ts", "src/store.ts", "src/queue.ts", "src/touch.ts", "src/gestures.ts"]
+}
