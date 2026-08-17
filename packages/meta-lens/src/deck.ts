@@ -6,7 +6,7 @@
  *
  * Pure module: no DOM, no socket — testable in node, liftable to lens-core.
  */
-import type { Card, Cue, DisplayPayload } from "./types.js";
+import type { Card, Cue, DisplayPayload, LensMode } from "./types.js";
 import { CUE_LINES, joinMeta, money, toDisplayText } from "./grammar.js";
 
 export function cueOf(payload: DisplayPayload): Cue {
@@ -15,9 +15,16 @@ export function cueOf(payload: DisplayPayload): Cue {
   return { lines: (payload.lines || []).slice(0, CUE_LINES).map(toDisplayText) };
 }
 
-export function cardsFor(payload: DisplayPayload): Card[] {
+/**
+ * `mode` changes the deal, not the vocabulary: classic is the G2 deck 1:1;
+ * meta additionally deals SHOW (the recommendation, imagery-forward) and
+ * carries image URLs on CART/HISTORY rows. Card *logic* stays identical so
+ * an associate switching modes never relearns the gestures.
+ */
+export function cardsFor(payload: DisplayPayload, mode: LensMode = "classic"): Card[] {
   const out: Card[] = [];
   const g = payload.guest || {};
+  const rich = mode === "meta";
 
   out.push({ kind: "CUE", lines: cueOf(payload).lines });
 
@@ -28,6 +35,28 @@ export function cardsFor(payload: DisplayPayload): Card[] {
       lines: cart.slice(0, 3).map((i) => toDisplayText(i.name)),
       all: cart.map((i) => joinMeta([toDisplayText(i.name), money(i.price)])),
       meta: [money(cart.reduce((t, i) => t + (i.price || 0), 0)), "ONLINE"].filter(Boolean),
+      ...(rich ? { images: cart.map((i) => i.image) } : {}),
+    });
+  }
+
+  const recs = payload.recommendations || [];
+  if (rich && recs.length) {
+    const top = recs[0];
+    out.push({
+      kind: "SHOW",
+      lines: [
+        toDisplayText(top.name),
+        joinMeta([money(top.price), top.location ? toDisplayText(top.location) : ""]),
+      ].filter(Boolean),
+      all: recs.map((r) =>
+        joinMeta([toDisplayText(r.name), money(r.price), r.location ? toDisplayText(r.location) : ""])
+      ),
+      meta: [
+        top.stock !== undefined ? `${top.stock} IN STOCK` : "",
+        recs.length > 1 ? `+${recs.length - 1} MORE` : "",
+      ].filter(Boolean),
+      heroImage: top.image,
+      images: recs.map((r) => r.image),
     });
   }
 
@@ -72,8 +101,8 @@ export interface DeckState {
 
 export const VISIBLE_ROWS = 3;
 
-export function deckOf(payload: DisplayPayload): DeckState {
-  return { cards: cardsFor(payload), index: 0, clickedIn: false, offset: 0 };
+export function deckOf(payload: DisplayPayload, mode: LensMode = "classic"): DeckState {
+  return { cards: cardsFor(payload, mode), index: 0, clickedIn: false, offset: 0 };
 }
 
 export function contentOf(card: Card): string[] {

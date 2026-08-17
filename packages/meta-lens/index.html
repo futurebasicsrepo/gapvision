@@ -65,6 +65,48 @@
     .idle-clock { font-size: 92px; font-weight: 700; color: var(--hud-500);
                   text-align: center; margin: auto 0; letter-spacing: 0.06em; }
     .idle-sub { text-align: center; font-size: 18px; color: var(--hud-300); letter-spacing: 0.2em; }
+    .hint { color: var(--hud-100); }
+
+    /* ================= meta mode — icons and logos by default =============
+       Color rule: green is the product's own voice, sea is everything
+       measured, flame is one per display — the thing that wants attention.
+       Values approximate brand 3.1; reconcile with brand.css on merge. */
+    :root { --sea-400: #4fb3ff; --sea-200: #2a6ea6; --flame: #ff7a3d; }
+
+    .name-row { display: flex; align-items: center; gap: 16px; margin-top: 14px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .mark svg { width: 34px; height: 34px; display: block; }
+    .word2 { font-size: 27px; font-weight: 700; text-transform: lowercase; letter-spacing: 0.02em; }
+    .word2 .cue { color: var(--hud-500); }
+    .word2 .sea { color: var(--sea-400); }
+
+    .mode-meta .cluster, .mode-meta .meta { color: var(--sea-400); }
+    .mode-meta .idle-sub { color: var(--sea-400); }
+
+    .chip { display: flex; align-items: center; gap: 7px; border: 1px solid var(--sea-400);
+            color: var(--sea-400); border-radius: 999px; padding: 3px 14px;
+            font-size: 14px; letter-spacing: 0.14em; }
+    .chip-icon svg { width: 15px; height: 15px; display: block; }
+
+    .mode-meta .hero { align-items: center; }
+    .hero-icon svg { width: 42px; height: 42px; display: block; color: var(--hud-100); }
+
+    .card .title { display: flex; align-items: center; gap: 10px; }
+    .title-icon svg { width: 20px; height: 20px; display: block; color: var(--hud-300); }
+
+    .row { display: flex; align-items: center; gap: 12px; }
+    .lines { display: flex; flex-direction: column; gap: 6px; }
+    .thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 8px;
+             border: 1px solid var(--hud-100); flex: none; }
+    .body.split { display: flex; align-items: center; gap: 20px; }
+    .show-hero { width: 156px; height: 156px; object-fit: cover; border-radius: 12px;
+                 border: 1px solid var(--flame); flex: none; }
+
+    /* flame: one per display — the recommendation that wants attention */
+    .mode-meta .card.attention { border-color: var(--flame); }
+    .mode-meta .card.attention:focus { border-color: var(--flame);
+      box-shadow: 0 0 24px rgba(255,122,61,.28); }
+    .mode-meta .card.attention .title { color: var(--flame); }
   </style>
 </head>
 <body>

@@ -100,3 +100,55 @@ test("empty payload still yields a home card", () => {
   assert.equal(s.cards[0].kind, "CUE");
   assert.equal(select(s).action, "end-engagement");
 });
+
+// ------------------------------------------------------------- v2 meta mode
+
+const RICH = {
+  ...PAYLOAD,
+  guest: {
+    ...PAYLOAD.guest,
+    open_cart: PAYLOAD.guest.open_cart.map((i, n) => ({ ...i, image: `https://cdn.example/cart-${n}.jpg` })),
+  },
+  recommendations: [
+    { name: "High Rise Barrel Jeans", price: 89.95, location: "Denim Wall", image: "https://cdn.example/rec-0.jpg", stock: 9 },
+    { name: "Heavyweight Relaxed Tee", price: 29.95, location: "Essentials", image: "https://cdn.example/rec-1.jpg" },
+  ],
+};
+
+test("classic mode: no SHOW card, no images — the G2 deck 1:1", () => {
+  const cards = cardsFor(RICH, "classic");
+  assert.deepEqual(cards.map((c) => c.kind), ["CUE", "CART", "HISTORY", "SIZES", "FLOOR"]);
+  assert.equal(cards.find((c) => c.kind === "CART").images, undefined);
+});
+
+test("meta mode deals SHOW after CART, images row-aligned", () => {
+  const cards = cardsFor(RICH, "meta");
+  assert.deepEqual(cards.map((c) => c.kind), ["CUE", "CART", "SHOW", "HISTORY", "SIZES", "FLOOR"]);
+  const cart = cards.find((c) => c.kind === "CART");
+  assert.equal(cart.images.length, cart.all.length);
+  assert.equal(cart.images[2], "https://cdn.example/cart-2.jpg");
+});
+
+test("SHOW: top rec as hero with flame facts, rest scrollable", () => {
+  const show = cardsFor(RICH, "meta").find((c) => c.kind === "SHOW");
+  assert.equal(show.heroImage, "https://cdn.example/rec-0.jpg");
+  assert.equal(show.lines[0], "HIGH RISE BARREL JEANS");
+  assert.equal(show.lines[1], "$90 · DENIM WALL");
+  assert.equal(show.all.length, 2);
+  assert.deepEqual(show.meta, ["9 IN STOCK", "+1 MORE"]);
+});
+
+test("meta mode without recommendations deals no SHOW", () => {
+  const cards = cardsFor(PAYLOAD, "meta");
+  assert.ok(!cards.some((c) => c.kind === "SHOW"));
+});
+
+test("gesture vocabulary identical across modes", () => {
+  let s = deckOf(RICH, "meta");
+  assert.equal(select(s).action, "end-engagement");           // home still ends
+  s = move(s, -1);
+  assert.equal(select(s).action, "open-floor");               // FLOOR still last
+  s = move(move(deckOf(RICH, "meta"), 1), 1);                 // SHOW
+  const r = select(s);
+  assert.equal(r.action, "clicked-in");                       // rec list scrolls like any card
+});

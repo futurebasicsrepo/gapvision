@@ -11,9 +11,10 @@
  * The token is remembered in localStorage so subsequent launches need nothing.
  */
 import { io, type Socket } from "socket.io-client";
-import type { DisplayPayload } from "./types.js";
+import type { DisplayPayload, LensMode } from "./types.js";
 import { type DeckState, back, deckOf, move, select } from "./deck.js";
 import { onGesture } from "./input.js";
+import { initialMode, toggleMode } from "./mode.js";
 import { renderDeck, renderIdle } from "./render.js";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:4000";
@@ -30,6 +31,7 @@ const TENANT_LABEL = TENANT === "gap" ? "GAP · DEMO" : `${TENANT.toUpperCase()}
 
 let socket: Socket;
 let connected = false;
+let mode: LensMode = initialMode(params);
 let deck: DeckState | null = null;
 let payload: DisplayPayload | null = null;
 
@@ -37,8 +39,8 @@ const clock = () =>
   new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 
 function paint() {
-  if (deck && payload) renderDeck(deck, payload, clock());
-  else renderIdle(clock(), TENANT_LABEL, connected);
+  if (deck && payload) renderDeck(mode, deck, payload, clock());
+  else renderIdle(mode, clock(), TENANT_LABEL, connected);
 }
 
 // Idle clock ticks on the minute only — no wire traffic, no busy repaints.
@@ -59,7 +61,15 @@ function endEngagement() {
 }
 
 onGesture((g) => {
-  if (!deck) return; // idle: back/select fall through to the system
+  if (!deck) {
+    // Idle owns the mode toggle — never mid-engagement, so one guest
+    // interaction keeps one visual state end to end.
+    if (g === "up" || g === "down") {
+      mode = toggleMode(mode);
+      paint();
+    }
+    return; // back/select fall through to the system
+  }
   if (g === "prev") deck = move(deck, -1);
   else if (g === "next") deck = move(deck, 1);
   else if (g === "up") deck = move(deck, -1);
@@ -79,7 +89,7 @@ onGesture((g) => {
  *  returns to idle. Gestures work as normal against the demo deck. */
 (window as any).__cueDemo = (p?: DisplayPayload) => {
   payload = p ?? null;
-  deck = p ? deckOf(p) : null;
+  deck = p ? deckOf(p, mode) : null;
   paint();
 };
 
@@ -93,7 +103,13 @@ function main() {
 
   socket.on("connect", () => {
     connected = true;
-    socket.emit("register", { role: "associate", name: "Display Associate", zone: ZONE, tenant: TENANT });
+    socket.emit("register", {
+      role: "associate",
+      name: "Display Associate",
+      zone: ZONE,
+      tenant: TENANT,
+      surface: "mrbd-webapp",
+    });
     paint();
   });
   socket.on("disconnect", () => {
@@ -102,7 +118,7 @@ function main() {
   });
   socket.on("glasses:display", (p: DisplayPayload) => {
     payload = p;
-    deck = deckOf(p);
+    deck = deckOf(p, mode);
     paint();
   });
   socket.on("session:ended", endEngagement);
