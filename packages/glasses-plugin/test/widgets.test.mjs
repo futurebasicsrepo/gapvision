@@ -54,9 +54,27 @@ check("the cue leads, always", kinds(def)[0] === "CUE", kinds(def).join(","));
 check("the default deck is today's order — guest, picks, floor",
   kinds(def).join(",") === "CUE,SIZES,CART,HISTORY,SHIP,CONTACT,PICK,PICK,FLOOR",
   kinds(def).join(","));
-check("the default order names every widget",
-  DEFAULT_ORDER.length === WIDGETS.length,
-  `${DEFAULT_ORDER.join(",")} vs ${WIDGETS.map((w) => w.id).join(",")}`);
+// The default deck is what an associate who never opens the widgets screen
+// sees, and it must not change under them when we ship something new.
+//
+// This assertion used to be "the default names every widget", which was true
+// while the catalogue was fixed and became wrong the moment widgets started
+// arriving as data. Kyle, 17 Aug 2026: not every associate needs every widget,
+// and new ones should plug in rather than force a rebuild. So a new widget
+// ships **off, and offered** — the associate adds it, or never does.
+check("the default deck is exactly the widgets the package renders from live data",
+  DEFAULT_ORDER.join(",") === WIDGETS.filter((w) => w.content === "live")
+    .map((w) => w.id).join(","),
+  `${DEFAULT_ORDER.join(",")} vs ${WIDGETS.map((w) => `${w.id}:${w.content}`).join(",")}`);
+
+check("a newly shipped widget is off by default rather than appearing on somebody's glass",
+  WIDGETS.some((w) => w.content === "feed")
+    && !DEFAULT_ORDER.includes("promos"),
+  DEFAULT_ORDER.join(","));
+
+check("and it is offered, so off-by-default does not mean undiscoverable",
+  disabledWidgets({ order: [...DEFAULT_ORDER] }).some((w) => w.id === "promos"),
+  disabledWidgets({ order: [...DEFAULT_ORDER] }).map((w) => w.id).join(","));
 
 // --- 2. stored preferences are untrusted -----------------------------------
 
@@ -92,8 +110,8 @@ check("removing the customer widget removes all five of its cards",
 check("removing one widget leaves the others intact",
   kinds(noCustomer).join(",") === "CUE,PICK,PICK,FLOOR", kinds(noCustomer).join(","));
 check("what is off is offered back",
-  disabledWidgets({ order: ["inventory", "messaging"] }).map((w) => w.id).join(",")
-    === "customer");
+  disabledWidgets({ order: ["inventory", "messaging"] }).map((w) => w.id).includes("customer"),
+  disabledWidgets({ order: ["inventory", "messaging"] }).map((w) => w.id).join(","));
 
 // --- 5. the store's master switch -------------------------------------------
 

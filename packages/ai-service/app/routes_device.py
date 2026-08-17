@@ -18,7 +18,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import db, devices, identity, preflight
+from . import db, devices, identity, preflight, widgets
 from .auth import KeyHeader, guard
 from .identity import BearerHeader, current_user, require
 
@@ -230,13 +230,24 @@ def authenticate_device(req: DeviceAuth, request: Request,
         raise HTTPException(status_code=401, detail="Unknown device")
 
     devices.seen(row["id"], req.meta)
-    return {
+    out = {
         "device_id": str(row["id"]),
         "user_id": str(row["user_id"]) if row.get("user_id") else None,
         "surface": row["surface"],
         "tenant": row["tenant_slug"],
         "label": row.get("label"),
     }
+    # The associate's deck rides along with the identity that determines it.
+    #
+    # A separate fetch would be a second round trip in front of the first
+    # frame, and — worse — a window where the lens has registered but does not
+    # yet know which widgets to draw, which renders as the deck rearranging
+    # itself a moment after somebody looked at it. Absent when the device is
+    # assigned to nobody, which is the honest answer: there is no person whose
+    # deck this is, so the package uses its own default.
+    if row.get("user_id"):
+        out["widget_prefs"] = widgets.prefs_for(row["user_id"])
+    return out
 
 
 @device_auth_router.post("/associate")
