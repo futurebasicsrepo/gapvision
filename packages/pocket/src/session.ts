@@ -35,9 +35,25 @@ export interface SignInResult {
   user: Person;
 }
 
+/**
+ * The realtime server, not the AI service.
+ *
+ * Everything the browser tier touches goes through `packages/server`, which
+ * proxies `/auth`, `/api/admin` and `/api/analytics` upstream and attaches the
+ * service key on the way (`proxy.js` PASSTHROUGH). Console and Studio have
+ * always worked this way, for the reason the proxy's own docstring gives: a
+ * static client cannot hold the AI service key.
+ *
+ * Pocket briefly called the AI service directly on its own `VITE_AI_URL`. That
+ * would have needed the control plane exposed to the public internet and
+ * CORS-opened to a phone's origin, to gain nothing — and it would have been
+ * discovered as "sign-in does not work in production", after launch.
+ *
+ * One base URL, the same one the socket uses.
+ */
 const AI_URL: string =
-  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_AI_URL ||
-  "http://localhost:8000";
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SERVER_URL ||
+  "http://localhost:4000";
 
 export class SignInError extends Error {
   constructor(message: string, readonly retryable: boolean) {
