@@ -98,7 +98,23 @@ export const api = {
     request(`/api/admin/tenants/${encodeURIComponent(idOrSlug)}`,
             { method: "PATCH", body: patch }),
   users: (t) => request(`/api/admin/users${tq(t, true)}`),
-  devices: (t) => request(`/api/admin/devices${tq(t, true)}`),
+
+  // --- devices ---------------------------------------------------------------
+  //
+  // The same routes Console drives, unchanged. That is deliberate and it is the
+  // whole reason this surface was cheap: `identity.admin_tenant` already pins a
+  // `client_admin` to their own store and refuses anyone else's, so a retailer
+  // reaching these from their own browser is safe by the same check that makes
+  // it safe from ours. Nothing here is a second implementation of a boundary.
+  devices: (t) => request(`/api/admin/tenants/${encodeURIComponent(t)}/devices`),
+  // The response to this is the only place the provision token ever exists.
+  mintDevice: (t, body) =>
+    request(`/api/admin/tenants/${encodeURIComponent(t)}/devices`,
+            { method: "POST", body }),
+  updateDevice: (id, body) =>
+    request(`/api/admin/devices/${id}`, { method: "PATCH", body }),
+  reissueDevice: (id) => request(`/api/admin/devices/${id}/reissue`, { method: "POST" }),
+  revokeDevice: (id) => request(`/api/admin/devices/${id}/revoke`, { method: "POST" }),
 };
 
 const tq = (tenant, first = false) =>
