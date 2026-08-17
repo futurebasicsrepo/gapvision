@@ -11,8 +11,8 @@
  * The token is remembered in localStorage so subsequent launches need nothing.
  */
 import { io, type Socket } from "socket.io-client";
-import type { DisplayPayload, LensMode } from "./types.js";
-import { type DeckState, back, deckOf, move, select } from "./deck.js";
+import type { DisplayPayload, LensMode } from "@cue/lens-core";
+import { type DeckState, back, deckOf, move, select } from "@cue/lens-core";
 import { onGesture, type LensGesture } from "./input.js";
 import { initialMode, toggleMode } from "./mode.js";
 import { renderDeck, renderIdle } from "./render.js";

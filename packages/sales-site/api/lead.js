@@ -15,11 +15,12 @@
  *  · **Rate limit by IP.** In-memory and per-instance, so it is a speed bump
  *    against a script rather than a defence against a botnet — the same honest
  *    framing `app/auth.py` uses about its own limiter.
- *  · **Log it, and forward it if somewhere is configured.** Without
- *    `LEAD_WEBHOOK_URL` a lead lands in the runtime log, which is recoverable
- *    but not a system. `claude/sales-deck.md` has the contract for
- *    `POST /api/ingest/deck-lead`, which is where these should end up: leads
- *    are personal data and belong in the retention sweep like everything else.
+ *  · **Forward it to the control plane, and log it either way.** The log line
+ *    is the fallback, not the system — it is recoverable by a human reading
+ *    Vercel and by nothing else. `CUE_AI_URL` + `CUE_API_KEY` send it to
+ *    `POST /api/ingest/deck-lead`, where it becomes a row the Console panel
+ *    can read and the retention sweep can age out. `LEAD_WEBHOOK_URL` stays
+ *    as a second, independent destination for anyone who wants one.
  */
 
 const MAX_BODY = 4_000;
@@ -52,6 +53,37 @@ function clean(body) {
   return out;
 }
 
+/**
+ * Send the lead to the control plane, where it becomes a row rather than a log
+ * line — readable in Console, countable against the link that produced it, and
+ * inside the retention sweep like every other piece of personal data we hold.
+ *
+ * Silent when unconfigured. This site is deployable on its own and a deck that
+ * refused to open because an internal service was not wired would be the tail
+ * wagging the dog; the log line still catches the lead either way.
+ */
+async function deliver(record) {
+  const base = (process.env.CUE_AI_URL || "").replace(/\/$/, "");
+  const key = process.env.CUE_API_KEY;
+  if (!base || !key) return;
+
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 3_000);
+  try {
+    const res = await fetch(`${base}/api/ingest/deck-lead`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-gapvision-key": key },
+      body: JSON.stringify(record),
+      signal: ctl.signal,
+    });
+    if (!res.ok) console.warn(`[cuesea-lead] control plane → ${res.status}`);
+  } catch (err) {
+    console.warn(`[cuesea-lead] control plane unreachable: ${err.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -73,7 +105,12 @@ export default async function handler(req, res) {
     if (!lead.email) return res.status(204).end();
 
     const record = { ...lead, at: lead.at || new Date().toISOString() };
+    // Logged unconditionally and *first*. Every destination below can fail, and
+    // when they all do this line is the only remaining copy of somebody who
+    // asked to hear from us.
     console.log(`[cuesea-lead] ${JSON.stringify(record)}`);
+
+    await deliver(record);
 
     const hook = process.env.LEAD_WEBHOOK_URL;
     if (hook) {

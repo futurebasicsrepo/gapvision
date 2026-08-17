@@ -14,6 +14,26 @@ Two rules, so this stays worth reading:
 
 ---
 
+## 17 August 2026 · We are selling a surface we have not built
+
+The customer deck's section 05 says *"Start on the phone in their pocket…
+This is where a pilot starts."* There is no phone app. Studio refuses
+associates by design — *"your surface is Lens, in the glass"* — and the only
+associate-facing build in the repo is the Even Hub plugin, which requires the
+glasses the whole section exists to make optional.
+
+Not caught by a merchant. Caught by going to look, after Kyle said the
+phone-delivery pitch was the part he liked — which is the uncomfortable
+version, because the pitch working is exactly what makes the gap expensive.
+
+The general lesson is the one worth keeping: **a deck written in the present
+tense outruns the code silently, and nothing in the build will tell you.** The
+known-edges section below is the mechanism that was supposed to catch this and
+did not, because it lists limits of things we built, not things we described.
+
+**Source:** the survey in `claude/phone-first.md`, 17 August 2026, with file
+and line references so the claim is checkable rather than remembered.
+
 ## 17 August 2026 · The known-edges section is the cheapest trust we can buy
 
 **Hypothesis, not yet tested against a merchant.** The customer deck carries a
@@ -50,6 +70,13 @@ to cost real money quietly. The four endpoints that fix it are specified in
 `claude/sales-deck.md` and unbuilt.
 
 **Source:** building the Sales panel, 17 August 2026.
+
+> **Corrected the same day.** `deck_links` and `deck_leads` exist now, the
+> panel reads both, and the deck host forwards gated opens to the control
+> plane. The half that is still true: nothing joins a deck open to a tenant
+> that later signed, so "which pilot came from which send" remains unanswerable.
+> Left in place rather than deleted — the more useful fact is that we shipped a
+> sales tool before we could tell who we had sent anything to.
 
 ---
 

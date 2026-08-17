@@ -3,8 +3,10 @@
  *
  *   node packages/internal/test/sales-browser.mjs
  *
- * Expects `vite preview` on :5176. No services: the panel is a link builder
- * plus one read, and the read is *supposed* to work when that read fails.
+ * Expects `vite preview` on :5176. No services — both endpoints are stubbed,
+ * including the case where they are missing entirely, which is a real state
+ * rather than a hypothetical: Console and the AI service deploy on separate
+ * pushes, so either can be ahead of the other for as long as a merge takes.
  *
  * What it holds down, in order of how badly it would hurt to get wrong:
  *
@@ -36,8 +38,12 @@ const browser = await chromium.launch(
 /**
  * @param leads  `null` to refuse `/api/analytics/deck-leads` the way a
  *               deployment without the endpoint does; an array to serve it.
+ * @param links  same, for `/api/analytics/deck-links`. Console and the AI
+ *               service deploy on separate pushes, so one having an endpoint
+ *               the other does not is a real state, not a hypothetical.
  */
-async function boot({ leads = null } = {}) {
+async function boot({ leads = null, links = [] } = {}) {
+  const posted = [];
   const ctx = await browser.newContext({
     viewport: { width: 1500, height: 1200 },
     permissions: ["clipboard-read", "clipboard-write"],
@@ -53,34 +59,37 @@ async function boot({ leads = null } = {}) {
   await ctx.route("**/auth/me", (r) => json(r, { user }));
   await ctx.route("**/api/analytics/deck-leads**", (r) =>
     (leads === null ? r.fulfill({ status: 404, body: "" }) : json(r, { leads })));
+  await ctx.route("**/api/analytics/deck-links**", (route) => {
+    if (links === null) return route.fulfill({ status: 404, body: "" });
+    if (route.request().method() === "POST") {
+      const body = JSON.parse(route.request().postData() || "{}");
+      posted.push(body);
+      // The stub stores it the way the server would, so the reload below sees
+      // what a real write would have left behind.
+      links.unshift({ id: `l${links.length}`, deck: body.deck, token: body.token,
+                      prepared_for: body.preparedFor, gated: body.gated,
+                      at: new Date().toISOString(), opens: 0, created_by: "Cue Staff" });
+      return json(route, { link: links[0] }, 201);
+    }
+    return json(route, { links });
+  });
 
   const p = await ctx.newPage();
   await p.addInitScript(([u]) => {
     sessionStorage.setItem("cue.console.token", "stub");
     sessionStorage.setItem("cue.console.user", JSON.stringify(u));
-    // The panel keeps its links here until the control plane stores them; a
-    // suite that inherited a previous run's rows would assert on those.
-    //
-    // Once per context, not once per navigation — this script runs on every
-    // load, so clearing unconditionally would wipe the links immediately
-    // before the reload that is meant to prove they survive one. (It did, and
-    // the panel was blamed for it.)
-    if (!sessionStorage.getItem("suite.linksCleared")) {
-      localStorage.removeItem("cuesea.console.sales.links");
-      sessionStorage.setItem("suite.linksCleared", "1");
-    }
   }, [user]);
   await p.goto(URL, { waitUntil: "domcontentloaded" });
   await p.waitForTimeout(800);
   await p.locator(".rail-item").filter({ hasText: "Sales" }).first().click();
   await p.waitForSelector(".sales", { timeout: 8_000 });
-  return { p, ctx };
+  return { p, ctx, posted };
 }
 
 // --- 1. an absent lead endpoint ----------------------------------------------
 
 {
-  const { p, ctx } = await boot({ leads: null });
+  const { p, ctx, posted } = await boot({ leads: null });
   await p.waitForTimeout(700);
   const body = await p.textContent(".sales");
 
@@ -129,14 +138,51 @@ async function boot({ leads = null } = {}) {
     (await p.locator(".sales-table tbody tr").count()) === 1
       && (await p.textContent(".sales-table")).includes("Reformation"));
 
-  // Links survive a reload — they are what the panel is for, and losing them
-  // on a refresh would make the whole list untrustworthy.
+  // Links survive a reload **because the server has them** — which is the whole
+  // reason this stopped being localStorage. A link made on a laptop that is
+  // invisible from a phone is a record of what you sent that you cannot trust.
   await p.reload({ waitUntil: "domcontentloaded" });
   await p.waitForTimeout(800);
   await p.locator(".rail-item").filter({ hasText: "Sales" }).first().click();
   await p.waitForSelector(".sales", { timeout: 8_000 });
-  check("and they survive a reload",
+  // The links are fetched on mount, so the panel existing is not the same as
+  // the panel having them. Wait for the row rather than for the card.
+  await p.waitForSelector(".sales-table tbody tr", { timeout: 8_000 }).catch(() => {});
+  check("and they survive a reload, from the server rather than this browser",
     (await p.textContent(".sales")).includes("Reformation"));
+  check("the link was recorded with what it was prepared for",
+    posted.some((b) => b.preparedFor === "Reformation" && b.deck === "floor" && b.gated === true),
+    JSON.stringify(posted));
+
+  await ctx.close();
+}
+
+// --- an absent link endpoint ---------------------------------------------------
+//
+// Console and the AI service deploy separately, so this window is real. The
+// link still has to be built and copied — a URL does not need our database to
+// work — and the panel has to say the row was not kept rather than quietly
+// showing a list that will be empty tomorrow.
+
+{
+  const { p, ctx } = await boot({ links: null });
+  await p.waitForTimeout(600);
+
+  await p.fill(".sales-compose input", "Ghost Retail");
+  await p.click(".sales-compose .btn.primary");
+  await p.waitForTimeout(500);
+
+  const link = await p.evaluate(() => navigator.clipboard.readText());
+  check("a link is still built and copied when there is nowhere to record it",
+    /[?&]to=Ghost\+Retail/.test(link) && /[?&]t=[0-9a-f]{12}/.test(link), link);
+
+  const body = await p.textContent(".sales");
+  check("and the panel says it was not recorded, rather than implying it was",
+    /not being recorded|could not be recorded/i.test(body),
+    body.slice(0, 160));
+  check("the row is still shown, marked",
+    (await p.locator(".sales-table tbody tr").count()) === 1
+      && /not recorded/i.test(await p.textContent(".sales-table")));
 
   await ctx.close();
 }

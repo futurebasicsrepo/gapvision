@@ -4,6 +4,8 @@
   "version": "0.5.0",
   "description": "CueSea \u2014 e-commerce level intelligence for retail floor associates, in-lens.",
   "workspaces": [
+    "packages/lens-core",
+    "packages/pocket",
     "packages/server",
     "packages/web",
     "packages/glasses-plugin",
@@ -60,6 +62,15 @@
     "test:devices-studio": "node packages/web/test/devices-browser.mjs",
     "test:sales": "node packages/internal/test/sales-browser.mjs",
     "dev:sales": "npx --yes serve packages/sales-site -l 8902",
-    "test:mobile": "node packages/internal/test/mobile-browser.mjs"
+    "test:mobile": "node packages/internal/test/mobile-browser.mjs",
+    "test:lens-core": "npm test --workspace=packages/lens-core",
+    "dev:pocket": "npm run dev --workspace=packages/pocket",
+    "build:pocket": "npm run build --workspace=packages/pocket",
+    "test:pocket": "npm test --workspace=packages/pocket",
+    "test:pocket-browser": "node packages/pocket/test/pocket-browser.mjs",
+    "test:phone-byod": "node packages/server/test/phone-byod.mjs",
+    "test:phone": "cd packages/ai-service && python -m pytest tests/test_phone.py -q",
+    "test:connections": "node packages/internal/test/connections-browser.mjs",
+    "test:connections-api": "cd packages/ai-service && python -m pytest tests/test_connections.py -q"
   }
 }

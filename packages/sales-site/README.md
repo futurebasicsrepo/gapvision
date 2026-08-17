@@ -37,35 +37,37 @@ vercel deploy --prod          # project: cuesea-sales
 # then add sales.cuesea.ai in Vercel, and a CNAME: sales → cname.vercel-dns.com
 ```
 
-Two environment variables, both optional and both worth setting:
+Four environment variables, all optional and all worth setting:
 
 | Where | Variable | Effect |
 |---|---|---|
-| this project | `LEAD_WEBHOOK_URL` | gated opens are forwarded there; without it they land in the runtime log |
+| this project | `CUE_AI_URL` | the AI service origin — gated opens become rows Console can read, inside the retention sweep |
+| this project | `CUE_API_KEY` | the service key for that call (`GAPVISION_API_KEY`'s value) |
+| this project | `LEAD_WEBHOOK_URL` | a second, independent destination, if you want one |
 | the Console project | `VITE_SALES_URL` | the origin the Sales panel builds every link from |
+
+Without `CUE_AI_URL` and `CUE_API_KEY` a lead still opens the deck and still
+lands in this project's runtime log — it just never becomes a row anybody can
+act on. The log is the fallback, not the system.
 
 Console defaults to `https://sales.cuesea.ai`, so if the domain above is what
 you use, `VITE_SALES_URL` is belt and braces rather than required.
 
-### Why the headers in `vercel.json` are what they are
+## What `vercel.json` does, since it cannot say so itself
 
-The reasoning lives here rather than beside each header, because Vercel
-validates `vercel.json` against a schema that rejects unknown properties —
-JSON has no comments, and a `comment` key invented next to a real one fails
-the deploy rather than explaining it. Keep this file free of them.
+Vercel validates this file against a schema that rejects unknown properties, so
+the reasoning lives here rather than in a `comment` key — which is how the first
+deploy of this project failed, twice. Keep that file free of them:
 
-- **`X-Frame-Options: DENY`** — these decks are sent to people who will open
-  them at a laptop in an office they do not control. Nothing here should be
-  frameable, because a deck inside somebody else's chrome is a deck whose gate
-  can be dressed up as theirs.
-- **`X-Content-Type-Options: nosniff`** and
-  **`Referrer-Policy: strict-origin-when-cross-origin`** — the ordinary pair;
-  nothing about a sent document wants type guessing or a full referrer
-  travelling to whatever the recipient clicks next.
-- **`Cache-Control: public, max-age=86400` on `*.pdf`** — the leave-behind. A
-  long cache with a revision in the filename is the usual answer, but this file
-  is regenerated from the page it accompanies and keeps its name, so it must
-  not be cached past a day or a recipient re-downloads last week's argument.
+- **`X-Frame-Options: DENY`.** These decks get opened on a laptop in an office
+  we do not control. Nothing here should be frameable, because a deck inside
+  somebody else's chrome is a deck whose gate can be dressed up as theirs.
+- **`nosniff` and a strict referrer policy.** Ordinary hygiene for a public
+  document that accepts a POST.
+- **A one-day cache on the PDF.** The usual answer is a long cache with a
+  revision in the filename, but this file is regenerated from the page it
+  accompanies and keeps its name. Cached longer, a recipient re-downloads last
+  week's argument.
 
 ## The one sentence that must not get softened
 

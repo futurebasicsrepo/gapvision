@@ -4,7 +4,10 @@
  * cycles the deck; select clicks into a card (scroll then moves its whole
  * content); select inside backs out; select on home ends the engagement.
  *
- * Pure module: no DOM, no socket — testable in node, liftable to lens-core.
+ * Pure module: no DOM, no socket, no storage. Every surface that renders a cue
+ * imports this one — the G2 plugin, the Meta lens and Pocket — so that an
+ * associate moving between them relearns nothing and, more importantly, cannot
+ * be told two different things about the same guest.
  */
 import type { Card, Cue, DisplayPayload, LensMode } from "./types.js";
 import { CUE_LINES, joinMeta, money, toDisplayText } from "./grammar.js";

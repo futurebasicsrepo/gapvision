@@ -482,6 +482,15 @@ function Check({ status, label, detail }) {
 const SURFACES = [
   { id: "even-g2", label: "Even G2", note: "Sideloaded plugin. Scan the QR on the glasses." },
   { id: "mrbd", label: "Meta Ray-Ban Display", note: "Launch URL, into Meta's preview share." },
+  {
+    id: "phone",
+    label: "Phone or handheld",
+    // The sentence that has to be here rather than in a doc nobody opens. An
+    // admin standing in a stockroom with a new hire's iPhone in their hand is
+    // exactly the person about to make this mistake, and Console is the last
+    // place it can be prevented.
+    note: "A store-owned device. Scan the code with it. Never an employee's own phone — they sign in instead, and disabling them in People ends their access everywhere.",
+  },
   { id: "sim", label: "Lens Sim", note: "A browser tab. Badged, and excludable from analytics." },
 ];
 
@@ -542,8 +551,21 @@ function MintedDevice({ minted, onDone }) {
       <p className="meta" style={{ margin: "8px 0 12px", lineHeight: 1.5 }}>
         This is the only time this token exists anywhere. It is stored hashed,
         so nothing — not this console, not the database, not us — can show it
-        again. Get it onto the glasses now; if it is lost, reissue.
+        again. Get it onto the device now; if it is lost, reissue.
       </p>
+
+      {minted.device.surface === "phone" && (
+        // Repeated at the moment of the act, not only in the picker above. The
+        // token in this box is the store's identity: whoever holds it registers
+        // as this shop. On a handset that leaves with its owner, that is a store
+        // credential in a stranger's pocket the day they quit, and the only
+        // record of it is a row labelled "Sam's iPhone".
+        <p className="meta flame" style={{ margin: "0 0 12px", lineHeight: 1.5 }}>
+          Scan this with a <strong>store-owned</strong> device only. An
+          associate using their own phone signs in with their own account —
+          they need nothing from this screen.
+        </p>
+      )}
 
       {minted.qr && (
         <div style={{ marginBottom: 12 }}>

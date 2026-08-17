@@ -19,17 +19,20 @@
  *    it reads as protection, someone sends the wrong deck to the wrong room
  *    and believes it was safe.
  *
- * 2. Links live in this browser's localStorage until the control plane grows
- *    an endpoint for them, and leads are reported as *absent* rather than as
- *    zero when the endpoint is missing. Fabricated numbers in an internal tool
- *    are worse than no numbers: they get quoted.
+ * 2. Links and leads both live in the control plane now. Either endpoint being
+ *    absent is reported as *absent* rather than as zero — an internal tool
+ *    that invents a number is an internal tool whose number gets quoted.
  *
- * When the endpoints land (contract in claude/sales-deck.md) delete the local
- * branch and both notices with it. Search for LOCAL_ONLY.
+ * The localStorage that used to hold links is gone. It meant a link made on a
+ * laptop was invisible from a phone and "Forget" removed the row rather than
+ * the link, which made the whole list untrustworthy in the one way a record of
+ * what you sent must not be.
+ *
+ * Console and the AI service deploy on separate pushes, so this surface has to
+ * survive the window where one has the endpoint and the other does not — hence
+ * `absent` as a first-class state rather than an error nobody can act on.
  */
-import { useEffect, useMemo, useState } from "react";
-
-const LOCAL_ONLY = "cuesea.console.sales.links";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 /** One origin serves both decks. Set VITE_SALES_URL per environment. */
 const ORIGIN = (import.meta.env?.VITE_SALES_URL || "https://sales.cuesea.ai").replace(/\/$/, "");
@@ -78,20 +81,6 @@ function token() {
   (globalThis.crypto || {}).getRandomValues?.(a);
   return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
 }
-function load() {
-  try {
-    return JSON.parse(localStorage.getItem(LOCAL_ONLY) || "[]");
-  } catch {
-    return [];
-  }
-}
-function save(rows) {
-  try {
-    localStorage.setItem(LOCAL_ONLY, JSON.stringify(rows.slice(0, 300)));
-  } catch {
-    /* private mode — the panel still works for this session */
-  }
-}
 function linkFor(deck, row) {
   const u = new URL(ORIGIN + deck.path + "/");
   if (row.to) u.searchParams.set("to", row.to);
@@ -102,7 +91,7 @@ function linkFor(deck, row) {
 
 export default function Sales() {
   const [deckId, setDeckId] = useState(DECKS[0].id);
-  const [rows, setRows] = useState(load);
+  const [links, setLinks] = useState({ state: "loading", items: [] });
   const [to, setTo] = useState("");
   const [gate, setGate] = useState(true);
   const [copied, setCopied] = useState("");
@@ -111,7 +100,24 @@ export default function Sales() {
   const deck = DECKS.find((d) => d.id === deckId);
   const deckUrl = ORIGIN + deck.path;
 
-  useEffect(() => save(rows), [rows]);
+  /* Links. Same three states as leads below, and for the same reason: Console
+     and the AI service deploy on separate pushes, so "the endpoint is not there
+     yet" is a real condition rather than a bug, and it has to read differently
+     from "no links yet". */
+  const loadLinks = useCallback(() => {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 6000);
+    fetch("/api/analytics/deck-links?days=365", { signal: ctl.signal, credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d) => setLinks({ state: "ok", items: (d.links || []).map((l) => ({
+        ...l, to: l.prepared_for || "", gate: l.gated, at: l.at,
+      })) }))
+      .catch(() => setLinks({ state: "absent", items: [] }))
+      .finally(() => clearTimeout(t));
+    return () => ctl.abort();
+  }, []);
+
+  useEffect(() => loadLinks(), [loadLinks]);
 
   /* Leads. An absent endpoint is reported as absent, never as zero — unknown
      never renders as a pass, the same rule the Health panel keeps. */
@@ -147,14 +153,38 @@ export default function Sales() {
     }
   };
 
-  const create = () => {
-    const row = { token: token(), deck: deck.id, to: to.trim(), gate, at: new Date().toISOString() };
-    setRows([row, ...rows]);
+  /* The link is built and copied first, and recorded second.
+     Deliberate ordering: the URL is valid the moment it exists — nothing about
+     it depends on our database — so a failure to record must never cost
+     somebody the link they just asked for. It costs them the row, and the card
+     says so. */
+  const create = async () => {
+    const row = { token: token(), deck: deck.id, to: to.trim(), gate,
+                  at: new Date().toISOString() };
     setTo("");
     copy(linkFor(deck, row), row.token);
+
+    try {
+      const res = await fetch("/api/analytics/deck-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ deck: row.deck, token: row.token,
+                               preparedFor: row.to || null, gated: row.gate }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      loadLinks();
+    } catch {
+      /* Show it anyway, marked, rather than dropping it out of a list the
+         person watched themselves create. */
+      setLinks((l) => ({ state: l.state === "ok" ? "ok" : "absent",
+                         items: [{ ...row, prepared_for: row.to, unsaved: true },
+                                 ...l.items] }));
+    }
   };
 
-  const mine = useMemo(() => rows.filter((r) => r.deck === deck.id), [rows, deck.id]);
+  const mine = useMemo(() => links.items.filter((r) => r.deck === deck.id),
+                       [links.items, deck.id]);
   const deckLeads = useMemo(
     () => leads.items.filter((l) => !l.deck || l.deck === deck.id),
     [leads.items, deck.id]
@@ -245,7 +275,8 @@ export default function Sales() {
         </div>
         {mine.length === 0 ? (
           <p className="empty">
-            No links for this deck yet. Create one above and it is on your clipboard.
+            {links.state === "loading" ? "Checking…"
+              : "No links for this deck yet. Create one above and it is on your clipboard."}
           </p>
         ) : (
           <table className="sales-table">
@@ -255,6 +286,7 @@ export default function Sales() {
                 <th>Gate</th>
                 <th>Created</th>
                 <th>Token</th>
+                <th>Opens</th>
                 <th aria-label="actions" />
               </tr>
             </thead>
@@ -267,15 +299,13 @@ export default function Sales() {
                   </td>
                   <td data-label="Created" className="mono">{new Date(r.at).toLocaleDateString()}</td>
                   <td data-label="Token" className="mono muted">{r.token}</td>
+                  <td data-label="Opens" className="mono">
+                    {r.unsaved ? <span className="muted">not recorded</span>
+                      : r.opens > 0 ? r.opens : <span className="muted">—</span>}
+                  </td>
                   <td className="right">
                     <button className="btn small" onClick={() => copy(linkFor(deck, r), r.token)}>
                       {copied === r.token ? "Copied" : "Copy"}
-                    </button>
-                    <button
-                      className="btn small ghost"
-                      onClick={() => setRows(rows.filter((x) => x.token !== r.token))}
-                    >
-                      Forget
                     </button>
                   </td>
                 </tr>
@@ -283,12 +313,20 @@ export default function Sales() {
             </tbody>
           </table>
         )}
-        <p className="warn-note">
-          {/* LOCAL_ONLY */}
-          Links are held in this browser until the control plane stores them. Another machine, or a
-          cleared browser, will not see this list — and “Forget” removes the row here, not the link
-          itself.
-        </p>
+        {links.state === "absent" && (
+          <p className="warn-note">
+            No link store on this deployment, so nothing here is being recorded — the
+            links still work, because a link is just a URL, but this list will be
+            empty on your next visit. Wire <code>/api/analytics/deck-links</code>
+            (contract in <code>claude/sales-deck.md</code>) and it persists.
+          </p>
+        )}
+        {mine.some((r) => r.unsaved) && (
+          <p className="warn-note">
+            One or more links above could not be recorded. They are valid and copied —
+            they just will not be here tomorrow.
+          </p>
+        )}
       </section>
 
       {/* ── leads ────────────────────────────────────────────── */}

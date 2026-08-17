@@ -216,6 +216,25 @@ def sweep_all() -> list[dict[str, Any]]:
     except Exception as e:
         log.warning("retention could not prune shift telemetry: %s", e)
 
+    # Our own leads, on their own window.
+    #
+    # `deck_leads` carries no tenant, so the per-tenant loop above cannot reach
+    # it — and a table of names and email addresses that no sweep touches is
+    # exactly the table a reviewer finds. It is *our* prospects rather than a
+    # retailer's customers, which changes whose window applies and changes
+    # nothing about whether one applies at all.
+    #
+    # Same posture as the telemetry prune: outside `sweep()`, because it writes
+    # nothing into `retention_runs` and because failing to redact a lead must
+    # not make a tenant's guest-data sweep look like it did not run.
+    try:
+        from . import decks
+        redacted = decks.sweep_leads()
+        if redacted:
+            log.info("retention redacted %s aged deck leads", redacted)
+    except Exception as e:
+        log.warning("retention could not redact deck leads: %s", e)
+
     return runs
 
 

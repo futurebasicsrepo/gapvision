@@ -5,7 +5,7 @@
  * launch URL (`?mode=meta`), and flips from the idle screen with up/down —
  * never mid-engagement, so a guest interaction always keeps one visual state.
  */
-import type { LensMode } from "./types.js";
+import type { LensMode } from "@cue/lens-core";
 
 const KEY = "cue.mode";
 const DEFAULT_MODE: LensMode = "meta";

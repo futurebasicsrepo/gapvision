@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 
-from . import (analytics, crm_credentials, crm_provider, db, devices, identity,
+from . import (analytics, connections, crm_credentials, crm_provider, db, devices, identity,
                mailer, retention, secrets_box, shifts)
 from .identity import BearerHeader, current_user, require, scope_tenant
 
@@ -208,6 +208,31 @@ def _crm_payload(tenant: dict, probe: dict | None = None) -> dict:
     if probe is not None:
         out["test"] = probe
     return out
+
+
+@router.get("/tenants/{id_or_slug}/connections")
+def get_tenant_connections(id_or_slug: str, authorization: str | None = BearerHeader):
+    """Everything this store is plugged into — systems and peripherals.
+
+    `manager`, not `client_admin`, and deliberately so. Connecting a system is
+    an admin act; *knowing whether the shop is answering* is a manager's job,
+    and the number that matters here — how many devices are live on the floor
+    right now — is exactly what a manager needs at the start of a shift. No
+    secret crosses this boundary: `connections.systems_for` only emits what
+    `crm_credentials.describe()` allows out.
+    """
+    me = current_user(authorization)
+    require(me, "manager")
+    tenant = _own_tenant(me, id_or_slug)
+
+    systems = connections.systems_for(tenant["id"])
+    peripherals = connections.peripherals_for(tenant["id"])
+    return {
+        "tenant": tenant["slug"],
+        "systems": systems,
+        "peripherals": peripherals,
+        "summary": connections.summary(systems, peripherals),
+    }
 
 
 @router.get("/tenants/{id_or_slug}/crm")

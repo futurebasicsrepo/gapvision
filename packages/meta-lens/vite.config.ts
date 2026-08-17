@@ -7,6 +7,11 @@ import { defineConfig } from "vite";
 // it ships in the same bundle so both stay same-origin.
 export default defineConfig({
   base: "./",
+  // @cue/lens-core ships TypeScript source, not a build — a shared package with
+  // a build step is one somebody forgets to rebuild. Excluding it from dep
+  // pre-bundling is what makes Vite transform it as source rather than hand it
+  // to esbuild as a dependency.
+  optimizeDeps: { exclude: ["@cue/lens-core"] },
   build: {
     target: "es2020",
     rollupOptions: {
