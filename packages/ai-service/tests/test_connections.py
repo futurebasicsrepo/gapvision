@@ -119,7 +119,68 @@ def test_a_hopeful_registry_entry_cannot_promote_itself(client, auth, monkeypatc
     body = read(client, auth)
     sf = next(s for s in body["systems"] if s["id"] == "salesforce")
     assert sf["state"] != "available", "a declaration is not an adapter"
-    assert sf["state"] in ("planned", "exploring"), sf
+    assert sf["state"] in connections.DECLARABLE, sf
+    assert "available" not in connections.DECLARABLE, \
+        "the whole mechanism is that `available` is earned, never declared"
+
+
+def test_a_built_thing_set_up_elsewhere_is_not_called_ready_to_connect(client, auth):
+    """The POS tile exists (`packages/pos-app`) and there is no button for it.
+
+    `available` means "connect it from this screen today". The merchant links
+    and deploys the tile against their own custom app with the Shopify CLI, so
+    claiming `available` would send an admin hunting for a control that is not
+    and should not be on this page — the mirror image of the wall-of-logos lie
+    this panel exists to avoid.
+    """
+    body = read(client, auth)
+    pos = next(s for s in body["systems"] if s["id"] == "shopify-pos")
+    assert pos["state"] == "external", pos
+    assert "packages/pos-app" in pos["note"]
+
+
+def test_the_pos_row_says_whether_THIS_store_could_actually_use_it(client, auth):
+    """A live per-tenant fact, and the most useful thing the row can say.
+
+    The tile verifies each till against the client secret stored with this
+    store's Shopify connection. A store on a legacy admin token has every till
+    refused, and the only place that is currently discoverable is a 503 at the
+    counter, mid-sale, in front of a customer.
+    """
+    body = read(client, auth)
+    pos = next(s for s in body["systems"] if s["id"] == "shopify-pos")
+    assert pos["ready"] is False, "this tenant has no Shopify connection at all"
+    assert "no Shopify connection" in pos["blocked_by"], pos["blocked_by"]
+
+
+def test_an_admin_token_connection_is_named_as_the_blocker(client, auth, world, monkeypatch):
+    """The case that actually bites: connected, working, and still refused."""
+    from app import connections
+
+    monkeypatch.setattr(connections.crm_credentials, "describe", lambda row: {
+        "connected": True, "provider": "shopify", "store_domain": "x.myshopify.com",
+        "auth_kind": "admin_token", "scopes": [], "missing_required_scopes": [],
+        "degraded_without": {},
+    })
+    body = read(client, auth)
+    pos = next(s for s in body["systems"] if s["id"] == "shopify-pos")
+    assert pos["ready"] is False
+    assert "admin token" in pos["blocked_by"], pos["blocked_by"]
+    assert "client ID and secret" in pos["blocked_by"], pos["blocked_by"]
+
+
+def test_a_client_credentials_connection_can_verify_a_till(client, auth, monkeypatch):
+    from app import connections
+
+    monkeypatch.setattr(connections.crm_credentials, "describe", lambda row: {
+        "connected": True, "provider": "shopify", "store_domain": "x.myshopify.com",
+        "auth_kind": "client_credentials", "scopes": [], "missing_required_scopes": [],
+        "degraded_without": {},
+    })
+    body = read(client, auth)
+    pos = next(s for s in body["systems"] if s["id"] == "shopify-pos")
+    assert pos["ready"] is True
+    assert pos["blocked_by"] is None
 
 
 def test_unbuilt_connectors_are_listed_rather_than_hidden(client, auth):
@@ -229,12 +290,39 @@ def test_another_retailers_admin_may_not(client, auth):
 def test_no_secret_crosses_the_boundary(client, auth):
     """Belt and braces on top of `crm_credentials.describe()`.
 
-    Asserted against the serialised response rather than the fields, because
-    the failure mode is a future change spreading a credential row into the
-    payload and nobody noticing which key carried it.
+    Walks the parsed payload rather than grepping the raw text, and checks two
+    different things — because the failure mode is a future change spreading a
+    credential row into the response and nobody noticing which key carried it:
+
+      · no **key** anywhere in the tree is a credential-bearing name;
+      · no **value** looks like a credential.
+
+    The earlier version of this test grepped the response text for the word
+    "secret" and failed the moment a row's prose explained that the POS tile
+    needs a client secret. Prose about a credential is not a credential, and a
+    test that cannot tell the difference eventually gets loosened by somebody
+    in a hurry — so it checks structure instead.
     """
+    import re
+
+    FORBIDDEN_KEYS = {"admin_token", "client_secret", "secret", "secret_sealed",
+                      "ciphertext", "password", "token", "access_token"}
+    # A Shopify admin token, a sealed blob, or anything long and opaque.
+    FORBIDDEN_VALUES = re.compile(r"shpat_|shpca_|shppa_|^[A-Za-z0-9+/]{60,}={0,2}$")
+
     r = client.get("/api/admin/tenants/c_alpha/connections",
                    headers=auth("admin@conn.example.com"))
-    text = r.text.lower()
-    for forbidden in ("admin_token", "client_secret", "secret", "ciphertext", "shpat_"):
-        assert forbidden not in text, forbidden
+    assert r.status_code == 200, r.text
+
+    def walk(node, path="$"):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                assert k.lower() not in FORBIDDEN_KEYS, f"{path}.{k}"
+                walk(v, f"{path}.{k}")
+        elif isinstance(node, list):
+            for i, v in enumerate(node):
+                walk(v, f"{path}[{i}]")
+        elif isinstance(node, str):
+            assert not FORBIDDEN_VALUES.search(node), f"{path} = {node[:40]}…"
+
+    walk(r.json())

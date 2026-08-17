@@ -58,6 +58,14 @@ const PAYLOAD = {
       gives: ["Inventory from a nightly export"],
       note: "The widest item on the roadmap and the cheapest.",
     },
+    {
+      id: "shopify-pos", name: "Shopify POS — Cue tile", kind: "commerce", state: "external",
+      ready: false,
+      blocked_by: "This store is connected with an admin token, which carries no client secret. "
+        + "Reconnect with a client ID and secret before deploying the tile, or every till will be refused.",
+      gives: ["The associate and engagement stamped onto the sale"],
+      note: "Built. The merchant deploys the tile to their own POS with the Shopify CLI.",
+    },
   ],
   peripherals: [
     { id: "even-g2", name: "Even G2 glasses", kind: "glasses",
@@ -119,6 +127,15 @@ async function boot({ connections = PAYLOAD } = {}) {
   const buttons = await p.locator(".conn button, .conn a").count();
   check("no unbuilt row carries a button that would file a feature request",
     buttons === 0, `${buttons} controls found inside connector rows`);
+
+  // A thing that is built but connected elsewhere must read as neither "ready
+  // to connect" (there is no button, and there should not be) nor "not built"
+  // (it exists). It is its own state for that reason.
+  const pos = await p.locator(".conn").filter({ hasText: "Shopify POS" }).textContent();
+  check("a built connector set up elsewhere says so, without offering a button",
+    /built · set up in Shopify/i.test(pos) && !/ready to connect|not built yet/i.test(pos), pos);
+  check("and names the live reason THIS store could not use it today",
+    /admin token/i.test(pos) && /client ID and secret/i.test(pos), pos);
 
   check("what a connector would give you is stated, not just its name",
     /Inventory from a nightly export/.test(body), body.slice(0, 300));

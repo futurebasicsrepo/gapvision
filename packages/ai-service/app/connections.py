@@ -19,11 +19,15 @@ buttons, most of which open a form that files a feature request. That page is a
 lie told at the exact moment a buyer is deciding whether to trust the product,
 and it is the most expensive possible moment to be caught.
 
-So every entry carries a `state` from a fixed vocabulary, and the two that mean
-"not yet" are distinct because they send a merchant to different next actions:
+So every entry carries a `state` from a fixed vocabulary, and the states that
+mean something other than "on" are distinct because they send a merchant to
+different next actions:
 
     connected   this tenant is on it now, with a live credential
     available   built and working; connect it from this screen today
+    external    built, but connecting it happens somewhere else — the POS tile
+                is deployed to a merchant's own till with the Shopify CLI, so
+                there is no button here and there should not be one
     planned     we know exactly what it takes and it is not built. The entry
                 says what it would give you and what it would cost us.
     exploring   researched, no decision. Named so it is not mistaken for the
@@ -53,17 +57,27 @@ SYSTEMS = (
     },
     {
         "id": "shopify-pos",
-        "name": "Shopify POS",
+        "name": "Shopify POS — Cue tile",
         "kind": "commerce",
-        "gives": ["Who is at the till, as it happens", "The real basket, line by line",
-                  "The associate stamped onto the sale"],
-        # The strongest argument, and it is not the obvious one. See
-        # claude/shopify-pos-what-it-gives-us.md — attribution first,
-        # identification second.
-        "note": "A POS extension, not an API we call. Worth building for "
-                "attribution before identification: it turns the number this "
-                "product is sold on from an inference into a record.",
-        "state": "planned",
+        "gives": ["The guest attached to the till's cart in one tap",
+                  "Their cart lines, loaded",
+                  "The associate and engagement stamped onto the sale"],
+        # Built — `packages/pos-app`. It reached what
+        # claude/shopify-pos-what-it-gives-us.md argued was the strongest
+        # reason: attribution stops being inferred from timing and becomes a
+        # property written onto the cart.
+        #
+        # `external` rather than `available` because connecting it is not an
+        # act available on this screen: the merchant links and deploys the
+        # extension against their own custom app with the Shopify CLI. Calling
+        # it "ready to connect" here would send an admin looking for a button
+        # that is not and should not be on this page.
+        "note": "Built. The merchant deploys the tile to their own POS with "
+                "the Shopify CLI — see packages/pos-app. It verifies each till "
+                "against the client secret stored with this store's Shopify "
+                "connection, so it needs a client ID + secret connection "
+                "rather than an admin token.",
+        "state": "external",
     },
     {
         "id": "feed",
@@ -148,7 +162,7 @@ PERIPHERALS = (
     },
 )
 
-STATES = ("connected", "available", "planned", "exploring")
+STATES = ("connected", "available", "external", "planned", "exploring")
 
 #: The only states a registry entry is allowed to ask for.
 #:
@@ -158,7 +172,14 @@ STATES = ("connected", "available", "planned", "exploring")
 #: `"state": "available"` to the Salesforce entry — an easy edit that reads as
 #: documentation — must not thereby ship a Connect button for a backend with
 #: no adapter behind it.
-DECLARABLE = ("planned", "exploring")
+#:
+#: `external` is declarable because it makes no claim this screen could be
+#: wrong about: it says the thing is built and that connecting it happens
+#: somewhere else. The POS tile is the case — the merchant links and deploys
+#: it against their own custom app with the Shopify CLI, so calling it "ready
+#: to connect" would send an admin hunting for a button that is not and should
+#: not be here.
+DECLARABLE = ("external", "planned", "exploring")
 
 
 def _state_of(entry: dict, connected_ids: set[str]) -> str:
@@ -188,6 +209,27 @@ def systems_for(tenant_id) -> list[dict]:
     for entry in SYSTEMS:
         state = _state_of(entry, connected_ids)
         item = {**entry, "state": state}
+        if entry["id"] == "shopify-pos":
+            # A live, per-tenant fact rather than a general note, and the most
+            # useful thing this row can say.
+            #
+            # The POS tile verifies each till by checking a Shopify session
+            # token against the client secret stored with *this* store's
+            # connection (`app/pos.py`). A store connected with a legacy admin
+            # token has no secret on file, so the tile is refused — and the
+            # place that is discoverable today is a 503 at the till, during a
+            # sale, in front of a customer. Said here instead.
+            kind = described.get("auth_kind") if described.get("connected") else None
+            item["ready"] = kind == "client_credentials"
+            item["blocked_by"] = (
+                None if item["ready"]
+                else "This store has no Shopify connection yet."
+                if kind is None
+                else "This store is connected with an admin token, which carries no "
+                     "client secret. Reconnect with a client ID and secret before "
+                     "deploying the tile, or every till will be refused."
+            )
+
         if state == "connected":
             # Only the connected one carries live detail, and only the shape
             # `describe()` allows out — no secret has ever crossed this
