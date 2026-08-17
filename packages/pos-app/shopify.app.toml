@@ -1,0 +1,34 @@
+# Cue POS Handoff — app configuration TEMPLATE.
+#
+# This file is per-merchant by design. Each retailer creates their OWN app in
+# the Shopify Dev Dashboard (the same app whose client id + secret they paste
+# into Cue Console → Tenants → Connect Shopify), then runs
+#
+#     shopify app config link
+#
+# from this directory, which rewrites client_id below against their app. That
+# keeps the go-to-market unchanged: no Shopify app review, no shared app, one
+# credential per merchant — and it is the same credential that lets the Cue
+# backend verify this extension's session tokens (see ai-service app/pos.py).
+#
+# The values below are the Cue pilot deployment's; `shopify app config link`
+# is the supported way to change them.
+
+client_id = "REPLACE_WITH_YOUR_APP_CLIENT_ID"
+name = "Cue POS Handoff"
+handle = "cue-pos-handoff"
+application_url = "https://realtime-production-80f4.up.railway.app"
+embedded = false
+
+[access_scopes]
+# The extension itself needs no Admin scopes — it talks to the POS cart
+# locally and to Cue over an authenticated fetch. The merchant's Admin scopes
+# (read_customers etc.) live on the same app but are granted in the Dev
+# Dashboard, not requested here.
+scopes = ""
+
+[auth]
+redirect_urls = ["https://realtime-production-80f4.up.railway.app/auth/callback"]
+
+[webhooks]
+api_version = "2026-07"

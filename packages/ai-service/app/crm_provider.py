@@ -71,6 +71,40 @@ class MockCRM:
                 return dict(item)
         return None
 
+    def create_checkout_link(self, items: list[dict], *, guest_id: str | None = None,
+                             note: str | None = None) -> dict:
+        """Same contract as the Shopify adapter, against nothing.
+
+        The demo world has no checkout to host, so the link points at a page
+        that does not exist under a domain we own — deliberately obvious in a
+        demo, and deliberately not a live store's URL. The total is real
+        arithmetic over the requested lines, because the number on the lens is
+        the part of the demo that has to be believed.
+        """
+        import hashlib
+        total = 0.0
+        count = 0
+        for it in items or []:
+            title = str(it.get("title") or it.get("name") or "").strip()
+            if not (title or it.get("variant_id")):
+                continue
+            try:
+                qty = max(1, int(it.get("qty") or 1))
+            except (TypeError, ValueError):
+                qty = 1
+            total += float(it.get("price") or 0) * qty
+            count += 1
+        if not count:
+            raise ValueError("A checkout link needs at least one line")
+        ref = hashlib.sha256(
+            f"{guest_id}|{count}|{total:.2f}".encode()).hexdigest()[:12]
+        return {
+            "url": f"https://demo.cuesea.ai/checkout/{ref}",
+            "draft_id": f"demo:{ref}",
+            "total": round(total, 2),
+            "currency": "USD",
+        }
+
 
 class TenantNotConfigured(Exception):
     pass

@@ -1,0 +1,20 @@
+# Cue POS Handoff — the extension itself.
+#
+# One tile on the POS smart grid, one modal behind it. `shopify app deploy`
+# assigns a `uid` on first deploy; do not invent one here.
+
+api_version = "2026-07"
+
+[[extensions]]
+type = "ui_extension"
+name = "Cue"
+handle = "cue-pos-handoff"
+description = "Pull the floor's live engagement into the till: customer attached, cart loaded, attribution stamped on the order."
+
+[[extensions.targeting]]
+target = "pos.home.tile.render"
+module = "./src/Tile.tsx"
+
+[[extensions.targeting]]
+target = "pos.home.modal.render"
+module = "./src/Modal.tsx"

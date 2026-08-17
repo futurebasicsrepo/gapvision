@@ -57,7 +57,7 @@ you use, `VITE_SALES_URL` is belt and braces rather than required.
 
 Vercel validates this file against a schema that rejects unknown properties, so
 the reasoning lives here rather than in a `comment` key — which is how the first
-deploy of this project failed:
+deploy of this project failed, twice. Keep that file free of them:
 
 - **`X-Frame-Options: DENY`.** These decks get opened on a laptop in an office
   we do not control. Nothing here should be frameable, because a deck inside

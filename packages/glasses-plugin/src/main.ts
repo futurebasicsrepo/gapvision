@@ -329,6 +329,14 @@ let engaged = false;
 /** What the associate is currently looking at — the context a voice question
  *  like "do we have these in a 32" needs in order to mean anything. */
 let engagedGuestId: string | null = null;
+/** Who the glasses think is wearing them — for the checkout draft's note.
+ *  Attribution on the order itself, readable by the merchant, so it is set
+ *  from the same `getUserInfo` answer the identity line shows. */
+let associateName: string | null = null;
+/** The checkout card's re-render, when the card exists. Set by
+ *  `mountCheckoutCard`; called when an engagement starts or ends, because the
+ *  card's item list is the engaged guest's cart. */
+let refreshCheckout: (() => void) | null = null;
 let focusSku: string | null = null;
 let lastDisplay: DisplayPayload | null = null;
 
@@ -944,6 +952,7 @@ async function showIdle() {
   railFacts = [];
   railGuestName = "";
   forgetSession();
+  refreshCheckout?.();
   // The engagement is over, so a zone change that was waiting for it can go.
   flushZoneRegistration();
   await renderCue({
@@ -1011,6 +1020,7 @@ async function onDisplay(payload: DisplayPayload) {
   railGuestName = railName((payload.guest as any)?.name);
   focusSku = recommendations[0]?.sku ?? focusSku;
   rememberSession();
+  refreshCheckout?.();
   await showCard(0);
   ui.sessionInfo.textContent = payload.guest
     ? `Engaged: ${payload.guest.name} (${payload.guest.tier})`
@@ -2077,6 +2087,263 @@ function mountFloorCard(caps: Capabilities) {
 }
 
 /**
+ * The Checkout card — the floor's till, without a till.
+ *
+ * Path B of `claude/lens-payments.md`: the basket is built here, the *guest's
+ * own phone* pays. The server mints a draft order through the store's own
+ * credentials and answers with the store's checkout URL for those lines plus
+ * an inert QR matrix ('1'/'0' rows — the same shape Console's device QRs
+ * use), which this card draws onto a canvas. Nothing that renders here has
+ * touched a payment: no card number, no charge, no PCI surface. A guest who
+ * would rather not use their phone walks to the till, which still exists —
+ * this card is how it stops being the default.
+ *
+ * Items come from three places: the engaged guest's open online cart (with
+ * variant ids, so the store sells the real thing), the pick on the lens (as
+ * a titled line — the floor cache has no variant ids yet, and a price the
+ * guest was already shown is better than a lookup that misses), and typed
+ * SKUs/barcodes, which the server resolves against the live store and
+ * *names* when it cannot — a skipped line is reported, never swallowed.
+ *
+ * Same reader rules as every card above it. Same gate posture as the floor
+ * card: only a store we actually reached saying "no" removes the card, and
+ * the service re-reads the real switch on every mint.
+ */
+function mountCheckoutCard(caps: Capabilities) {
+  const mount = document.getElementById("checkout-mount");
+  if (!mount) return;
+  mount.replaceChildren();
+  refreshCheckout = null;
+  if (caps.known && caps.checkout_links === false) return;
+
+  const card = document.createElement("section");
+  card.className = "card checkout";
+
+  const title = document.createElement("h3");
+  title.textContent = "Checkout";
+  card.appendChild(title);
+
+  const blurb = document.createElement("p");
+  blurb.className = "capture-note";
+  blurb.textContent =
+    "Build the basket, then show the QR — the guest pays on their own phone "
+    + "at the store's checkout. No till, no card reader.";
+  card.appendChild(blurb);
+
+  const itemsBox = document.createElement("div");
+  itemsBox.className = "co-items";
+  card.appendChild(itemsBox);
+
+  // Add-by-code: the row for the thing in the associate's hand. The server
+  // resolves it against the live store; a code it cannot resolve comes back
+  // *named* in the response and is said here, never silently dropped.
+  const row = document.createElement("div");
+  row.className = "floor-compose";
+  const codeInput = document.createElement("input");
+  codeInput.type = "text";
+  codeInput.className = "floor-input";
+  codeInput.placeholder = "Add by SKU or barcode";
+  codeInput.autocomplete = "off";
+  codeInput.maxLength = 40;
+  row.appendChild(codeInput);
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "btn btn-ghost";
+  addBtn.textContent = "Add";
+  row.appendChild(addBtn);
+  card.appendChild(row);
+
+  const mintBtn = document.createElement("button");
+  mintBtn.type = "button";
+  mintBtn.className = "btn btn-primary";
+  mintBtn.style.width = "100%";
+  mintBtn.style.marginTop = "12px";
+  mintBtn.textContent = "Create payment link";
+  card.appendChild(mintBtn);
+
+  const status = document.createElement("div");
+  status.className = "floor-status";
+  status.setAttribute("role", "status");
+  card.appendChild(status);
+
+  const result = document.createElement("div");
+  result.className = "co-result";
+  const qrBox = document.createElement("div");
+  qrBox.className = "co-qr";
+  const canvas = document.createElement("canvas");
+  qrBox.appendChild(canvas);
+  result.appendChild(qrBox);
+  const totalLine = document.createElement("div");
+  totalLine.className = "co-total";
+  result.appendChild(totalLine);
+  const link = document.createElement("a");
+  link.className = "co-link";
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  result.appendChild(link);
+  card.appendChild(result);
+
+  type CoLine = { key: string; label: string; price?: number; payload: Record<string, unknown>; on: boolean };
+  let lines: CoLine[] = [];
+  let typed: CoLine[] = [];
+
+  const setStatus = (text: string, warn = false) => {
+    status.textContent = text;
+    status.className = warn ? "floor-status warn" : "floor-status";
+  };
+
+  const drawQr = (rows: string[] | null | undefined) => {
+    if (!rows?.length) {
+      // No segno on the server — the link still works; the white box would
+      // just be an empty claim, so it goes.
+      qrBox.style.display = "none";
+      return;
+    }
+    qrBox.style.display = "inline-block";
+    const scale = 6;
+    const quiet = 2; // the box's white padding is most of the quiet zone
+    const n = rows.length + quiet * 2;
+    canvas.width = canvas.height = n * scale;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#000";
+    rows.forEach((r, y) => {
+      for (let x = 0; x < r.length; x++) {
+        if (r[x] === "1") ctx.fillRect((x + quiet) * scale, (y + quiet) * scale, scale, scale);
+      }
+    });
+  };
+
+  const renderLines = () => {
+    // Keep an associate's deselections across re-renders of the same guest.
+    const wasOn = new Map([...lines, ...typed].map((l) => [l.key, l.on]));
+    const g = (lastDisplay?.guest as any) || null;
+    lines = [];
+    (g?.open_cart_online || []).forEach((it: any, i: number) => {
+      lines.push({
+        key: `cart:${it.variant_id || it.sku || i}`,
+        label: String(it.name || it.sku || "Item"),
+        price: typeof it.price === "number" ? it.price : undefined,
+        // The variant id rides along when the CRM had one, so the store
+        // sells its own variant; a title+price line is the fallback.
+        payload: { variant_id: it.variant_id || undefined,
+                   title: it.name || it.sku, price: it.price, qty: 1 },
+        on: true,
+      });
+    });
+    const pick = recommendations.find((r) => r.sku === focusSku) || recommendations[0];
+    if (pick) {
+      lines.push({
+        key: `pick:${pick.sku}`,
+        label: `On the lens · ${pick.name}`,
+        price: pick.price,
+        // A titled line, not a code: the floor cache carries no variant ids
+        // yet, and the price the guest was just shown beats a lookup that
+        // misses on a handle.
+        payload: { title: pick.name, price: pick.price, qty: 1 },
+        on: wasOn.get(`pick:${pick.sku}`) ?? false,
+      });
+    }
+    lines.forEach((l) => { l.on = wasOn.get(l.key) ?? l.on; });
+
+    itemsBox.replaceChildren();
+    [...lines, ...typed].forEach((l) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = l.on ? "floor-pick co-item selected" : "floor-pick co-item";
+      b.setAttribute("aria-pressed", l.on ? "true" : "false");
+      const name = document.createElement("span");
+      name.textContent = l.label;
+      b.appendChild(name);
+      if (typeof l.price === "number") {
+        const price = document.createElement("span");
+        price.className = "meta co-price";
+        price.textContent = `$${l.price.toFixed(2)}`;
+        b.appendChild(price);
+      }
+      b.addEventListener("click", () => { l.on = !l.on; renderLines(); });
+      itemsBox.appendChild(b);
+    });
+    if (!lines.length && !typed.length) {
+      const empty = document.createElement("p");
+      empty.className = "floor-empty";
+      empty.textContent = engagedGuestId
+        ? "Nothing in their online cart — add items by code."
+        : "Engage a guest and their online cart lands here — or add items by code.";
+      itemsBox.appendChild(empty);
+    }
+  };
+  refreshCheckout = renderLines;
+
+  const addCode = () => {
+    const code = codeInput.value.trim();
+    if (!code) return;
+    typed.push({ key: `code:${code}:${typed.length}`, label: code,
+                 payload: { code, qty: 1 }, on: true });
+    codeInput.value = "";
+    renderLines();
+  };
+  addBtn.addEventListener("click", addCode);
+  codeInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); addCode(); }
+  });
+
+  const mint = async () => {
+    const chosen = [...lines, ...typed].filter((l) => l.on);
+    if (!chosen.length) {
+      setStatus("Nothing selected — nothing was sent.", true);
+      return;
+    }
+    mintBtn.disabled = true;
+    result.classList.remove("show");
+    // "Creating", not "Created": nothing has been minted yet, and only the
+    // response knows whether it will be. Same rule as the floor composer.
+    setStatus("Creating the link…");
+    try {
+      const res = await fetch(`${SERVER_URL}/api/checkout-link`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tenant: TENANT,
+          guest_id: engagedGuestId,
+          associate: associateName,
+          items: chosen.map((l) => l.payload),
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.ok) {
+        setStatus(String(body?.detail || `The store refused (${res.status}). The till still works.`), true);
+        return;
+      }
+      drawQr(body.qr);
+      const total = typeof body.total === "number" ? body.total.toFixed(2) : String(body.total ?? "");
+      totalLine.textContent = `${total} ${body.currency || ""} · ${body.lines?.length ?? 0} line(s)`.trim();
+      link.href = body.url;
+      link.textContent = body.url;
+      result.classList.add("show");
+      if (body.skipped?.length) {
+        // The link is real and the misses are named — the associate decides
+        // whether a basket short of those lines is still the sale.
+        setStatus(`Link ready — not found in the store: ${body.skipped.map((s: any) => s.code).join(", ")}`, true);
+      } else {
+        setStatus("Link ready. It also sits on the draft order in the store admin.");
+      }
+      log(`checkout link ${body.draft_id || ""}`);
+    } catch {
+      setStatus("No connection — no link was created.", true);
+    } finally {
+      mintBtn.disabled = false;
+    }
+  };
+  mintBtn.addEventListener("click", () => void mint());
+
+  mount.appendChild(card);
+  renderLines();
+}
+
+/**
  * The capture card — the phone-page trigger for a scan.
  *
  * **Built only when the store has the camera on, and not built at all
@@ -2233,6 +2500,7 @@ async function main() {
   // name or on nobody's — and an unassigned pair records activity that never
   // reaches the leaderboard, which is exactly the confusion the Health panel
   // flags for managers and the floor could never see for itself.
+  associateName = user.name || null;
   if (ui.whoName) {
     ui.whoName.textContent = user.name || "NOT SIGNED IN";
     ui.whoName.className = user.name ? "whoami-name" : "whoami-name unknown";
@@ -2552,6 +2820,7 @@ async function main() {
       `voice=${capabilities.voice} floor=${capabilities.floor_comms}`);
   mountCaptureCard(capabilities);
   mountFloorCard(capabilities);
+  mountCheckoutCard(capabilities);
   await loadWidgetPrefs();
   mountWidgetsCard();
   // Said before anything is sent, deliberately. If the first record of a shift

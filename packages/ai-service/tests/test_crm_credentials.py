@@ -389,6 +389,10 @@ def test_missing_scopes_are_named(client, auth, monkeypatch):
     assert set(body["credential"]["missing_required_scopes"]) == {
         "read_customers", "read_orders"}
     assert "read_inventory" in body["credential"]["degraded_without"]
+    # The floor-checkout scope is named the same way. Without this the only
+    # symptom of a token that cannot mint a checkout link is the associate
+    # pressing Create payment link and getting a refusal on the floor.
+    assert "write_draft_orders" in body["credential"]["degraded_without"]
 
 
 def test_a_rejected_token_is_reported_not_raised(client, auth, monkeypatch):

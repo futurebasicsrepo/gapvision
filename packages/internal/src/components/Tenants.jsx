@@ -412,6 +412,7 @@ const CRM_SCOPES = [
   { handle: "read_orders", required: true, why: "purchase history and sizes" },
   { handle: "read_products", required: true, why: "recommendations" },
   { handle: "read_inventory", required: false, why: "live floor stock counts" },
+  { handle: "write_draft_orders", required: false, why: "floor checkout links" },
 ];
 
 /** A failed test gets a headline naming which of the plausible things is wrong.
