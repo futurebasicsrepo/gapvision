@@ -57,6 +57,8 @@
     "test:device-register": "node packages/server/test/device-register.mjs",
     "test:devices-console": "node packages/internal/test/devices-browser.mjs",
     "test:lens-sim": "node packages/internal/test/lens-sim-browser.mjs",
-    "test:devices-studio": "node packages/web/test/devices-browser.mjs"
+    "test:devices-studio": "node packages/web/test/devices-browser.mjs",
+    "test:sales": "node packages/internal/test/sales-browser.mjs",
+    "dev:sales": "npx --yes serve packages/sales-site -l 8902"
   }
 }
