@@ -1,0 +1,141 @@
+/* ============================================================
+   cuesea — the consumer layer
+   Loaded last, after every other sheet.
+
+   This changes the register, not the system. The ground, the ramps, the
+   glass material and the lens are untouched — brand v3.2 still holds, and
+   the product surfaces still look like product. What moves is scale, air,
+   and how much furniture is allowed to compete with the sentence.
+
+   Three dials:
+     1. type      the headline is the page; everything else steps back
+     2. air       one idea per screen, so sections stop stacking into a wall
+     3. quiet     less bloom, fewer rules, less small uppercase everywhere
+
+   ── the mobile guards ───────────────────────────────────────
+   Every block here that raises a size on desktop re-asserts the existing
+   phone value in the @media(max-width:700px) block at the foot of this
+   file. That is not belt-and-braces, it is required: media queries carry
+   no specificity, so an unscoped rule in this sheet would otherwise beat
+   the identical selector inside cuesea-mobile.css and cuesea-extra.css
+   purely by load order — and cuesea-extra.css exists because an oversized
+   hero headline once made the document wider than the phone and dragged
+   the sticky bar off-screen with it. Read that file's comment before
+   touching any hero type here.
+   ============================================================ */
+
+:root{
+  /* The editorial margin. 64 → 84 at the top end only; the phone value is
+     untouched, because at 390px the margin is already most of the screen. */
+  --m:clamp(18px,5.5vw,84px);
+}
+
+/* ── 1. the hero ─────────────────────────────────────────────
+   The claim gets the room a claim deserves. -.042em tracking is the
+   compensation for the larger size: at 94px the stock -.035em reads loose. */
+.hero{
+  padding-top:clamp(48px,10vw,148px);
+  padding-bottom:clamp(48px,9vw,128px);
+}
+.hero .hero-say h1{
+  font-size:clamp(30px,6.4vw,94px);
+  line-height:.97;
+  letter-spacing:-.042em;
+  max-width:13ch;
+  margin-bottom:clamp(20px,3vw,34px);
+}
+.hero .hero-say .sub{
+  font-size:clamp(16px,1.75vw,21px);
+  line-height:1.5;
+  max-width:40ch;
+  margin:0 0 clamp(26px,3.4vw,42px);
+}
+.hero-acts{gap:13px}
+
+/* ── 2. the sections ─────────────────────────────────────────
+   The single largest change on the page: a section now owns a screen.
+   92 → 168 at the top end is what turns nine stacked panels into nine
+   things you arrive at one at a time. */
+.sec{
+  padding-top:clamp(56px,12vw,168px);
+  padding-bottom:clamp(56px,12vw,168px);
+}
+.sec .head{margin-bottom:clamp(28px,5vw,64px)}
+.sec h2{
+  font-size:clamp(26px,4.9vw,62px);
+  line-height:1.0;
+  letter-spacing:-.04em;
+  max-width:16ch;
+}
+.sec .lede{
+  font-size:clamp(15.5px,1.6vw,19px);
+  line-height:1.55;
+  max-width:46ch;
+}
+.state h2{
+  font-size:clamp(28px,5.6vw,72px);
+  max-width:14ch;
+}
+
+/* The four-fact strip under the statement. These are the page's only
+   numbers; at 22px they read as furniture rather than as the point. */
+.facts b{font-size:clamp(18px,2.2vw,26px)}
+
+/* ── 3. the close ────────────────────────────────────────────── */
+.close{
+  padding-top:clamp(64px,13vw,180px);
+  padding-bottom:clamp(64px,13vw,180px);
+}
+.close .big{
+  font-size:clamp(32px,7.4vw,100px);
+  letter-spacing:-.05em;
+}
+.close .note{margin-top:24px}
+
+/* The one button on the page can afford to be a real target. */
+.btn{padding:16px 34px;font-size:15.5px}
+
+/* ── 4. quiet ────────────────────────────────────────────────
+   The ambient field was tuned when the page was denser and needed the
+   help. Against this much air it competes with the headline instead, so
+   each bloom drops by roughly a third. The animation is untouched. */
+.amb i:nth-child(1){background:radial-gradient(circle,rgba(46,127,208,.30),transparent 70%)}
+.amb i:nth-child(2){background:radial-gradient(circle,rgba(196,210,224,.14),transparent 70%)}
+.amb i:nth-child(3){background:radial-gradient(circle,rgba(62,155,232,.19),transparent 70%)}
+
+/* Three interior rules at 25% read as a spec sheet. One at 50% still says
+   "this page is built on a grid" without narrating it. */
+.lines{background-size:50% 100%}
+
+/* The caption under the lens is a credit, not a caption. */
+.hero-lens .mono,.hero-lens .cap{font-size:9.5px;opacity:.85}
+
+/* ── the phone ───────────────────────────────────────────────
+   Re-asserting cuesea-mobile.css and cuesea-extra.css verbatim, because
+   this sheet loads after both and would otherwise silently undo them.
+   The hero clamp below is the fix for the horizontal-overflow bug — it is
+   deliberately unchanged from cuesea-extra.css and must stay that way. */
+@media(max-width:700px){
+  .hero{padding-top:clamp(28px,8vw,64px);padding-bottom:clamp(34px,9vw,72px)}
+  .hero .hero-say h1{
+    font-size:clamp(26px,7.4vw,42px);
+    line-height:1.02;
+    overflow-wrap:break-word;
+    hyphens:none;
+    max-width:none;
+  }
+  .hero .hero-say h1 em{display:inline;max-width:100%}
+  .hero .hero-say .sub{font-size:16px;max-width:none}
+
+  .sec{padding-top:clamp(44px,11vw,74px);padding-bottom:clamp(44px,11vw,74px)}
+  .sec .head{margin-bottom:clamp(20px,5vw,30px)}
+  .sec h2{font-size:clamp(23px,7.2vw,34px);max-width:none}
+  .sec .lede{font-size:15px;max-width:none}
+  .state h2{max-width:none}
+  .facts b{font-size:18px}
+
+  .close{padding-top:clamp(46px,12vw,90px);padding-bottom:clamp(46px,12vw,90px)}
+  .close .big{font-size:clamp(30px,11vw,54px)}
+}
+
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
