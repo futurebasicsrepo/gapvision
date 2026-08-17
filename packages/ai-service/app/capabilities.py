@@ -101,6 +101,21 @@ def shift_telemetry(slug: str | None) -> bool:
     return bool(privacy.get(SHIFT_TELEMETRY))
 
 
+def checkout_links(slug: str | None) -> bool:
+    """May this tenant's floor mint checkout links at all?
+
+    Read from `config`, like floor comms and the widget deck: on unless a
+    store we actually reached said no. The privacy-blob switches protect
+    people from being recorded; this one is an operational preference, and
+    the store's Shopify token (which must carry write_draft_orders) is the
+    gate that actually binds.
+
+    Checked server-side on every mint, same as the camera: the client's copy
+    decides what to draw, never what the service will do.
+    """
+    return _config(slug or "").get("checkout_links") is not False
+
+
 def exists(slug: str | None) -> bool:
     """Is there a tenant with this slug at all?
 
@@ -151,4 +166,11 @@ def for_tenant(slug: str | None) -> dict[str, bool]:
         # is the associate's. Same posture and same default as floor comms —
         # only an explicit False from a store we reached turns it off.
         "widgets": cfg.get("widgets") is not False,
+        # Floor checkout links — a draft order the guest pays on their own
+        # phone. Config posture, not privacy: it touches no personal data the
+        # engagement hasn't already surfaced, and the binding gate is the
+        # store's own token, which simply lacks write_draft_orders until a
+        # merchant deliberately grants it. The switch exists so a store can
+        # turn the affordance off without touching scopes.
+        "checkout_links": checkout_links(slug),
     }

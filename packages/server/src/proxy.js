@@ -131,6 +131,30 @@ export function createAiProxy({ aiServiceUrl, apiKey, allowRoster = false }) {
   });
 
   /**
+   * A floor checkout link, minted with our key attached.
+   *
+   * Machine call, exactly like guest-context: the plugin is a static bundle
+   * that cannot hold the service key, and the AI service is the thing that
+   * holds the store's credential and re-reads the tenant's checkout switch.
+   * Nothing about the payment passes through here — the response is a URL
+   * (the store's own checkout) and an inert QR matrix the phone page draws.
+   */
+  router.post("/api/checkout-link", express.json(), async (req, res) => {
+    try {
+      const r = await fetch(`${aiServiceUrl}/api/checkout-link`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify(req.body ?? {}),
+      });
+      const body = await r.text();
+      res.status(r.status).type("application/json").send(body);
+    } catch (e) {
+      console.error(`[proxy] checkout-link failed: ${e.message}`);
+      res.status(502).json({ error: "upstream_unavailable" });
+    }
+  });
+
+  /**
    * One photograph of an object, on its way to the AI service.
    *
    * Its own JSON parser because the body is an image and the global one is

@@ -76,6 +76,12 @@ export interface Capabilities {
    *  in the closed direction — see the reader in main.ts — because a fetch we
    *  could not complete must not take the deck away for a whole shift. */
   widgets: boolean;
+  /** Whether the floor may mint checkout links — a draft order the guest pays
+   *  on their own phone at the store's own checkout. Same posture as
+   *  `floor_comms`: an operational switch, read like the others, and the
+   *  service re-reads the real flag on every mint. The card only hides when a
+   *  store we actually reached said no. */
+  checkout_links: boolean;
 }
 
 /**
@@ -92,6 +98,7 @@ export const NO_CAPABILITIES: Capabilities = { known: false,
   voice: false,
   floor_comms: false,
   widgets: false,
+  checkout_links: false,
 };
 
 /** Don't hold the HUD hostage to a slow store network. */
@@ -133,6 +140,7 @@ export async function fetchCapabilities(
       voice: body.voice === true,
       floor_comms: body.floor_comms === true,
       widgets: body.widgets === true,
+      checkout_links: body.checkout_links === true,
     };
   } catch {
     return { ...NO_CAPABILITIES };

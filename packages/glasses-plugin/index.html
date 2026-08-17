@@ -112,6 +112,25 @@
        by sending it again. */
     .floor-status.warn{color:var(--flame-300)}
     .floor-empty{font-family:var(--sans);font-size:14px;color:var(--sea-200);margin:8px 0 0}
+    /* The Checkout card. Same reader, same rules as the cards above. The item
+       rows reuse the floor picker's toggle (they are the same control: a set
+       of named things, some chosen), stretched full-width so a title and its
+       price sit at opposite ends. The QR is black-on-white deliberately — it
+       is the one element on this page a *guest's* camera has to read, and a
+       camera reads contrast, not brand. */
+    .co-items{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+    .co-item{display:flex;justify-content:space-between;align-items:center;
+      gap:10px;text-align:left;width:100%}
+    .co-price{flex:0 0 auto}
+    .co-result{display:none;margin-top:14px;text-align:center}
+    .co-result.show{display:block}
+    .co-qr{background:#fff;border-radius:9px;padding:10px;display:inline-block;
+      line-height:0}
+    .co-qr canvas{width:min(60vw,220px);height:auto;image-rendering:pixelated}
+    .co-total{font-family:var(--mono);font-size:13px;letter-spacing:.08em;
+      text-transform:uppercase;color:var(--paper);margin-top:10px}
+    .co-link{display:block;font-family:var(--mono);font-size:10.5px;
+      color:var(--sea-200);word-break:break-all;margin-top:6px}
     /* The Widgets card. Up/down rather than drag: a shop floor is one-handed
        and moving, and a drag target is the first affordance to fail there. */
     .widget-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
@@ -271,6 +290,13 @@
        with a ring; a keyboard can say the other thing, and this is the only
        surface in the product that has one. -->
   <div id="floor-mount"></div>
+
+  <!-- The Checkout card — the basket the floor just sold, paid on the guest's
+       own phone. Built by `mountCheckoutCard`, gated on `checkout_links` with
+       the floor card's posture: only a store we reached saying "no" removes
+       it. The QR it draws is the store's own checkout URL; nothing on this
+       page touches a payment. -->
+  <div id="checkout-mount"></div>
 
   <!-- The Widgets card — the deck the associate arranges, built by
        `mountWidgetsCard` and gated on the store's `widgets` capability the

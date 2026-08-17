@@ -19,7 +19,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import capabilities, db, mailer, retention, secrets_box, vision
+from . import capabilities, checkout, db, mailer, pos, retention, secrets_box, vision
 from .auth import KeyHeader, guard, startup_check
 from .crm_provider import TenantNotConfigured, get_crm_for, tenant_status
 from .llm import get_provider
@@ -349,6 +349,77 @@ def tenant_capabilities(request: Request, tenant: str = "gap",
     # along. Same rule as the Health panel's: unknown must never render as a
     # valid answer.
     return {**capabilities.for_tenant(tenant), "known": capabilities.exists(tenant)}
+
+
+class CheckoutItem(BaseModel):
+    """One line, in whichever vocabulary the floor has for it."""
+    code: str | None = None        # SKU or barcode — resolved against the store
+    variant_id: str | None = None  # already-resolved Shopify variant GID
+    title: str | None = None       # custom-line fallback
+    name: str | None = None        # alias for title (the lens payload's word)
+    price: float | None = None
+    qty: int = 1
+
+
+class CheckoutLinkRequest(BaseModel):
+    tenant: str | None = "gap"
+    guest_id: str | None = None    # attaches the customer: pre-fill + Shop Pay
+    items: list[CheckoutItem]
+    note: str | None = None
+    associate: str | None = None   # for the draft's note — attribution a
+                                   # merchant can read on the order itself
+
+
+@app.post("/api/checkout-link")
+def checkout_link(req: CheckoutLinkRequest, request: Request,
+                  x_gapvision_key: str | None = KeyHeader):
+    """Mint a Shopify-hosted checkout for the lines the floor just sold.
+
+    Path B of the payments exploration: the guest pays on their own phone at
+    the store's own checkout. Cue never touches the payment — the one write
+    is a draft order, and the response is a URL (plus an inert QR matrix the
+    phone page draws) that IS the store's checkout for those lines.
+
+    Guarded like every data endpoint: it spends the store's credential and
+    names a guest. The capability gate is re-read server-side per call —
+    `checkout.build_link` refuses for a store that switched it off, whatever
+    a stale client believes.
+    """
+    guard(request, req.tenant, x_gapvision_key)
+
+    try:
+        return checkout.build_link(
+            _crm(req.tenant),
+            (req.tenant or "gap").lower(),
+            [i.model_dump() for i in req.items],
+            guest_id=req.guest_id,
+            note=req.note,
+            associate=req.associate,
+        )
+    except checkout.CheckoutRefused as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+
+
+class PosVerifyRequest(BaseModel):
+    token: str
+
+
+@app.post("/api/pos/verify")
+def pos_verify(req: PosVerifyRequest, request: Request,
+               x_gapvision_key: str | None = KeyHeader):
+    """Check a Shopify POS session token and say whose till it is.
+
+    Called by the realtime server (never by a browser) before it hands the
+    POS extension the floor's live engagements. Guarded with the tenant slug
+    "pos" — a name that is deliberately not in DEMO_TENANTS, so this door
+    needs the service key even when the deployment runs in demo mode: the
+    answer maps a token onto a tenant, which is not demo data.
+    """
+    guard(request, "pos", x_gapvision_key)
+    try:
+        return pos.verify_session_token(req.token)
+    except pos.PosVerifyRefused as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
 
 
 class VisionAnalyzeRequest(BaseModel):
