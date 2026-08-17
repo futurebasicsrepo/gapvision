@@ -24,7 +24,7 @@
 import type { Card } from "./cards";
 
 /** Every widget that can appear in the deck, in the order they are offered. */
-export type WidgetId = "customer" | "inventory" | "messaging";
+export type WidgetId = "customer" | "inventory" | "messaging" | "promos";
 
 export interface WidgetSpec {
   id: WidgetId;
@@ -34,6 +34,21 @@ export interface WidgetSpec {
   blurb: string;
   /** Which card kinds this widget contributes, in deck order. */
   kinds: string[];
+  /**
+   * Where the content comes from.
+   *
+   * `live` — the package builds these cards from the engagement payload.
+   * `feed` — the cards are rows the control plane sent, and the package only
+   *          draws them.
+   *
+   * The distinction is the one that decides whether a *new* widget costs a
+   * release. A feed widget is a row in `tenant_feeds` plus an entry in this
+   * catalogue; a live one is code. Kyle, 17 Aug 2026, asked for widgets that
+   * plug in rather than forcing a rebuild each time — this is how far that
+   * can honestly go, and PROMOS is the first instance rather than a special
+   * case.
+   */
+  content: "live" | "feed";
 }
 
 /**
@@ -50,18 +65,38 @@ export const WIDGETS: WidgetSpec[] = [
     label: "Customer",
     blurb: "Their sizes, cart, order history, shipping and contact.",
     kinds: ["SIZES", "CART", "HISTORY", "SHIP", "CONTACT"],
+    content: "live",
   },
   {
     id: "inventory",
     label: "Inventory",
     blurb: "What to offer, with price, stock and where it is on the floor.",
     kinds: ["PICK"],
+    content: "live",
   },
   {
     id: "messaging",
     label: "Messaging",
     blurb: "The floor channel — what is waiting, and what you can say back.",
     kinds: ["FLOOR"],
+    content: "live",
+  },
+  {
+    // The first widget that is data rather than code.
+    //
+    // Kyle, 17 Aug 2026: the source is a marketing asset — a PDF or a live
+    // feed at a URL — not hand-typed copy. That is why the rows live in
+    // `tenant_feeds` with a validity window and an ingest source, and why the
+    // package's whole contribution here is "draw a titled list of lines".
+    //
+    // Nothing about this widget is promotion-specific, which is the point:
+    // announcements, shift notes and the "other useful information" slot are
+    // the same shape and can be added as data.
+    id: "promos",
+    label: "Promotions",
+    blurb: "What is running in store today, from your marketing feed.",
+    kinds: ["PROMO"],
+    content: "feed",
   },
 ];
 

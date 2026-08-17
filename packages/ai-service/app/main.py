@@ -19,7 +19,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import capabilities, checkout, db, mailer, pos, retention, secrets_box, vision
+from . import (capabilities, checkout, db, mailer, pos, retention, secrets_box,
+               vision, widgets)
 from .auth import KeyHeader, guard, startup_check
 from .crm_provider import TenantNotConfigured, get_crm_for, tenant_status
 from .llm import get_provider
@@ -349,6 +350,59 @@ def tenant_capabilities(request: Request, tenant: str = "gap",
     # along. Same rule as the Health panel's: unknown must never render as a
     # valid answer.
     return {**capabilities.for_tenant(tenant), "known": capabilities.exists(tenant)}
+
+
+@app.get("/api/tenant/widgets")
+def tenant_widgets(request: Request, tenant: str = "gap",
+                   x_gapvision_key: str | None = KeyHeader):
+    """The content of every data-defined widget, for this store, right now.
+
+    Separate from `/api/tenant/capabilities` because they answer different
+    questions and change at different rates: capabilities are switches a
+    plugin branches on, and this is *content* a plugin draws. Mixing them
+    would mean re-fetching the switchboard every time a promotion's window
+    opened.
+
+    Only feed-backed widgets appear here. `customer`, `inventory` and
+    `messaging` are rendered from live engagement data by the package itself
+    and have nothing to fetch.
+
+    The validity window is applied server-side. A client deciding what is
+    "current" would drift with the phone's clock, which on a shop floor is a
+    device somebody set by hand.
+    """
+    guard(request, tenant, x_gapvision_key)
+    row = db.query_one("SELECT id FROM tenants WHERE slug = %s", (tenant,))
+    if row is None:
+        # Same posture as capabilities: unknown must not render as a valid
+        # empty answer, or a typo in a launch URL looks like a store with no
+        # promotions running.
+        return {"known": False, "widgets": {}}
+    return {
+        "known": True,
+        "widgets": {w: widgets.live(row["id"], w) for w in widgets.FEED_WIDGETS},
+    }
+
+
+class WidgetPrefs(BaseModel):
+    user_id: str
+    prefs: dict
+
+
+@app.put("/api/tenant/widget-prefs")
+def put_widget_prefs(req: WidgetPrefs, request: Request,
+                     x_gapvision_key: str | None = KeyHeader):
+    """Save an associate's deck order.
+
+    Service key, and the `user_id` comes from the realtime server, which
+    resolved it from the device's own provision token — not from anything the
+    phone typed. The phone page has no session of its own (the G2 identifies
+    by serial), so this is the only conduit, and it is the same shape as the
+    device door: a server that already holds the key vouching for a client
+    that cannot.
+    """
+    guard(request, None, x_gapvision_key)
+    return {"prefs": widgets.save_prefs(req.user_id, req.prefs or {})}
 
 
 class CheckoutItem(BaseModel):

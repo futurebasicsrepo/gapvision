@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from . import (analytics, connections, crm_credentials, crm_provider, db, devices, identity,
+               widgets as widget_feeds,
                mailer, retention, secrets_box, shifts)
 from .identity import BearerHeader, current_user, require, scope_tenant
 
@@ -208,6 +209,76 @@ def _crm_payload(tenant: dict, probe: dict | None = None) -> dict:
     if probe is not None:
         out["test"] = probe
     return out
+
+
+class FeedItem(BaseModel):
+    widget: str
+    title: str
+    lines: list[str] = []
+    starts_at: str | None = None
+    ends_at: str | None = None
+    source: str = "manual"
+    source_ref: str | None = None
+    position: int = 0
+
+
+@router.get("/tenants/{id_or_slug}/feeds/{widget}")
+def list_feed(id_or_slug: str, widget: str, authorization: str | None = BearerHeader):
+    """Everything in a data-defined widget, live or not.
+
+    The authoring view, so it deliberately includes rows outside their window
+    — an admin editing promotions needs to see the one that ended yesterday.
+    `/api/tenant/widgets` is the lens's view and shows only what is current.
+    """
+    me = current_user(authorization)
+    require(me, "manager")
+    tenant = _own_tenant(me, id_or_slug)
+    if widget not in widget_feeds.FEED_WIDGETS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{widget} is not a data-defined widget. "
+                   f"These are: {', '.join(widget_feeds.FEED_WIDGETS)}.")
+    return {"widget": widget, "items": widget_feeds.all_for(tenant["id"], widget)}
+
+
+@router.post("/tenants/{id_or_slug}/feeds", status_code=201)
+def create_feed(id_or_slug: str, req: FeedItem,
+                authorization: str | None = BearerHeader):
+    """Add a row to a data-defined widget.
+
+    `client_admin`, not manager: this writes something every associate in the
+    store will read on the glass, which is the same class of act as changing
+    what the floor can do.
+    """
+    me = current_user(authorization)
+    require(me, "client_admin")
+    tenant = _own_tenant(me, id_or_slug)
+    if req.widget not in widget_feeds.FEED_WIDGETS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{req.widget} is not a data-defined widget. "
+                   f"These are: {', '.join(widget_feeds.FEED_WIDGETS)}.")
+    if not req.title.strip():
+        raise HTTPException(status_code=400, detail="A title is required")
+    return {"item": widget_feeds.create(
+        tenant["id"], widget=req.widget, title=req.title, lines=req.lines,
+        starts_at=req.starts_at, ends_at=req.ends_at, source=req.source,
+        source_ref=req.source_ref, position=req.position)}
+
+
+@router.delete("/tenants/{id_or_slug}/feeds/{feed_id}")
+def delete_feed(id_or_slug: str, feed_id: str,
+                authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "client_admin")
+    tenant = _own_tenant(me, id_or_slug)
+    try:
+        gone = widget_feeds.delete(tenant["id"], feed_id)
+    except Exception:
+        gone = False  # not a valid uuid
+    if not gone:
+        raise HTTPException(status_code=404, detail="No such item")
+    return {"deleted": feed_id}
 
 
 @router.get("/tenants/{id_or_slug}/connections")
