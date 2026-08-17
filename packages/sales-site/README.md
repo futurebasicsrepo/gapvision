@@ -53,6 +53,22 @@ act on. The log is the fallback, not the system.
 Console defaults to `https://sales.cuesea.ai`, so if the domain above is what
 you use, `VITE_SALES_URL` is belt and braces rather than required.
 
+## What `vercel.json` does, since it cannot say so itself
+
+Vercel validates this file against a schema that rejects unknown properties, so
+the reasoning lives here rather than in a `comment` key — which is how the first
+deploy of this project failed:
+
+- **`X-Frame-Options: DENY`.** These decks get opened on a laptop in an office
+  we do not control. Nothing here should be frameable, because a deck inside
+  somebody else's chrome is a deck whose gate can be dressed up as theirs.
+- **`nosniff` and a strict referrer policy.** Ordinary hygiene for a public
+  document that accepts a POST.
+- **A one-day cache on the PDF.** The usual answer is a long cache with a
+  revision in the filename, but this file is regenerated from the page it
+  accompanies and keeps its name. Cached longer, a recipient re-downloads last
+  week's argument.
+
 ## The one sentence that must not get softened
 
 **The gate is a lead gate, not authentication.** Anyone can delete `gate=1`
