@@ -988,7 +988,7 @@ function TenantDetail({ tenant, onChanged }) {
                             <div className="meta">{d.serial}</div>
                           )}
                         </td>
-                        <td>
+                        <td data-label="Surface">
                           {/* `sim` reads distinct on purpose — a demo device
                               that looks like a pair of glasses is how demo
                               traffic ends up in a pilot's numbers. */}
@@ -996,7 +996,7 @@ function TenantDetail({ tenant, onChanged }) {
                             {surface?.label || d.surface}
                           </span>
                         </td>
-                        <td>
+                        <td data-label="Assigned to">
                           {/* Assigning is a whole job of this table, so it's a
                               control rather than a value with an edit affordance
                               hidden behind it. */}
@@ -1017,8 +1017,8 @@ function TenantDetail({ tenant, onChanged }) {
                             ))}
                           </select>
                         </td>
-                        <td><span className={`pill ${state.cls}`}>{state.label}</span></td>
-                        <td><span className="machine">{when(d.last_seen_at)}</span></td>
+                        <td data-label="State"><span className={`pill ${state.cls}`}>{state.label}</span></td>
+                        <td data-label="Last seen"><span className="machine">{when(d.last_seen_at)}</span></td>
                         <td>
                           <div className="btn-row">
                             <button className="btn small ghost"
@@ -1117,18 +1117,18 @@ export default function Tenants() {
                   <tr key={t.id}
                       className={`clickable ${selected?.slug === t.slug ? "selected" : ""}`}
                       onClick={() => setSelected(selected?.slug === t.slug ? null : t)}>
-                    <td>{t.name}</td>
+                    <td data-label="Retailer">{t.name}</td>
                     <td className="ident">{t.slug}</td>
-                    <td><span className="pill muted">{t.billing_plan}</span></td>
-                    <td>
+                    <td data-label="Plan"><span className="pill muted">{t.billing_plan}</span></td>
+                    <td data-label="Status">
                       {t.status === "active"
                         ? <span className="machine">active</span>
                         : <span className="pill flame">{t.status}</span>}
                     </td>
-                    <td className="num">{compact(t.users)}</td>
-                    <td className="num">{compact(t.engagements)}</td>
-                    <td className="num">{compact(t.voice_queries)}</td>
-                    <td className="num">{Math.round((Number(t.stt_seconds) || 0) / 60)}</td>
+                    <td data-label="People" className="num">{compact(t.users)}</td>
+                    <td data-label="Engagements" className="num">{compact(t.engagements)}</td>
+                    <td data-label="Voice" className="num">{compact(t.voice_queries)}</td>
+                    <td data-label="STT min" className="num">{Math.round((Number(t.stt_seconds) || 0) / 60)}</td>
                   </tr>
                 ))}
               </tbody>

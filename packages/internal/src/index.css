@@ -302,7 +302,15 @@ body::before {
 .span-4 { grid-column: span 4; }
 .span-6 { grid-column: span 6; }
 .span-8 { grid-column: span 8; }
-.span-12 { grid-column: span 12; }
+/* `1 / -1`, not `span 12`. The two are identical on a twelve-track grid and
+   nothing alike below it: the narrow breakpoints re-track the grid to six and
+   then two columns, and a `span 12` item on a two-column grid does not clamp —
+   it creates ten implicit tracks and drags the whole panel to about 1018px on a
+   390px screen. Every panel with a full-width card was doing this, which is
+   most of them: cards in side-by-side slivers, text clipped at the right edge,
+   the page scrolling sideways. `1 / -1` means "first line to last" at any track
+   count and cannot come apart the same way. */
+.span-12 { grid-column: 1 / -1; }
 
 .stat { display: flex; flex-direction: column; gap: 3px; }
 .stat-label {
@@ -993,4 +1001,67 @@ body::before {
 @media (max-width:620px){
   .sales-tabs{flex-direction:column}
   .sales-tab{width:100%}
+}
+
+/* ---------- Marketing ----------
+   Rows of "here is a thing, and here is the honest state of it". Not a table:
+   every row's note is a sentence rather than a value, and a table would make
+   the sentences fight the columns. */
+.channel-list { display: flex; flex-direction: column; }
+.channel { padding: 12px 0; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.channel:first-child { border-top: 0; }
+.channel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* The note is the point of the row — it says *why* something is not connected,
+   which is the part a person can act on. Sentence case, sans, measured. */
+.channel-note {
+  font-family: var(--sans); font-size: 12.5px; letter-spacing: 0;
+  text-transform: none; line-height: 1.5; margin: 6px 0 0; max-width: 62ch;
+}
+.runnable + .runnable { margin-top: 18px; }
+.runnable .rail-section-label { margin-bottom: 2px; }
+
+/* ---------- Tables on a phone ----------
+   A table is a grid of values that only means anything next to its column
+   heading. On a 390px screen there is no room for the grid, and the two usual
+   answers both fail: shrinking the type makes it unreadable, and scrolling it
+   sideways hides the row identity you are scrolling *for* — you end up looking
+   at a value with no idea whose it is.
+
+   So below 700px a table stops being a table. Each row becomes a block, each
+   cell carries its own heading from `data-label`, and the identity cell sits
+   at the top in the app's own ident type. Same DOM, same semantics for a
+   screen reader, no second component to keep in step with the first.
+
+   A cell with no `data-label` renders with no heading, which is right for
+   action cells — a row of buttons does not want the word "actions" above it. */
+@media (max-width: 700px) {
+  .table-wrap { overflow-x: visible; }
+  .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+  /* Headings live on the cells now. Hidden accessibly rather than removed, so
+     the table still reads as a table to anything that announces one. */
+  .table thead {
+    position: absolute; width: 1px; height: 1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .table tr {
+    border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 10px; background: rgba(255, 255, 255, 0.02);
+  }
+  .table td {
+    border: 0; padding: 6px 0; text-align: left;
+  }
+  .table td::before {
+    content: attr(data-label);
+    display: block; margin-bottom: 3px;
+    font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+    letter-spacing: 0.15em; text-transform: uppercase; color: var(--slate-300);
+  }
+  .table td:not([data-label])::before { content: none; }
+  /* The identity cell leads the block and needs no heading — it is the row's
+     name, and labelling it "device" above a device's name is noise. */
+  .table td.ident::before { content: none; }
+  .table td.ident { font-size: 14px; padding-top: 0; }
+  /* Actions wrap rather than crowd; each stays a full touch target. */
+  .table td .btn-row { flex-wrap: wrap; }
+  .table .assign { max-width: 100%; width: 100%; }
 }

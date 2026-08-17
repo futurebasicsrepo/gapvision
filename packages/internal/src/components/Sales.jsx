@@ -261,12 +261,12 @@ export default function Sales() {
             <tbody>
               {mine.map((r) => (
                 <tr key={r.token}>
-                  <td>{r.to || <span className="muted">— no recipient —</span>}</td>
-                  <td>
+                  <td data-label="Prepared for">{r.to || <span className="muted">— no recipient —</span>}</td>
+                  <td data-label="Gate">
                     {r.gate ? <span className="tag on">email</span> : <span className="tag">open</span>}
                   </td>
-                  <td className="mono">{new Date(r.at).toLocaleDateString()}</td>
-                  <td className="mono muted">{r.token}</td>
+                  <td data-label="Created" className="mono">{new Date(r.at).toLocaleDateString()}</td>
+                  <td data-label="Token" className="mono muted">{r.token}</td>
                   <td className="right">
                     <button className="btn small" onClick={() => copy(linkFor(deck, r), r.token)}>
                       {copied === r.token ? "Copied" : "Copy"}
@@ -319,11 +319,11 @@ export default function Sales() {
             <tbody>
               {deckLeads.map((l, i) => (
                 <tr key={l.id || i}>
-                  <td>{l.name}</td>
-                  <td className="mono">{l.email}</td>
-                  <td>{l.firm || <span className="muted">—</span>}</td>
-                  <td>{l.preparedFor || <span className="muted">—</span>}</td>
-                  <td className="mono">{new Date(l.at).toLocaleString()}</td>
+                  <td data-label="Name">{l.name}</td>
+                  <td data-label="Email" className="mono">{l.email}</td>
+                  <td data-label="Company">{l.firm || <span className="muted">—</span>}</td>
+                  <td data-label="Prepared for">{l.preparedFor || <span className="muted">—</span>}</td>
+                  <td data-label="Opened" className="mono">{new Date(l.at).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>

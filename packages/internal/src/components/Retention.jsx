@@ -100,16 +100,16 @@ export default function Retention() {
               const backlog = !!t.more_remaining;
               return (
                 <tr key={t.slug}>
-                  <td>{t.name || t.slug}<span className="machine"> · {t.slug}</span></td>
-                  <td className="num">{t.retention_days}d</td>
-                  <td>{swept
+                  <td data-label="Store">{t.name || t.slug}<span className="machine"> · {t.slug}</span></td>
+                  <td data-label="Window" className="num">{t.retention_days}d</td>
+                  <td data-label="Last sweep">{swept
                     ? <span className="machine">{when(t.last_run)}</span>
                     : <span className="pill hot">never</span>}</td>
-                  <td className="num">{swept ? (t.voice_redacted || 0) : "—"}</td>
-                  <td className="num">{swept ? (t.engagements_redacted || 0) : "—"}</td>
-                  <td className="num">{swept ? (t.assists_redacted || 0) : "—"}</td>
-                  <td className="num">{swept ? (t.requests_redacted || 0) : "—"}</td>
-                  <td>
+                  <td data-label="Voice" className="num">{swept ? (t.voice_redacted || 0) : "—"}</td>
+                  <td data-label="Engagements" className="num">{swept ? (t.engagements_redacted || 0) : "—"}</td>
+                  <td data-label="Assists" className="num">{swept ? (t.assists_redacted || 0) : "—"}</td>
+                  <td data-label="Requests" className="num">{swept ? (t.requests_redacted || 0) : "—"}</td>
+                  <td data-label="State">
                     {!swept ? <span className="machine">unproven</span>
                       : backlog ? <span className="pill hot">more to do</span>
                       : <span className="machine">clear</span>}
