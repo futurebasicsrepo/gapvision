@@ -762,3 +762,56 @@ body::after {
   .view-switch button, .linkish { min-height: 44px; }
   .linkish { padding: 0 6px; }
 }
+
+/* ---------- Devices ----------
+   A store's own glasses. Studio has no table vocabulary and does not want one:
+   these ride the same `.row` inset the floor roster uses, so a retailer's admin
+   meets a list they have already read once. */
+
+/* Row controls sit among data rather than among labelled fields, so they are
+   sized to the row and not to the 44px form scale. The row is not a touch
+   target itself, and every action in it is also reachable at full size on a
+   phone, where `.row-right` wraps. */
+.btn.small {
+  font-size: 12.5px; padding: 6px 12px; min-height: 34px; border-radius: 8px;
+  /* A visible edge. `.btn` is transparent on both, which reads as a link in a
+     paragraph and as nothing at all in a row of data — and every control in
+     this row is a write. */
+  border-color: rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.04);
+}
+.btn.small:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+.assign {
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--slate-100); font-family: var(--sans); font-size: 12.5px;
+  padding: 5px 8px; border-radius: 8px; cursor: pointer; max-width: 180px;
+}
+.assign:focus-visible { outline: 2px solid var(--sea-300); outline-offset: 2px; }
+
+.add-device { display: grid; gap: 10px; max-width: 380px; margin: 12px 0; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > span {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--slate-300);
+}
+/* 16px, not smaller: anything under it makes iOS zoom the page on focus, and a
+   form that jumps when tapped feels broken in a way people cannot name. */
+.input-inline {
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--slate-100); font-family: var(--sans); font-size: 16px;
+  padding: 10px 12px; border-radius: 10px; min-height: 44px;
+}
+.input-inline:focus-visible { outline: 2px solid var(--sea-300); outline-offset: 2px; }
+
+/* The one-time code. Louder than a note because what it holds cannot be
+   recovered — dismissing it early costs a reissue, not a lookup. */
+.minted {
+  border: 1px solid var(--sea-500); border-radius: 12px; padding: 14px;
+  background: rgba(30, 90, 110, 0.16); color: var(--slate-100);
+}
+/* White ground, always: a QR inverted by a dark panel does not scan. */
+.qr { display: block; background: #fff; border-radius: 6px; padding: 6px; }
+.launch-url {
+  font-family: var(--mono); font-size: 11.5px; word-break: break-all; line-height: 1.5;
+  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px; padding: 8px 10px;
+}

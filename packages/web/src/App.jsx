@@ -7,6 +7,7 @@ import SetPassword from "./components/SetPassword.jsx";
 import ManagerDashboard from "./components/ManagerDashboard.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import Settings from "./components/Settings.jsx";
+import Devices from "./components/Devices.jsx";
 import AssociateView from "./components/AssociateView.jsx";
 
 /** Which views a role may open. An associate has no business in here at all —
@@ -18,10 +19,16 @@ const VIEWS = {
   // staff are deliberately absent: they have Console, and a second door into a
   // retailer's configuration — from a surface where the store came out of a
   // switcher — is how the wrong shop gets changed.
-  client_admin: ["floor", "settings"],
+  //
+  // Glasses sits beside Settings and under the same rule: handing out an
+  // identity that registers as this store is the same class of act as changing
+  // what the floor can do, and the API agrees — minting is `client_admin`.
+  client_admin: ["floor", "glasses", "settings"],
   cue_admin: ["floor"],
 };
-const LABELS = { floor: "Floor", settings: "Settings", simulator: "Simulator" };
+const LABELS = {
+  floor: "Floor", glasses: "Glasses", settings: "Settings", simulator: "Simulator",
+};
 
 /** The one path this app answers on other than `/`. Read once, before React
  *  renders anything, because the answer cannot change without a navigation. */
@@ -139,6 +146,7 @@ export default function App() {
       </div>
 
       {view === "floor" && <ManagerDashboard user={user} />}
+      {view === "glasses" && <Devices user={user} />}
       {view === "settings" && <Settings user={user} />}
       {view === "simulator" && (
         <>
