@@ -43,6 +43,10 @@ import { api } from "../api.js";
 const STATE = {
   connected: { label: "connected", cls: "on" },
   available: { label: "ready to connect", cls: "" },
+  // Built, but not from here. The POS tile is deployed to a merchant's own
+  // till with the Shopify CLI; "ready to connect" would send an admin hunting
+  // for a button that is not and should not be on this page.
+  external: { label: "built · set up in Shopify", cls: "" },
   planned: { label: "not built yet", cls: "muted" },
   exploring: { label: "researched, not decided", cls: "muted" },
 };
@@ -92,6 +96,16 @@ function System({ s }) {
           )}
           {!s.last_tested_at && <span className="meta muted">never tested</span>}
         </div>
+      )}
+
+      {/* A live per-tenant fact, not a general note. The POS tile verifies
+          each till against the client secret stored with this store's Shopify
+          connection, so a store on a legacy admin token has every till
+          refused — and the place that is currently discoverable is a 503 at
+          the counter, mid-sale, in front of a customer. */}
+      {s.blocked_by && <p className="conn-warn">{s.blocked_by}</p>}
+      {s.ready === true && (
+        <p className="meta">This store's connection can verify a till.</p>
       )}
 
       {scopesMissing && (
