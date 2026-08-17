@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en" data-pdf="/cuesea-preseed.pdf">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>cuesea — the floor's request-and-answer loop</title>
+<meta name="description" content="Just-in-time context for the person standing in front of the customer. Anonymous presence in, grounded answer out.">
+<meta name="theme-color" content="#141920">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231A2029'/%3E%3Cpath d='M16 5a11 11 0 1 0 8.4 18.1' fill='none' stroke='%23F6F6F4' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='3.1' fill='%23FF6B2C'/%3E%3C/svg%3E">
+<meta property="og:title" content="cuesea — the floor's request-and-answer loop">
+<meta property="og:description" content="Anonymous presence in, grounded answer out. Pre-seed, August 2026.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Doto:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/deck.css">
+</head>
+<body>
+<div class="ambient" aria-hidden="true"><div class="bloom b1"></div><div class="bloom b2"></div><div class="bloom b3"></div></div>
+
+<header class="bar">
+  <a class="mark" href="#top">cue<span class="s">sea</span></a>
+  <div class="sec" id="secLabel">01 — THE FLOOR'S REQUEST-AND-ANSWER LOOP</div>
+  <div class="acts">
+    <button class="btn" id="shareBtn" type="button">Share</button>
+    <a class="btn pri" id="pdfBtn" href="/cuesea-preseed.pdf" download>PDF</a>
+  </div>
+</header>
+<div class="prog" id="prog"></div>
+
+<main id="top">
+
+<!-- 01 ───────────────────────────────────────────── HERO -->
+<section class="hero" data-sec="01 — THE FLOOR'S REQUEST-AND-ANSWER LOOP">
+  <div class="hero-in">
+    <div>
+      <div class="forwho" id="forwho"></div>
+      <h1 class="wordmark">cue<span class="hl">sea</span></h1>
+      <h2 data-decode>The floor's request-and-answer loop.</h2>
+      <p class="lede">Just-in-time context for the person standing in front of the customer.
+        Anonymous presence in, grounded answer out — to whatever they already carry.</p>
+      <div class="rule"></div>
+      <div class="chips">
+        <span class="chip">Pre-seed · $1.5M</span>
+        <span class="chip">August 2026</span>
+        <span class="chip f">Live in production</span>
+      </div>
+      <div class="scrollcue"><i></i> Scroll</div>
+    </div>
+    <div>
+      <div class="lens-wrap">
+        <div class="lens" id="heroLens">
+          <div class="pad">
+            <div class="l-head"><span>CUE</span><span class="l-lat">0.4S</span></div>
+            <div class="l-body">
+              <div class="l-rail">
+                <div class="l-name">SARAH CHEN</div>
+                <ul class="l-facts"><li>ICON</li><li>TOP M</li><li>BTM 28X30</li></ul>
+              </div>
+              <div class="l-card">
+                <div class="t">CUE · 1/3</div>
+                <div class="l-line">LEFT THE CASHSOFT CREW</div>
+                <div class="l-line">SWEATER IN THEIR CART</div>
+                <div class="l-line">OFFER IT IN SIZE M</div>
+              </div>
+            </div>
+            <div class="l-foot"><span>DENIM WALL · 4200 PTS</span><span>1/3</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="lens-cap">Even Realities G2 · verified on device · 14 Aug 2026</div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 ───────────────────────────────────────── PROBLEM -->
+<section data-sec="02 — THE PROBLEM" data-obs>
+  <p class="eyebrow rise">01 / The problem</p>
+  <h2 class="rise wide" data-decode>The job got harder. The training got shorter.</h2>
+  <div class="grid g4">
+    <div class="pane rise"><div class="stat" data-count="77" data-suffix="%">0%</div>
+      <p style="margin-top:14px">of associates say customers now expect them to find stock on the spot — up from 66% in 2015.</p>
+      <div class="src">Red Ant / OnePoll, 2025</div></div>
+    <div class="pane rise"><div class="stat" data-count="63" data-suffix="%">0%</div>
+      <p style="margin-top:14px">get less than half a day of training before they are on the floor — up from 58% in 2015.</p>
+      <div class="src">Red Ant / OnePoll, 2025</div></div>
+    <div class="pane rise"><div class="stat" data-count="52" data-suffix="%">0%</div>
+      <p style="margin-top:14px">of retailers say associates leave the floor 2–3 hours a shift doing manual lookups.</p>
+      <div class="src">ServiceNow / Retail Dive, May 2026</div></div>
+    <div class="pane rise"><div class="stat flame" data-count="196" data-prefix="$" data-suffix="B">$0B</div>
+      <p style="margin-top:14px">lost annually to in-store execution failure — 6.4% of gross sales, up from 4.5% two years ago.</p>
+      <div class="src">Coresight, n=200 — sponsored study</div></div>
+  </div>
+  <div class="pane sea rise" style="margin-top:18px">
+    <h3 style="max-width:44ch">Expectations of the associate rose eighteen points in a decade while training investment fell.</h3>
+    <p style="margin-top:12px;max-width:80ch">That gap cannot be trained shut. It has to be delivered — at the moment of service,
+      to someone whose hands are busy and whose eyes are on a person.</p>
+  </div>
+</section>
+
+<!-- 03 ───────────────────────────────────────── INSIGHT -->
+<section data-sec="03 — THE INSIGHT" data-obs>
+  <p class="eyebrow rise">02 / The insight</p>
+  <h2 class="rise wide">Presence and identity are not the same event.</h2>
+  <div class="pane rise" style="margin-top:28px">
+    <h3 style="max-width:none;font-size:clamp(19px,2.9vw,29px);line-height:1.3">
+      <span style="color:var(--fg2)">The cue needs to know who you are.</span>
+      <span class="hl">A request only needs to know where you are.</span>
+    </h3>
+  </div>
+  <div class="grid g2">
+    <div class="pane rise">
+      <div class="lens-wrap" style="max-width:520px">
+        <div class="lens">
+          <div class="pad">
+            <div class="l-head"><span>REQUEST</span><span>0.3S</span></div>
+            <div class="l-body">
+              <div class="l-rail">
+                <div class="l-name">NO NAME</div>
+                <ul class="l-facts"><li>ROOM 3</li><li>OPEN 40S</li><li>DENIM</li></ul>
+              </div>
+              <div class="l-card">
+                <div class="t">FLOOR · 1/1</div>
+                <div class="l-line">FITTING ROOM 3 WANTS A 32</div>
+                <div class="l-line">IN THE BARREL JEAN</div>
+                <div class="l-line">TWO ON THE WALL</div>
+              </div>
+            </div>
+            <div class="l-foot"><span>DENIM WALL</span><span>CLAIM</span></div>
+          </div>
+        </div>
+      </div>
+      <p style="margin-top:18px"><strong>Completely actionable. Names nobody.</strong>
+        No CRM. No customer account. No app install. No loyalty programme. No consent problem.
+        It works on day one in a store that has never collected a single email address.</p>
+    </div>
+    <div class="pane rise">
+      <p class="k">Why it is the wedge</p>
+      <ul class="tick">
+        <li>Not a feature Shopify ships or has signalled.</li>
+        <li>Not what Endear or Tulip sell — they sell outreach to customers you already know.</li>
+        <li>It dissolves the cold-start problem that kills every clienteling deployment.</li>
+        <li>Customer depth becomes the upsell rather than the prerequisite.</li>
+      </ul>
+      <p style="margin-top:22px">Clienteling is what the product becomes once a merchant opts customers in.
+        It is the expansion, not the entry.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 04 ─────────────────────────────── PINNED: THE ROOM -->
+<section class="pin" id="rooms" data-sec="04 — ONE PRODUCT, THREE ROOMS">
+  <div class="pin-in">
+    <div class="pin-grid">
+      <div>
+        <p class="eyebrow">03 / The room</p>
+        <h2>Any worker whose hands are busy and whose eyes are on a person.</h2>
+        <div class="steps" style="margin-top:26px">
+          <div class="step on" data-step="0">
+            <div class="k">Retail</div><h3>The fitting room</h3>
+            <p>A size request, answered at the wall, without leaving the customer.</p>
+          </div>
+          <div class="step" data-step="1">
+            <div class="k">Hospitality</div><h3>The table</h3>
+            <p>An allergy and a returning guest's usual, before the greeting.</p>
+          </div>
+          <div class="step" data-step="2">
+            <div class="k">Field service</div><h3>The unit</h3>
+            <p>The last service call and the part number, hands on the panel.</p>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="lens-wrap">
+          <div class="lens" id="roomLens">
+            <div class="pad">
+              <div class="l-head"><span id="rTag">CUE</span><span id="rLat">0.4S</span></div>
+              <div class="l-body">
+                <div class="l-rail">
+                  <div class="l-name" id="rName">NO NAME</div>
+                  <ul class="l-facts" id="rFacts"><li>ROOM 3</li><li>OPEN 40S</li><li>DENIM</li></ul>
+                </div>
+                <div class="l-card">
+                  <div class="t" id="rMod">FLOOR · 1/3</div>
+                  <div class="l-line" data-rl="0">FITTING ROOM 3 WANTS A 32</div>
+                  <div class="l-line" data-rl="1">IN THE BARREL JEAN</div>
+                  <div class="l-line" data-rl="2">TWO ON THE WALL</div>
+                </div>
+              </div>
+              <div class="l-foot"><span id="rZone">DENIM WALL</span><span id="rIdx">1/3</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="lens-cap">The same grammar, three industries. Under 60 characters, always.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 ───────────────────────────────────────── PRODUCT -->
+<section data-sec="05 — THE PRODUCT" data-obs>
+  <p class="eyebrow rise">04 / The product</p>
+  <h2 class="rise wide">Anonymous presence in. Grounded answer out.</h2>
+  <div class="rise" style="margin-top:34px">
+    <svg class="pipe pipe-h" viewBox="0 0 1120 210" role="img" aria-label="The sea to currents to depth to the cue">
+      <path class="track" d="M90 105 H1030"/>
+      <path class="flow" style="--len:940" d="M90 105 H1030"/>
+      <g class="pulse"><circle r="6" cx="90" cy="105">
+        <animate attributeName="cx" from="90" to="1030" dur="2.2s" begin="0.2s" fill="freeze"/>
+      </circle></g>
+      <g>
+        <circle class="node" cx="90" cy="105" r="15"/>
+        <text class="lbl" x="90" y="58" text-anchor="middle">THE SEA</text>
+        <text class="sub" x="90" y="152" text-anchor="middle">DATA SOURCES</text>
+      </g>
+      <g>
+        <circle class="node" cx="403" cy="105" r="15"/>
+        <text class="lbl" x="403" y="58" text-anchor="middle">CURRENTS</text>
+        <text class="sub" x="403" y="152" text-anchor="middle">CONNECTIONS</text>
+      </g>
+      <g>
+        <circle class="node" cx="716" cy="105" r="15"/>
+        <text class="lbl" x="716" y="58" text-anchor="middle">DEPTH</text>
+        <text class="sub" x="716" y="152" text-anchor="middle">RANKING + GROUNDING</text>
+      </g>
+      <g>
+        <circle class="node hot" cx="1030" cy="105" r="15"/>
+        <text class="lbl" x="1030" y="58" text-anchor="middle">THE CUE</text>
+        <text class="sub" x="1030" y="152" text-anchor="middle">ONE LINE, DELIVERED</text>
+      </g>
+    </svg>
+    <svg class="pipe pipe-v" viewBox="0 0 340 300" role="img" aria-label="The sea to currents to depth to the cue">
+      <path class="track" d="M28 26 V276"/>
+      <path class="flow" style="--len:250" d="M28 26 V276"/>
+      <g class="pulse"><circle r="5" cx="28" cy="26">
+        <animate attributeName="cy" from="26" to="276" dur="2.2s" begin="0.2s" fill="freeze"/>
+      </circle></g>
+      <g><circle class="node" cx="28" cy="26" r="10"/>
+        <text class="lbl" x="54" y="23" style="font-size:19px">THE SEA</text>
+        <text class="sub" x="54" y="41" style="font-size:13px">DATA SOURCES</text></g>
+      <g><circle class="node" cx="28" cy="109" r="10"/>
+        <text class="lbl" x="54" y="106" style="font-size:19px">CURRENTS</text>
+        <text class="sub" x="54" y="124" style="font-size:13px">CONNECTIONS</text></g>
+      <g><circle class="node" cx="28" cy="192" r="10"/>
+        <text class="lbl" x="54" y="189" style="font-size:19px">DEPTH</text>
+        <text class="sub" x="54" y="207" style="font-size:13px">RANKING + GROUNDING</text></g>
+      <g><circle class="node hot" cx="28" cy="276" r="10"/>
+        <text class="lbl" x="54" y="273" style="font-size:19px">THE CUE</text>
+        <text class="sub" x="54" y="291" style="font-size:13px">ONE LINE, DELIVERED</text></g>
+    </svg>
+  </div>
+  <div class="grid g4">
+    <div class="pane rise"><p class="k">01 · The sea</p><p>Shopify orders, variants and stock. Store notes. Inventory beyond the POS. Whatever the merchant already keeps.</p></div>
+    <div class="pane rise"><p class="k">02 · Currents</p><p>One adapter contract per source. Per-tenant credentials sealed AES-256-GCM under a key the database never sees.</p></div>
+    <div class="pane rise"><p class="k">03 · Depth</p><p>Ranks what matters in this moment and answers only from records held. Never a model's guess about stock.</p></div>
+    <div class="pane rise"><p class="k">04 · The cue</p><p>Under 60 characters, in the line of sight or in the ear. No dashboard. No lookup. No broken eye contact.</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:18px">
+    <div class="pane rise"><p class="k hud">Three seconds, hands free</p>
+      <p>Double-press the temple, ask, and the answer lands in the glass — speech to text to grounded
+        answer in roughly three seconds. The same sentence renders on a phone, a handheld or a wrist.</p></div>
+    <div class="pane rise"><p class="k hud">Consent as architecture</p>
+      <p>Camera-free. Opt-in only. No biometrics, no ambient recording of customers, retention enforced
+        per tenant with a receipt for every sweep.</p></div>
+  </div>
+</section>
+
+<!-- 06 ──────────────────────────────────────── TRACTION -->
+<section data-sec="06 — WHERE WE ARE" data-obs>
+  <p class="eyebrow rise">05 / Where we are</p>
+  <h2 class="rise">This is not a deck-stage company.</h2>
+  <p class="lede rise">Built solo. In production. Every claim below is running code, not roadmap.</p>
+  <div class="grid g3">
+    <div class="pane rise"><p class="k hud">Live in production</p><p>One deployment, many merchants. Per-tenant Shopify credentials sealed AES-256-GCM under a key Postgres never sees. Any Shopify POS retailer connects themselves — no app review, no second deployment.</p></div>
+    <div class="pane rise"><p class="k hud">Running on real hardware</p><p>Plugin confirmed on Even Realities G2 — cards rendering in-lens, ring gestures and the full voice round trip verified on device, 14 August 2026.</p></div>
+    <div class="pane rise"><p class="k hud">Voice, end to end</p><p>Double-press → mic → transcription → grounded answer in-lens in ~3s. Answers read the customer record: sizes, cart, history, tier.</p></div>
+    <div class="pane rise"><p class="k hud">A real catalogue to fail against</p><p>300 products, 1,385 variants, 100 customers, 290 orders on a live store — sizing deliberately inconsistent, a fifth of variants at zero. A catalogue where everything is in stock proves nothing.</p></div>
+    <div class="pane rise"><p class="k hud">Consent architecture, shipped</p><p>Camera-free. Opt-in at every tier. Roster enumeration deliberately closed. Retention enforced per tenant, with a receipt for every sweep.</p></div>
+    <div class="pane rise"><p class="k hud">Back office + enterprise interest</p><p>Console and Studio live: tenants, devices, floor queue, attribution. Integration spec authored for a Gap Inc. pilot conversation — unsigned, and treated as a logo, not a forecast.</p></div>
+  </div>
+</section>
+
+<!-- 07 ───────────────────────────────────── DEFENSIBILITY -->
+<section data-sec="07 — WHY US" data-obs>
+  <p class="eyebrow rise">06 / Why us</p>
+  <h2 class="rise wide">Three claims survive scrutiny. Three is enough.</h2>
+  <div class="grid" style="grid-template-columns:1fr">
+    <div class="row rise"><div class="num">01</div><h3>Zero-lookup delivery</h3>
+      <p>Endear, Tulip, Salesfloor, Clientbook and Shopify POS all require the associate to break eye contact,
+        pick up a device and search. cuesea is the only one where the answer arrives without leaving the interaction.
+        The claim is about the moment, not the frame — it holds on a wrist, an earpiece, a handheld or a lens.</p></div>
+    <div class="row rise"><div class="num">02</div><h3>Grounded, not generated</h3>
+      <p>Answers come from records held, never a model's guess about stock. “I can't see stock right now” is a
+        different sentence from “we don't carry that”, and we treat that distinction as core engineering.
+        54% of retailers name integration and 40% name data quality as their top AI blocker — honesty about what
+        we don't know is an enterprise claim, not a feature.</p></div>
+    <div class="row rise"><div class="num">03</div><h3>Consent as architecture</h3>
+      <p>Camera-free by default. Opt-in at every tier — tap, QR, wallet pass — never passive matching. No ambient
+        recording of customers. Per-tenant sealed credentials that no cuesea surface and no cuesea employee can read
+        back. This is precisely what dies in an enterprise security review, and it is already built.</p></div>
+  </div>
+</section>
+
+<!-- 08 ────────────────────────────────────────── MARKET -->
+<section data-sec="08 — MARKET" data-obs>
+  <p class="eyebrow rise">07 / Market</p>
+  <h2 class="rise wide">$5–10B today. Three methods, one order of magnitude.</h2>
+  <div class="grid g2">
+    <div class="rise">
+      <div class="grid" style="grid-template-columns:1fr;margin-top:0">
+        <div class="pane"><p class="k">A · Locations</p>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:14px">
+            <p>2.2–3.3M associate-served locations globally × $2,000–4,200 per location</p>
+            <div class="stat" style="font-size:22px;white-space:nowrap">$4.4–13.9B</div></div></div>
+        <div class="pane"><p class="k">B · Seats</p>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:14px">
+            <p>9–13M addressable associate seats globally × $180–600 per seat</p>
+            <div class="stat" style="font-size:22px;white-space:nowrap">$1.6–7.8B</div></div></div>
+        <div class="pane"><p class="k">C · Top-down</p>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:14px">
+            <p>Gartner retail enterprise IT spend $232.8B × 1.5–3% associate-facing</p>
+            <div class="stat" style="font-size:22px;white-space:nowrap">$3.5–7.0B</div></div></div>
+        <div class="pane sea"><h3 style="font-size:19px">Converged: $5–10B/yr, growing to $15–20B by 2030.</h3>
+          <p style="margin-top:10px">No Tier-1 analyst sizes this category directly. Three unrelated methods landing
+            in one order of magnitude is the strongest statement available.</p>
+          <div class="src">Built from BLS headcount, US Census retail and Gartner IT spend. We do not cite a published
+            “clienteling market size” — every such figure online traces to one content farm.</div></div>
+      </div>
+    </div>
+    <div class="rise">
+      <p class="k" style="font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--fg3)">What we actually address</p>
+      <div class="bars">
+        <div class="bar-row"><div class="top"><span class="lab">TAM</span><span class="val hl">$5–10B</span></div>
+          <div class="track2"><div class="fill" data-w="100"></div></div>
+          <div class="cap">Global associate-facing store software</div></div>
+        <div class="bar-row"><div class="top"><span class="lab">SAM</span><span class="val hl">$960M</span></div>
+          <div class="track2"><div class="fill f2" data-w="72"></div></div>
+          <div class="cap">267k mid-market specialty locations @ $3,600/loc/yr</div></div>
+        <div class="bar-row"><div class="top"><span class="lab">Beachhead</span><span class="val hl">$130–325M</span></div>
+          <div class="track2"><div class="fill f3" data-w="48"></div></div>
+          <div class="cap">36k–90k staffed Shopify retail locations in target verticals</div></div>
+        <div class="bar-row"><div class="top"><span class="lab">SOM · year 3</span><span class="val hl-f">$6–18M</span></div>
+          <div class="track2"><div class="fill f4" data-w="26"></div></div>
+          <div class="cap">500–1,500 self-serve locations + 20–40 mid-market chains</div></div>
+      </div>
+      <div class="note">Sanity check: after two roll-ups, the category's #1 player serves ~100 enterprise logos.
+        Any model producing $100M ARR here by year three is inconsistent with the observable facts.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 09 ───────────────────────────────────── COMPETITION -->
+<section data-sec="09 — COMPETITION" data-obs>
+  <p class="eyebrow rise">08 / Competition</p>
+  <h2 class="rise wide">The category is consolidating. That is the opening.</h2>
+  <div class="grid g2">
+    <div class="quad rise">
+      <div class="ax h"></div><div class="ax v"></div>
+      <div class="ed" style="top:6px;left:0;right:0">Answer delivered</div>
+      <div class="ed" style="bottom:6px;left:0;right:0">Associate searches</div>
+      <div class="ed" style="left:2px;top:44%;width:76px">Needs a known customer</div>
+      <div class="ed" style="right:2px;top:44%;width:76px">Works anonymously</div>
+      <div class="dot us" style="left:70%;top:26%"><i></i><span>cuesea</span></div>
+      <div class="dot" style="left:30%;top:60%"><i></i><span>Endear</span></div>
+      <div class="dot" style="left:22%;top:70%"><i></i><span>Tulip + Salesfloor</span></div>
+      <div class="dot" style="left:29%;top:80%"><i></i><span>Clientbook</span></div>
+      <div class="dot" style="left:20%;top:90%"><i></i><span>Shopify POS + Sidekick</span></div>
+    </div>
+    <div>
+      <div class="grid" style="grid-template-columns:1fr;margin-top:0">
+        <div class="pane rise"><p class="k hl" style="color:var(--sea2)">Tulip + Salesfloor</p>
+          <p>Merged March 2026 — the third roll-up in eighteen months. The combined entity serves roughly
+            100 enterprise logos. Categories consolidate when they mature and margins compress, not when
+            they are being land-grabbed.</p></div>
+        <div class="pane rise"><p class="k" style="color:var(--sea2)">Endear</p>
+          <p>Shopify Plus certified, $350/location/month published, and it raised $6M of growth equity in 2025
+            while deliberately declining venture. The sharpest near-term threat: it can bolt an LLM layer onto
+            an installed base cheaply.</p></div>
+        <div class="pane rise"><p class="k" style="color:var(--sea2)">Shopify POS</p>
+          <p>Ships customer profiles, order history and notes for free, and put Sidekick into POS in June 2026.
+            So we do not sell retrieval. We sell delivery, grounding, and presence without identity — none of
+            which POS has any form of.</p></div>
+        <div class="rise"><h3 class="hl-f" style="margin-top:6px">We enter below the suite, on a floor-operations job the suite does not do.</h3></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 ─────────────────────────────────────────── MODEL -->
+<section data-sec="10 — MODEL" data-obs>
+  <p class="eyebrow rise">09 / Model</p>
+  <h2 class="rise wide">Priced at the level of a POS seat, not a category budget.</h2>
+  <div class="grid g3">
+    <div class="pane rise"><p class="k">Shopify-native</p><div class="stat">$79–149</div>
+      <div class="src">per location / month</div>
+      <p style="margin-top:14px">Self-serve. The merchant creates their own custom app, so there is no Shopify review
+        and no second deployment on our side. Phone-first — no hardware required to start.</p></div>
+    <div class="pane rise"><p class="k">Mid-market direct</p><div class="stat">$50–150k</div>
+      <div class="src">ACV · 10–50 store chains</div>
+      <p style="margin-top:14px">Paid twelve-week pilot with a measured holdout, converting to annual.
+        Five to eight logos a quarter is the plan, not a hundred.</p></div>
+    <div class="pane rise"><p class="k">Glasses</p><div class="stat" style="color:var(--fg3)">$0</div>
+      <div class="src">never a line item</div>
+      <p style="margin-top:14px">Cue Lens is an output tier, not a SKU. No pilot requires a merchant to buy hardware,
+        and no revenue in this model depends on one.</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:18px">
+    <div class="pane rise">
+      <p class="k">Modelled ARR path</p>
+      <div class="arr">
+        <div class="col"><span class="n">$0.2M</span><div class="b" data-h="1"></div><span class="y">YR 1</span></div>
+        <div class="col"><span class="n">$1.6M</span><div class="b" data-h="8"></div><span class="y">YR 2</span></div>
+        <div class="col"><span class="n">$9.0M</span><div class="b" data-h="47"></div><span class="y">YR 3</span></div>
+        <div class="col"><span class="n">$14.5M</span><div class="b" data-h="76"></div><span class="y">YR 4</span></div>
+        <div class="col"><span class="n">$19.0M</span><div class="b" data-h="100"></div><span class="y">YR 5</span></div>
+      </div>
+    </div>
+    <div class="pane rise"><p class="k">Illustrative model, not a forecast</p>
+      <p>Year 3 sits inside the $6–18M band the market work produces; year 5 inside $13–25M.
+        Anything claiming $100M ARR in this category by year three contradicts the observable facts
+        about the incumbents.</p>
+      <div class="src">Pricing anchor: Endear's published $350/location/month, less a multi-store discount.
+        Shopify POS Pro is $89/location/month.</div>
+      <p style="margin-top:16px">Raydiant is the cautionary tale we price against: retail buyers on 3–5% margins
+        cut the category line item first. Sitting beside a POS seat rather than above it is a survival choice.</p></div>
+  </div>
+</section>
+
+<!-- 11 ───────────────────────────────────────── BEAR CASE -->
+<section data-sec="11 — THE BEAR CASE" data-obs>
+  <p class="eyebrow flame rise">10 / Risk</p>
+  <h2 class="rise">The bear case, in our own words.</h2>
+  <p class="lede rise">Everything below is the argument against us. We would rather hand it to you than have you find it.</p>
+  <div class="grid g3">
+    <div class="pane rise"><p class="k flame">No publishing path</p><p>Meta's wearables toolkit is developer preview only — its own FAQ says publishing is not available. No store, no permission model, no MDM.</p></div>
+    <div class="pane rise"><p class="k flame">No fleet procurement</p><p>Ray-Ban Display is US-only and international expansion was paused in January 2026 on supply. A forty-store chain cannot buy four hundred units.</p></div>
+    <div class="pane rise"><p class="k flame">Supply below the user base</p><p>~3.0M display glasses ship globally in 2026. The US alone employs 4.21M retail sales workers.</p></div>
+    <div class="pane rise"><p class="k flame">The incumbent's ceiling</p><p>Vuzix has sold head-worn computing to frontline workers for fifteen years. FY2025: $6.3M revenue, $32.3M net loss.</p></div>
+    <div class="pane rise"><p class="k flame">Retail voted mobile</p><p>Kroger's associate assistant is mobile. Shopify shipped a handheld in June 2026. Zero named retail sales-floor glasses deployments exist anywhere.</p></div>
+    <div class="pane rise"><p class="k flame">And the seed bar is revenue</p><p>Many 2026 funds want $300–500k ARR at seed. We are pre-revenue with an unsigned pilot — which is exactly why this is a pre-seed.</p></div>
+  </div>
+  <div class="pane sea rise" style="margin-top:18px">
+    <p style="font-size:16px"><strong>So we are not a glasses company.</strong> We are the context layer, delivered to
+      whatever the associate already carries — phone, handheld, earpiece or lens. Glass is an option we own cheaply:
+      demoed live, promised for nothing. Convergence plausibly lands 2027–2028, and we will already be there.</p>
+  </div>
+</section>
+
+<!-- 12 ─────────────────────────────────────────── PLAN -->
+<section data-sec="12 — THE PLAN" data-obs>
+  <p class="eyebrow rise">11 / The plan</p>
+  <h2 class="rise">Spend the money on exactly one number.</h2>
+  <div class="pane rise" style="margin-top:26px">
+    <h3 class="hl" style="font-size:clamp(21px,3.4vw,31px);max-width:none">Incremental revenue per associate per shift.</h3>
+    <p style="margin-top:12px;max-width:88ch">Measured in three pilot chains, against a holdout. Tulip publishes a decade
+      of ROI case studies — we cannot out-market that. We can out-measure it.</p>
+  </div>
+  <div class="grid g3">
+    <div class="pane rise"><p class="k">Months 0–3</p><h3>Prove the answer</h3>
+      <ul class="tick">
+        <li>Completeness semantics shipped — “I can't see stock” separated from “we don't carry it”</li>
+        <li>Shopify App Store listing live; self-serve onboarding end to end</li>
+        <li>Three paid twelve-week pilots signed, holdout designed before the first install</li>
+      </ul></div>
+    <div class="pane rise"><p class="k">Months 3–9</p><h3>Prove the lift</h3>
+      <ul class="tick">
+        <li>Pilots run to completion with attribution instrumented from day one</li>
+        <li>The number published, with its method and its error bars</li>
+        <li>25+ locations live; first mid-market chain converted to annual</li>
+      </ul></div>
+    <div class="pane rise"><p class="k flame">Months 9–18</p><h3>Prove the motion</h3>
+      <ul class="tick">
+        <li>150–400 locations; $300–600k ARR</li>
+        <li>Second data source beyond Shopify; hospitality or field-service design partner</li>
+        <li>Seed raised on evidence, not narrative</li>
+      </ul></div>
+  </div>
+</section>
+
+<!-- 13 ──────────────────────────────────────────── ASK -->
+<section class="ask" data-sec="13 — THE ASK" data-obs>
+  <p class="eyebrow rise">12 / The ask</p>
+  <h2 class="rise" data-decode>$1.5M pre-seed.</h2>
+  <p class="lede rise">Eighteen months of runway to $300–600k ARR and one defensible attribution number.
+    We are raising a pre-seed rather than a seed deliberately: the 2026 seed bar is revenue, and this round
+    buys the right to show it rather than the claim of having it.</p>
+  <div class="ask-grid">
+    <div>
+      <div class="grid" style="grid-template-columns:1fr;margin-top:0">
+        <div class="use rise"><span class="pc">45%</span><span class="t">Engineering</span><span class="d">Completeness semantics, multi-source ingestion, App Store release, two hires</span></div>
+        <div class="use rise"><span class="pc">25%</span><span class="t">Pilots + measurement</span><span class="d">Three chains, holdout design, attribution instrumentation</span></div>
+        <div class="use rise"><span class="pc">20%</span><span class="t">Go to market</span><span class="d">Shopify listing, mid-market direct motion, first sales hire</span></div>
+        <div class="use rise"><span class="pc">10%</span><span class="t">Ops, legal, hardware</span><span class="d">Security review readiness, tags and beacons, devices for pilots</span></div>
+      </div>
+      <div class="contact">
+        <span>Kyle · The Future Basics</span>
+        <a href="mailto:kyle@thefuturebasics.com">kyle@thefuturebasics.com</a>
+        <a href="https://cuesea.ai">cuesea.ai</a>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:22px">
+        <a class="btn pri" href="/cuesea-preseed.pdf" download>Download the deck</a>
+        <button class="btn" type="button" onclick="document.getElementById('shareBtn').click()">Share this page</button>
+      </div>
+    </div>
+    <div class="rise">
+      <div class="lens-wrap">
+        <div class="lens">
+          <div class="pad">
+            <div class="l-head"><span>CUESEA</span><span>PRE-SEED</span></div>
+            <div class="l-body">
+              <div class="l-rail">
+                <div class="l-name">$1.5M</div>
+                <ul class="l-facts"><li>18 MONTHS</li><li>3 PILOTS</li><li>1 NUMBER</li></ul>
+              </div>
+              <div class="l-card">
+                <div class="t">ASK · 1/1</div>
+                <div class="l-line">INCREMENTAL REVENUE PER</div>
+                <div class="l-line">ASSOCIATE PER SHIFT</div>
+                <div class="l-line">MEASURED AGAINST A HOLDOUT</div>
+              </div>
+            </div>
+            <div class="l-foot"><span>KYLE · THE FUTURE BASICS</span><span>AUG 2026</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="lens-cap">The one number this round buys</div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer><div class="in2">
+  <span>cuesea · pre-seed · confidential</span>
+  <span id="stamp">August 2026</span>
+</div></footer>
+
+<!-- share sheet -->
+<div class="scrim" id="shareScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Share">
+    <h3>Share this deck</h3>
+    <p>A link anyone can open. Add a recipient to personalise the header, or gate it to capture the email first.</p>
+    <label class="field"><span>Prepared for (optional)</span><input id="shareTo" type="text" placeholder="Acme Ventures" autocomplete="off"></label>
+    <label style="display:flex;align-items:center;gap:10px;margin:14px 0 4px;cursor:pointer">
+      <input type="checkbox" id="shareGate" style="width:18px;height:18px;accent-color:#2E7FD0">
+      <span style="font-size:14px;color:var(--fg2)">Ask for an email before showing the deck</span>
+    </label>
+    <div class="linkbox" id="shareLink" style="margin-top:14px"></div>
+    <div class="acts">
+      <button class="btn pri" id="copyLink" type="button">Copy link</button>
+      <button class="btn" id="nativeShare" type="button" hidden>Send…</button>
+      <a class="btn" href="/cuesea-preseed.pdf" download>Download PDF</a>
+      <button class="btn" id="closeShare" type="button">Close</button>
+    </div>
+    <div class="copied" id="copied">Copied to clipboard</div>
+  </div>
+</div>
+
+<!-- email gate -->
+<div class="scrim" id="gateScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Continue to the deck">
+    <h3 id="gateTitle">cue<span class="hl">sea</span> — pre-seed</h3>
+    <p>Tell us who you are and the deck opens. One line, no follow-up you didn't ask for.</p>
+    <label class="field"><span>Name</span><input id="gName" type="text" autocomplete="name"></label>
+    <label class="field"><span>Work email</span><input id="gEmail" type="email" inputmode="email" autocomplete="email"></label>
+    <label class="field"><span>Firm (optional)</span><input id="gFirm" type="text" autocomplete="organization"></label>
+    <div class="acts"><button class="btn pri" id="gateGo" type="button">Open the deck</button></div>
+    <div class="copied" id="gateErr" style="color:var(--flame2)">A work email, please</div>
+  </div>
+</div>
+
+<script>
+window.CUE_HERO = [
+  ["LEFT THE CASHSOFT CREW","SWEATER IN THEIR CART","OFFER IT IN SIZE M"],
+  ["ASKED FOR A 32 IN BARREL","TWO ON THE DENIM WALL","LAST PAIR IN STORE"],
+  ["ICON MEMBER SINCE 2019","NEVER BOUGHT OUTERWEAR","NEW ARRIVALS AT THE FRONT"]
+];
+window.CUE_ROOMS = [
+  { tag:"REQUEST", lat:"0.3S", name:"NO NAME", facts:["ROOM 3","OPEN 40S","DENIM"],
+    mod:"FLOOR \u00b7 1/3", zone:"DENIM WALL", idx:"1/3",
+    lines:["FITTING ROOM 3 WANTS A 32","IN THE BARREL JEAN","TWO ON THE WALL"] },
+  { tag:"CUE", lat:"0.4S", name:"TABLE 12", facts:["RETURNING","NO SHELLFISH","2 GUESTS"],
+    mod:"FLOOR \u00b7 2/3", zone:"SECTION B", idx:"2/3",
+    lines:["ALLERGY ON FILE \u00b7 NO SHELLFISH","USUAL IS THE ALBARINO","LAST IN 14 MARCH"] },
+  { tag:"CUE", lat:"0.4S", name:"UNIT 44B", facts:["SERVICED 9 MO","WARRANTY 11 MO","PART 3F-220"],
+    mod:"FLOOR \u00b7 3/3", zone:"ROOF PLANT", idx:"3/3",
+    lines:["LAST CALL WAS THE SAME FAULT","CONDENSER FAN \u00b7 PART 3F-220","ONE IN THE VAN"] }
+];
+</script>
+<script src="/assets/deck.js" defer></script>
+</body>
+</html>

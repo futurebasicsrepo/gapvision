@@ -302,7 +302,15 @@ body::before {
 .span-4 { grid-column: span 4; }
 .span-6 { grid-column: span 6; }
 .span-8 { grid-column: span 8; }
-.span-12 { grid-column: span 12; }
+/* `1 / -1`, not `span 12`. The two are identical on a twelve-track grid and
+   nothing alike below it: the narrow breakpoints re-track the grid to six and
+   then two columns, and a `span 12` item on a two-column grid does not clamp —
+   it creates ten implicit tracks and drags the whole panel to about 1018px on a
+   390px screen. Every panel with a full-width card was doing this, which is
+   most of them: cards in side-by-side slivers, text clipped at the right edge,
+   the page scrolling sideways. `1 / -1` means "first line to last" at any track
+   count and cannot come apart the same way. */
+.span-12 { grid-column: 1 / -1; }
 
 .stat { display: flex; flex-direction: column; gap: 3px; }
 .stat-label {
@@ -886,3 +894,174 @@ body::before {
 .lens-sim-wrap { border-radius: 12px; overflow: hidden; background: #05070A; }
 .lens-sim { display: block; width: 100%; height: 760px; border: 0; }
 @media (max-width: 900px) { .lens-sim { height: 1180px; } }
+
+/* ---------- Sales ----------
+   Lifted from the drop as-is apart from the note below. Console keeps every
+   panel's styling in this one sheet rather than beside its component, so
+   this arrives here rather than as a second import — one place to read when
+   a token changes. */
+
+.sales-head{
+  display:flex;gap:20px;align-items:flex-start;justify-content:space-between;
+  flex-wrap:wrap;margin-bottom:22px;
+}
+.sales-head h1{margin:0 0 6px}
+.sales-sub{margin:0;color:var(--slate-200);max-width:62ch}
+
+.sales .card{
+  background:var(--slate-700);border:1px solid var(--slate-600);border-radius:16px;
+  padding:20px 22px;margin-bottom:16px;
+}
+.sales .k{
+  font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--slate-300);margin:0 0 10px;
+}
+.sales .meta{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--slate-300);margin:8px 0 0}
+.sales .muted{color:var(--slate-300)}
+.sales .mono{font-family:var(--mono);font-size:11.5px;letter-spacing:.04em}
+
+.sales-deck{display:flex;gap:22px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.sales-deck h2{margin:0 0 4px;font-size:22px}
+.sales-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.sales-compose{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap}
+.sales-compose .field{flex:1 1 240px;min-width:220px}
+.sales .field span{
+  display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--slate-300);margin-bottom:6px;
+}
+.sales .field input{
+  width:100%;min-height:44px;font-size:16px;   /* 16px or iOS zooms on focus */
+  color:var(--slate-100);background:rgba(255,255,255,.04);
+  border:1px solid var(--slate-600);border-radius:10px;padding:0 12px;
+}
+.sales-check{display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;color:var(--slate-200);font-size:14px}
+.sales-check input{width:18px;height:18px;accent-color:var(--sea-500)}
+
+.sales-rowhead{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap}
+.sales-table{width:100%;border-collapse:collapse;margin-top:12px}
+.sales-table th{
+  text-align:left;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--slate-300);padding:0 10px 8px 0;border-bottom:1px solid var(--slate-600);
+}
+.sales-table td{padding:11px 10px 11px 0;border-bottom:1px solid var(--slate-600);font-size:14px;color:var(--slate-100);vertical-align:middle}
+.sales-table td.right{text-align:right;white-space:nowrap}
+.sales-table .btn.small{padding:0 10px;min-height:32px;font-size:10px;margin-left:6px}
+
+.sales .tag{
+  display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+  padding:4px 8px;border-radius:999px;border:1px solid var(--slate-600);color:var(--slate-300);
+}
+/* Sea, not green. Green marks what the product itself says, and it lives in
+   the lens — a table of green pills is exactly the wall of ticks that trains
+   you to stop reading them. */
+.sales .tag.on{color:var(--sea-200);border-color:rgba(62,155,232,.35)}
+
+.sales .empty{color:var(--slate-200);font-size:14px;margin:6px 0 0;max-width:76ch;line-height:1.6}
+.sales .empty code{font-family:var(--mono);font-size:12px;color:var(--sea-200)}
+/* One flame per region, and this is it: the sentence that stops someone
+   treating a lead gate as protection. */
+.sales .warn-note{
+  margin:14px 0 0;padding-left:12px;border-left:2px solid var(--flame);
+  color:var(--slate-200);font-size:12.5px;line-height:1.6;max-width:80ch;
+}
+
+@media (max-width:860px){
+  .sales-deck,.sales-head{align-items:stretch}
+  .sales-actions .btn{flex:1 1 auto}
+  /* A five-column table does not fit a phone. Rows become blocks with their
+     header as a label, rather than a horizontal scroll nobody discovers. */
+  .sales-table thead{display:none}
+  .sales-table,.sales-table tbody,.sales-table tr,.sales-table td{display:block;width:100%}
+  .sales-table tr{border-bottom:1px solid var(--slate-600);padding:12px 0}
+  .sales-table td{border:0;padding:3px 0}
+  .sales-table td.right{text-align:left;margin-top:8px}
+  .sales-table .btn.small{margin:0 6px 0 0}
+}
+
+/* ── deck tabs ────────────────────────────────────────────
+   Two decks, two audiences. The active tab takes the flame edge — the same
+   idiom the rail uses for the active item, and the same budget: one. */
+.sales-tabs{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap}
+.sales-tab{
+  display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+  min-height:52px;padding:9px 16px;cursor:pointer;border-radius:12px;
+  background:rgba(255,255,255,.03);border:1px solid var(--slate-600);color:var(--slate-200);
+  font:inherit;text-align:left;transition:background .2s ease,color .2s ease,border-color .2s ease;
+}
+.sales-tab:hover{background:rgba(255,255,255,.06);color:var(--slate-100)}
+.sales-tab.on{background:rgba(255,255,255,.07);color:var(--slate-100);box-shadow:inset 2px 0 0 var(--flame)}
+.sales-tab .t{font-size:14.5px;font-weight:600}
+.sales-tab .a{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-300)}
+
+.sales-covers{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:7px;max-width:70ch}
+.sales-covers li{position:relative;padding-left:16px;color:var(--slate-200);font-size:13.5px;line-height:1.5}
+.sales-covers li::before{content:"";position:absolute;left:0;top:8px;width:5px;height:5px;border-radius:50%;background:var(--sea-500)}
+
+@media (max-width:620px){
+  .sales-tabs{flex-direction:column}
+  .sales-tab{width:100%}
+}
+
+/* ---------- Marketing ----------
+   Rows of "here is a thing, and here is the honest state of it". Not a table:
+   every row's note is a sentence rather than a value, and a table would make
+   the sentences fight the columns. */
+.channel-list { display: flex; flex-direction: column; }
+.channel { padding: 12px 0; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.channel:first-child { border-top: 0; }
+.channel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* The note is the point of the row — it says *why* something is not connected,
+   which is the part a person can act on. Sentence case, sans, measured. */
+.channel-note {
+  font-family: var(--sans); font-size: 12.5px; letter-spacing: 0;
+  text-transform: none; line-height: 1.5; margin: 6px 0 0; max-width: 62ch;
+}
+.runnable + .runnable { margin-top: 18px; }
+.runnable .rail-section-label { margin-bottom: 2px; }
+
+/* ---------- Tables on a phone ----------
+   A table is a grid of values that only means anything next to its column
+   heading. On a 390px screen there is no room for the grid, and the two usual
+   answers both fail: shrinking the type makes it unreadable, and scrolling it
+   sideways hides the row identity you are scrolling *for* — you end up looking
+   at a value with no idea whose it is.
+
+   So below 700px a table stops being a table. Each row becomes a block, each
+   cell carries its own heading from `data-label`, and the identity cell sits
+   at the top in the app's own ident type. Same DOM, same semantics for a
+   screen reader, no second component to keep in step with the first.
+
+   A cell with no `data-label` renders with no heading, which is right for
+   action cells — a row of buttons does not want the word "actions" above it. */
+@media (max-width: 700px) {
+  .table-wrap { overflow-x: visible; }
+  .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+  /* Headings live on the cells now. Hidden accessibly rather than removed, so
+     the table still reads as a table to anything that announces one. */
+  .table thead {
+    position: absolute; width: 1px; height: 1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .table tr {
+    border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 10px; background: rgba(255, 255, 255, 0.02);
+  }
+  .table td {
+    border: 0; padding: 6px 0; text-align: left;
+  }
+  .table td::before {
+    content: attr(data-label);
+    display: block; margin-bottom: 3px;
+    font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+    letter-spacing: 0.15em; text-transform: uppercase; color: var(--slate-300);
+  }
+  .table td:not([data-label])::before { content: none; }
+  /* The identity cell leads the block and needs no heading — it is the row's
+     name, and labelling it "device" above a device's name is noise. */
+  .table td.ident::before { content: none; }
+  .table td.ident { font-size: 14px; padding-top: 0; }
+  /* Actions wrap rather than crowd; each stays a full touch target. */
+  .table td .btn-row { flex-wrap: wrap; }
+  .table .assign { max-width: 100%; width: 100%; }
+}

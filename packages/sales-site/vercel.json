@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        {
+          "comment": "These decks are sent to people who will open them at a laptop in an office they do not control. Nothing here should be frameable, because a deck inside somebody else's chrome is a deck whose gate can be dressed up as theirs.",
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
+      ]
+    },
+    {
+      "comment": "The leave-behind. Long cache with a revision in the filename is the usual answer, but this file is regenerated from the page it accompanies and keeps its name, so it must not be cached past a day or a recipient re-downloads last week's argument.",
+      "source": "/(.*).pdf",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    }
+  ]
+}

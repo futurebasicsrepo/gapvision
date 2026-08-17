@@ -27,6 +27,10 @@ const OUT = join(PKG, "src", "docs");
 const DOCS = [
   { from: join(ROOT, "FEATURES.md"), to: "features.md" },
   { from: join(ROOT, "docs", "onboarding.md"), to: "onboarding.md" },
+  // Learnings live in git rather than in a database or a browser: the two ways
+  // to lose one are a cleared profile and a note nobody can review, and a
+  // versioned file in the repo answers both.
+  { from: join(ROOT, "claude", "marketing-learnings.md"), to: "marketing-learnings.md" },
 ];
 
 const BANNER = (src) =>

@@ -9,6 +9,8 @@ import Staff from "./components/Staff.jsx";
 import Plates from "./components/Plates.jsx";
 import Retention from "./components/Retention.jsx";
 import LensSim from "./components/LensSim.jsx";
+import Sales from "./components/Sales.jsx";
+import Marketing from "./components/Marketing.jsx";
 import Architecture from "./components/Architecture.jsx";
 import Brand from "./components/Brand.jsx";
 import Doc from "./components/Doc.jsx";
@@ -37,6 +39,10 @@ const SECTIONS = [
       // Last in Platform rather than under Reference: it is a thing you drive,
       // not a thing you read.
       { key: "lens-sim", name: "Lens Sim", hint: "the Meta lens, no hardware" },
+      // Platform, not Reference: the decks are live state — who has been sent
+      // what, and who opened it — rather than something you read once.
+      { key: "sales", name: "Sales", hint: "the decks, and who has them" },
+      { key: "marketing", name: "Marketing", hint: "assets, channels, learnings" },
     ],
   },
   {
@@ -58,6 +64,8 @@ const TITLES = {
   retention: ["Retention", "Each store's window, and what the last sweep actually deleted."],
   plates: ["Plates", "Every printed door, how hard each is being used, and the one control that matters."],
   "lens-sim": ["Lens Sim", "The Meta lens, running the bundle the glasses run, with nothing to plug in."],
+  marketing: ["Marketing", "The assets, where outreach can happen, what can be run, and what we have actually learned."],
+  sales: ["Sales", "Both decks, as things you can send \u2014 open one, share a link, gate it behind an email, or hand over the PDF."],
   architecture: ["Architecture", "The system, the decisions behind it, and what's still missing."],
   features: ["What CueSea does", "Read off the code, not the roadmap — and honest about the difference."],
   onboarding: ["Onboarding a retailer", "Console only. No terminal, no code."],
@@ -226,6 +234,8 @@ export default function App() {
           {view === "plates" && <Plates />}
           {view === "retention" && <Retention />}
           {view === "lens-sim" && <LensSim />}
+          {view === "sales" && <Sales />}
+          {view === "marketing" && <Marketing />}
           {view === "architecture" && <Architecture />}
           {view === "features" && (
             <div className="card span-12"><Doc source={featuresMd} /></div>

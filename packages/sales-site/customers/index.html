@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en" data-pdf="/cuesea-for-the-floor.pdf">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>cuesea — the answer, where the customer is</title>
+<meta name="description" content="Your floor already knows the answer. cuesea puts it where the customer is — hands free, grounded in your own records, camera-free.">
+<meta name="theme-color" content="#141920">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231A2029'/%3E%3Cpath d='M16 5a11 11 0 1 0 8.4 18.1' fill='none' stroke='%23F6F6F4' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='3.1' fill='%23FF6B2C'/%3E%3C/svg%3E">
+<meta property="og:title" content="cuesea — the answer, where the customer is">
+<meta property="og:description" content="Just-in-time context for the person standing in front of the customer. Live on Shopify. Camera-free. No hardware required to start.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Doto:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/deck.css">
+<style>
+/* Page-local: the capability switcher. Everything else is the deck sheet. */
+.caps{display:grid;grid-template-columns:.85fr 1.15fr;gap:clamp(22px,4vw,52px);align-items:start;margin-top:clamp(26px,4vw,40px)}
+.cap{
+  display:block;width:100%;text-align:left;cursor:pointer;
+  background:transparent;border:0;border-left:1px solid var(--line);
+  padding:14px 0 14px 18px;color:inherit;font:inherit;
+  opacity:.42;transition:opacity .3s ease,border-color .3s ease;
+}
+.cap:hover{opacity:.75}
+.cap.on{opacity:1;border-color:var(--flame)}
+.cap .k{font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--fg3);margin-bottom:5px}
+.cap h3{margin:0 0 5px}
+.cap p{margin:0;color:var(--fg2);font-size:14px;line-height:1.55}
+.cap-state{position:sticky;top:calc(var(--bar-h) + 24px)}
+.cap-facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.cap-facts span{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--fg3);border:1px solid var(--line);border-radius:99px;padding:6px 11px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:clamp(12px,1.6vw,18px);margin-top:18px}
+.price{display:flex;align-items:baseline;gap:8px;margin:6px 0 2px}
+.price .n{font-size:clamp(30px,4.4vw,40px);font-weight:700;letter-spacing:-.03em;color:var(--sea2)}
+.price .u{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg3)}
+.weeks{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(12px,1.6vw,18px);margin-top:26px}
+.weeks .w{background:var(--bg2);border:1px solid var(--line);border-radius:var(--card);padding:clamp(18px,2.2vw,24px)}
+.weeks .n{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--fg3)}
+.edge{display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--hair)}
+.edge:last-child{border-bottom:0}
+.edge .t{font-weight:600;font-size:14.5px;min-width:210px;flex:none}
+.edge .d{color:var(--fg2);font-size:14px;line-height:1.55}
+@media print{
+  .cap-state{position:static}
+  .caps .mono{display:none}   /* nothing to tap on paper */
+}
+@media (max-width:900px){
+  .caps{grid-template-columns:1fr}
+  /* The glass leads on a phone and stays put: a tap on a capability below has
+     to be visibly answered, and a lens that has scrolled off screen answers
+     nothing. Solid fill, never blur — repeated surfaces stay cheap here. */
+  .cap-state{order:-1;position:sticky;top:calc(var(--bar-h) + 6px);z-index:5;
+    background:var(--bg);padding:10px 0 12px;border-bottom:1px solid var(--hair)}
+  .cap-facts{margin-top:10px}
+  .two,.weeks{grid-template-columns:1fr}
+  .edge{flex-direction:column;gap:4px}
+  .edge .t{min-width:0}
+}
+</style>
+</head>
+<body>
+<div class="ambient" aria-hidden="true"><div class="bloom b1"></div><div class="bloom b2"></div><div class="bloom b3"></div></div>
+
+<header class="bar">
+  <a class="mark" href="#top">cue<span class="s">sea</span></a>
+  <div class="sec" id="secLabel">01 — THE ANSWER, WHERE THE CUSTOMER IS</div>
+  <div class="acts">
+    <button class="btn" id="shareBtn" type="button">Share</button>
+    <a class="btn pri" id="pdfBtn" href="/cuesea-for-the-floor.pdf" download>PDF</a>
+  </div>
+</header>
+<div class="prog" id="prog"></div>
+
+<main id="top">
+
+<!-- 01 ───────────────────────────────────────────── HERO -->
+<section class="hero" data-sec="01 — THE ANSWER, WHERE THE CUSTOMER IS">
+  <div class="hero-in">
+    <div>
+      <div class="forwho" id="forwho"></div>
+      <h1 class="wordmark" style="font-size:clamp(38px,7.4vw,72px);line-height:1">The answer,<br>where the<br><span class="hl">customer is.</span></h1>
+      <p class="lede">Your floor already knows whether you have it in a 32. It just isn't where the
+        customer is standing. cuesea puts the answer in front of the person serving them — hands free,
+        in about three seconds, from your own records.</p>
+      <div class="rule"></div>
+      <div class="chips">
+        <span class="chip">Live on Shopify</span>
+        <span class="chip">Camera-free</span>
+        <span class="chip f">No hardware to start</span>
+      </div>
+      <div class="scrollcue"><i></i> Scroll</div>
+    </div>
+    <div>
+      <div class="lens-wrap">
+        <div class="lens" id="heroLens">
+          <div class="pad">
+            <div class="l-head"><span>CUE</span><span class="l-lat">0.4S</span></div>
+            <div class="l-body">
+              <div class="l-rail">
+                <div class="l-name">ROOM 3</div>
+                <ul class="l-facts"><li>OPEN 40S</li><li>DENIM</li><li>YOU</li></ul>
+              </div>
+              <div class="l-card">
+                <div class="t">FLOOR · 1/1</div>
+                <div class="l-line">BARREL JEAN IN A 32</div>
+                <div class="l-line">TWO ON THE DENIM WALL</div>
+                <div class="l-line">NONE IN THE BACK</div>
+              </div>
+            </div>
+            <div class="l-foot"><span>DENIM WALL</span><span>CLAIM</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="lens-cap">What the associate sees. Same sentence on a phone.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 ────────────────────────────────────────── THE COST -->
+<section data-sec="02 — WHAT IT COSTS YOU TODAY" data-obs>
+  <p class="eyebrow rise">01 / The floor today</p>
+  <h2 class="rise wide" data-decode>Every answer costs you a walk away from the customer.</h2>
+  <div class="grid g3">
+    <div class="pane rise"><div class="stat" data-count="52" data-suffix="%">0%</div>
+      <p style="margin-top:14px">of retailers say associates spend two to three hours a shift on manual lookups
+        instead of on the floor.</p>
+      <div class="src">ServiceNow / Retail Dive, May 2026</div></div>
+    <div class="pane rise"><div class="stat" data-count="77" data-suffix="%">0%</div>
+      <p style="margin-top:14px">of associates say customers now expect them to find stock on the spot —
+        up from 66% a decade ago.</p>
+      <div class="src">Red Ant / OnePoll, 2025</div></div>
+    <div class="pane rise"><div class="stat" data-count="63" data-suffix="%">0%</div>
+      <p style="margin-top:14px">get less than half a day of training before they are on the floor.
+        The expectation went up; the preparation went down.</p>
+      <div class="src">Red Ant / OnePoll, 2025</div></div>
+  </div>
+  <div class="pane sea rise" style="margin-top:18px">
+    <h3 style="max-width:46ch">Nobody loses the sale at the till. They lose it in the ninety seconds
+      the associate spends looking for a stockroom answer.</h3>
+    <p style="margin-top:12px;max-width:80ch">cuesea does not add a screen to that ninety seconds.
+      It removes the ninety seconds.</p>
+  </div>
+</section>
+
+<!-- 03 ─────────────────────────────────────── CAPABILITIES -->
+<section data-sec="03 — WHAT IT DOES" data-obs>
+  <p class="eyebrow rise">02 / What it does</p>
+  <h2 class="rise wide">Four things, and they all end in the same place.</h2>
+  <p class="lede rise">Pick one. The glass on the right is the real rendering — this is exactly what
+    the floor sees.</p>
+  <div class="caps">
+    <div>
+      <button class="cap on rise" data-cap="0" type="button">
+        <div class="k">Ask</div><h3>A question, answered out loud</h3>
+        <p>Double-press and ask. Transcribed, answered from your records, in the glass in about three
+          seconds. Sizes, stock, a customer's history, what is in their cart.</p>
+      </button>
+      <button class="cap rise" data-cap="1" type="button">
+        <div class="k">Requests</div><h3>The floor asks for what it needs</h3>
+        <p>A customer taps a plate in a fitting room and says what they want. It routes to whoever is
+          nearest, with a claim, a queue and a resolution — and it names nobody.</p>
+      </button>
+      <button class="cap rise" data-cap="2" type="button">
+        <div class="k">Presence</div><h3>Who is here, if they chose to say</h3>
+        <p>A tap, a scan, a wallet pass or your own app. Opt-in at every door. Then the card:
+          sizes, tier, last purchase, the cart they abandoned online this morning.</p>
+      </button>
+      <button class="cap rise" data-cap="3" type="button">
+        <div class="k">Floor comms</div><h3>Associate to associate</h3>
+        <p>Urgent takes the frame; everything else queues behind a marker. Talk-to-text or typed
+          from the desk, delivered to the glass — no group chat, no phones out on the floor.</p>
+      </button>
+      <p class="mono" style="margin:16px 0 0;padding-left:19px">Tap to change the glass</p>
+    </div>
+    <div class="cap-state rise">
+      <div class="lens-wrap">
+        <div class="lens" id="capLens">
+          <div class="pad">
+            <div class="l-head"><span id="cTag">VOICE</span><span id="cLat">2.9S</span></div>
+            <div class="l-body">
+              <div class="l-rail">
+                <div class="l-name" id="cName">ASKED</div>
+                <ul class="l-facts" id="cFacts"><li>SIZE 32</li><li>BARREL</li><li>DENIM</li></ul>
+              </div>
+              <div class="l-card">
+                <div class="t" id="cMod">ANSWER · 1/1</div>
+                <div class="l-line" data-cl="0">TWO ON THE DENIM WALL</div>
+                <div class="l-line" data-cl="1">NONE IN THE BACK</div>
+                <div class="l-line" data-cl="2">30 AND 34 ALSO ON FLOOR</div>
+              </div>
+            </div>
+            <div class="l-foot"><span id="cZone">DENIM WALL</span><span id="cIdx">HEARD</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cap-facts" id="capFacts">
+        <span>Grounded in your records</span><span>~3 seconds</span><span>Hands stay free</span>
+      </div>
+    </div>
+  </div>
+  <div class="pane rise" style="margin-top:24px">
+    <p class="k">The rule underneath all four</p>
+    <p style="font-size:15px"><strong>Answers come from records you hold — never from a model's guess
+      about your stock.</strong> And “I can't see stock right now” is a different sentence from
+      “we don't carry that.” An associate who gets confidently told the wrong thing twice stops using
+      the tool, and they are right to.</p>
+  </div>
+</section>
+
+<!-- 04 ────────────────────────────── PINNED: THE VERTICALS -->
+<section class="pin" id="rooms" data-sec="04 — WHERE IT FITS">
+  <div class="pin-in">
+    <div class="pin-grid">
+      <div>
+        <p class="eyebrow">03 / Where it fits</p>
+        <h2>The room changes. The grammar does not.</h2>
+        <div class="steps" style="margin-top:26px">
+          <div class="step on" data-step="0">
+            <div class="k">Specialty retail</div><h3>Apparel, footwear, home</h3>
+            <p>Fitting-room requests, per-size stock, the online cart they left this morning.</p>
+          </div>
+          <div class="step" data-step="1">
+            <div class="k">Hospitality</div><h3>Restaurants, hotels, venues</h3>
+            <p>Allergies, the usual, the returning guest — before the greeting, not after it.</p>
+          </div>
+          <div class="step" data-step="2">
+            <div class="k">Field service</div><h3>HVAC, utilities, facilities</h3>
+            <p>Last call, warranty, the part number, and whether it is on the van.</p>
+          </div>
+        </div>
+        <p class="note" style="margin-top:22px">Retail is live today. Hospitality and field service run on the
+          same engine and are looking for design partners — the work is the adapter, not the product.</p>
+      </div>
+      <div>
+        <div class="lens-wrap">
+          <div class="lens" id="roomLens">
+            <div class="pad">
+              <div class="l-head"><span id="rTag">CUE</span><span id="rLat">0.4S</span></div>
+              <div class="l-body">
+                <div class="l-rail">
+                  <div class="l-name" id="rName">ROOM 3</div>
+                  <ul class="l-facts" id="rFacts"><li>OPEN 40S</li><li>DENIM</li><li>YOU</li></ul>
+                </div>
+                <div class="l-card">
+                  <div class="t" id="rMod">FLOOR · 1/3</div>
+                  <div class="l-line" data-rl="0">BARREL JEAN IN A 32</div>
+                  <div class="l-line" data-rl="1">TWO ON THE DENIM WALL</div>
+                  <div class="l-line" data-rl="2">NONE IN THE BACK</div>
+                </div>
+              </div>
+              <div class="l-foot"><span id="rZone">DENIM WALL</span><span id="rIdx">1/3</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="lens-cap">Scroll to change the room</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 ──────────────────────────────────────── INTEGRATION -->
+<section data-sec="05 — WHAT IT CONNECTS TO" data-obs>
+  <p class="eyebrow rise">04 / What it connects to</p>
+  <h2 class="rise wide">Twenty minutes to your first answer.</h2>
+  <div class="grid g3">
+    <div class="pane rise"><p class="k">Live today · Shopify</p>
+      <p>Orders, customers, tags and notes. Products down to the <strong>variant</strong>, so
+        “do you have it in a 32” is answered per size rather than per style. Abandoned online carts.
+        Loyalty tier and points derived from lifetime spend.</p></div>
+    <div class="pane rise"><p class="k">How you connect</p>
+      <p>You create a custom app in your own admin and paste the token in. We test it on save and tell
+        you which scopes it actually carries — no app review, no agency, no shared deployment.
+        Your credentials are sealed with a key our database never sees.</p></div>
+    <div class="pane rise"><p class="k">Next, and in that order</p>
+      <p>Inventory beyond the POS — the back-of-house sheet that actually knows. Then your brand and
+        service guidelines as context, so the answer sounds like you. Then a second POS adapter,
+        driven by whoever signs first.</p></div>
+  </div>
+  <div class="two">
+    <div class="pane rise"><p class="k">The doors a customer can come through</p>
+      <p style="margin-bottom:12px">Each one carries its own consent class, and the system will not let a
+        weak door claim a strong one:</p>
+      <ul class="tick">
+        <li><strong>Tap a plate</strong> — an NFC tag on the wall. Eleven dollars, no battery, no app.</li>
+        <li><strong>Scan a QR</strong> — the same plate, the other half.</li>
+        <li><strong>Your own app</strong> — one universal link and one POST; no SDK, no background location.</li>
+        <li><strong>Wallet pass, collection, appointment</strong> — identity as a by-product of something they already did.</li>
+        <li><strong>An associate asks</strong> — recorded honestly as the weakest door, because it is how retail already works.</li>
+      </ul></div>
+    <div class="pane rise"><p class="k">What you do not have to do</p>
+      <ul class="tick">
+        <li>No cameras, anywhere.</li>
+        <li>No beacons required — a plate on a wall is the zone.</li>
+        <li>No glasses required. Phone first, always.</li>
+        <li>No customer database required. The request half works on day one in a store that has never
+          collected an email address.</li>
+        <li>No rip and replace. cuesea reads what you already keep.</li>
+      </ul></div>
+  </div>
+</section>
+
+<!-- 06 ────────────────────────────────────────── SURFACES -->
+<section data-sec="06 — WHERE IT SHOWS UP" data-obs>
+  <p class="eyebrow rise">05 / Where it shows up</p>
+  <h2 class="rise wide">Start on the phone in their pocket. Upgrade the surface later.</h2>
+  <div class="grid g4">
+    <div class="pane rise"><p class="k">Phone</p><p>The associate's own device, or the store handheld.
+      Requests, answers, comms and the customer card. This is where a pilot starts.</p></div>
+    <div class="pane rise"><p class="k">Cue Studio · desktop</p><p>The manager's view: what is waiting on
+      the floor, who claimed it, what was said, and which associate assisted which sale.</p></div>
+    <div class="pane rise"><p class="k">Cue Lens · glasses</p><p>The same sentence in the line of sight,
+      running on Even Realities G2 today. Optional, never a line item on your invoice.</p></div>
+    <div class="pane rise"><p class="k">Cue Console</p><p>Where you connect a store, add people, pair a
+      device, set retention and see whether every door is answering.</p></div>
+  </div>
+  <div class="pane rise" style="margin-top:18px">
+    <p class="k">The claim that matters</p>
+    <p style="font-size:15px">Every other tool on this floor — clienteling suites, POS, your own back office —
+      asks the associate to break eye contact, pick up a device and search.
+      <strong>cuesea is the one where the answer arrives instead.</strong> That is an interaction
+      difference, not a feature difference, and it holds on whichever surface you pick.</p>
+  </div>
+</section>
+
+<!-- 07 ─────────────────────────────────────────── PRIVACY -->
+<section data-sec="07 — PRIVACY AND SECURITY" data-obs>
+  <p class="eyebrow rise">06 / For your legal and security review</p>
+  <h2 class="rise wide">Built to survive the review, not to argue with it.</h2>
+  <div class="grid g3">
+    <div class="pane rise"><p class="k">No cameras. No biometrics.</p>
+      <p>Nobody is identified by their face, ever. The glasses we run on have no camera at all. Where a
+        phone camera is used it photographs a tag or a part — <strong>things, never people</strong> —
+        and it is off by default per store.</p></div>
+    <div class="pane rise"><p class="k">Opt-in at every door</p>
+      <p>No passive matching. Each door records what agreement stands behind it, and a caller cannot
+        claim a stronger one than it has. One tap on Stop closes every session and cancels their open
+        requests. Presence expires by itself after 45 minutes.</p></div>
+    <div class="pane rise"><p class="k">No path, no dwell, no tracking</p>
+      <p>Presence is a moment at a place. There is no table that reconstructs someone's walk through
+        your store — a test asserts the columns are absent, so it cannot quietly grow one.</p></div>
+    <div class="pane rise"><p class="k">Your credentials, sealed</p>
+      <p>Per-store tokens encrypted AES-256-GCM under a key the database never holds. No cuesea screen
+        and no cuesea employee can read one back. One deployment, isolated per tenant, with tests
+        that assert the isolation.</p></div>
+    <div class="pane rise"><p class="k">No customer list to leak</p>
+      <p>There is deliberately no endpoint that enumerates your customers. Depth arrives only for
+        someone who has already opted in, in the moment they are standing there.</p></div>
+    <div class="pane rise"><p class="k">Retention with receipts</p>
+      <p>You set the window. Personal data is redacted on a timer — transcripts, answers, cue lines,
+        the customer pointer — while the operational skeleton survives, so switching it on does not
+        cost you your quarter. Every sweep leaves a record.</p></div>
+  </div>
+  <p class="note">Camera-free is a legal-clearance accelerator, not a limitation. It is the difference between a
+    pilot that clears a general counsel in weeks and one that does not clear at all in a two-party-consent state.</p>
+</section>
+
+<!-- 08 ─────────────────────────────────────── KNOWN EDGES -->
+<section data-sec="08 — KNOWN EDGES" data-obs>
+  <p class="eyebrow flame rise">07 / Known edges</p>
+  <h2 class="rise">What we would rather tell you now.</h2>
+  <p class="lede rise">Every vendor's deck has a slide this honest missing from it. Here is ours, and
+    all of it is in flight.</p>
+  <div class="pane rise" style="margin-top:22px">
+    <div class="edge"><div class="t">Zones need tagging</div>
+      <div class="d">Until products carry a zone, the answer says “on the floor” rather than “on the denim wall.”
+        A metafield and an afternoon fixes it per store.</div></div>
+    <div class="edge"><div class="t">One data source, for now</div>
+      <div class="d">Shopify is the live adapter. If the truth about your stock lives somewhere else,
+        that is an integration conversation before a pilot, not after.</div></div>
+    <div class="edge"><div class="t">Empty is not the same as absent</div>
+      <div class="d">Separating “I can't see stock right now” from “we don't carry it” is the current
+        engineering priority, and it ships before any pilot starts.</div></div>
+    <div class="edge"><div class="t">Glasses are pilot-grade</div>
+      <div class="d">They work, and they are genuinely the best demo you will see this year. They are also
+        six-hour batteries in an eight-hour shift. Run the pilot on phones and treat the glass as the upgrade.</div></div>
+    <div class="edge"><div class="t">A printed QR can be photographed</div>
+      <div class="d">The token is opaque and revocable, and a leaked plate is one reprint. Genuine
+        unshareability needs rotating-cryptogram tags, which is a purchase decision we will walk you through.</div></div>
+  </div>
+</section>
+
+<!-- 09 ──────────────────────────────────────── THE ROLLOUT -->
+<section data-sec="09 — THE ROLLOUT" data-obs>
+  <p class="eyebrow rise">08 / The rollout</p>
+  <h2 class="rise wide">Twelve weeks, with a holdout, or it proves nothing.</h2>
+  <div class="weeks">
+    <div class="w rise"><div class="n">Weeks 0–2</div><h3 style="margin:8px 0 8px">Connect</h3>
+      <ul class="tick">
+        <li>Store connected through Console; scopes verified on save</li>
+        <li>Plates printed and mounted per zone, tags locked</li>
+        <li>Retention window and privacy toggles set with your team</li>
+      </ul></div>
+    <div class="w rise"><div class="n">Weeks 3–4</div><h3 style="margin:8px 0 8px">Baseline</h3>
+      <ul class="tick">
+        <li>Associates trained — it is one gesture and one sentence</li>
+        <li>Holdout group chosen: same store, same shifts, no cue</li>
+        <li>Baseline measured before anything is claimed</li>
+      </ul></div>
+    <div class="w rise"><div class="n">Weeks 5–12</div><h3 style="margin:8px 0 8px">Measure</h3>
+      <ul class="tick">
+        <li>Requests answered, and time from request to answer</li>
+        <li>Assisted sales, attributed to the associate who assisted</li>
+        <li>Basket and units per transaction against the holdout</li>
+      </ul></div>
+  </div>
+  <div class="pane sea rise" style="margin-top:18px">
+    <h3 style="max-width:none">The one number we are trying to move: incremental revenue per associate per shift.</h3>
+    <p style="margin-top:10px;max-width:82ch">Kill criteria agreed before week one. If the holdout keeps up,
+      we say so and you stop — a pilot that cannot fail is not a measurement, it is a marketing exercise.</p>
+  </div>
+</section>
+
+<!-- 10 ───────────────────────────────────────── COMMERCIAL -->
+<section data-sec="10 — COMMERCIAL" data-obs>
+  <p class="eyebrow rise">09 / Commercial</p>
+  <h2 class="rise wide">Priced beside a POS seat, not above it.</h2>
+  <div class="grid g3">
+    <div class="pane rise"><p class="k">Self-serve · Shopify</p>
+      <div class="price"><span class="n">$79–149</span><span class="u">per location / month</span></div>
+      <p style="margin-top:12px">Connect your own store, invite your team, print your plates. Monthly,
+        no minimum term, phone-first. Bring glasses if and when you want them.</p></div>
+    <div class="pane rise"><p class="k">Chains · 10–50 stores</p>
+      <div class="price"><span class="n">$50–150k</span><span class="u">annual, after pilot</span></div>
+      <p style="margin-top:12px">A paid twelve-week pilot with a measured holdout, converting to annual
+        on the evidence. Security review support and zone setup included.</p></div>
+    <div class="pane rise"><p class="k">Hardware</p>
+      <div class="price"><span class="n" style="color:var(--fg3)">$0</span><span class="u">never a line item</span></div>
+      <p style="margin-top:12px">We do not sell glasses, take a margin on them, or require them.
+        If you want a pair for the pilot we will tell you exactly which to buy and what it will cost you.</p></div>
+  </div>
+</section>
+
+<!-- 11 ──────────────────────────────────────────── START -->
+<section class="ask" data-sec="11 — START" data-obs>
+  <p class="eyebrow rise">10 / Start</p>
+  <h2 class="rise" data-decode>See it on your own store.</h2>
+  <p class="lede rise">Thirty minutes. We connect a Shopify store, you ask it something you know the answer
+    to, and you watch it either get it right or say honestly that it can't see. That demo is the whole
+    sales process.</p>
+  <div class="ask-grid">
+    <div>
+      <div class="grid" style="grid-template-columns:1fr;margin-top:0">
+        <div class="use rise"><span class="pc" style="font-size:15px">01</span><span class="t">A connected store</span><span class="d">Yours, or our seeded one with 1,385 variants and deliberately messy sizing</span></div>
+        <div class="use rise"><span class="pc" style="font-size:15px">02</span><span class="t">A question you already know</span><span class="d">The one your floor gets asked six times a day</span></div>
+        <div class="use rise"><span class="pc" style="font-size:15px">03</span><span class="t">The glass, if you want it</span><span class="d">Real hardware, on the table, no promises attached</span></div>
+      </div>
+      <div class="contact">
+        <span>Kyle · The Future Basics</span>
+        <a href="mailto:kyle@thefuturebasics.com">kyle@thefuturebasics.com</a>
+        <a href="https://cuesea.ai">cuesea.ai</a>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:22px">
+        <a class="btn pri" href="mailto:kyle@thefuturebasics.com?subject=cuesea%20—%20book%20a%20demo">Book the demo</a>
+        <a class="btn" href="/cuesea-for-the-floor.pdf" download>Download this</a>
+        <button class="btn" type="button" onclick="document.getElementById('shareBtn').click()">Share</button>
+      </div>
+    </div>
+    <div class="rise">
+      <div class="lens-wrap">
+        <div class="lens">
+          <div class="pad">
+            <div class="l-head"><span>CUESEA</span><span>READY</span></div>
+            <div class="l-body">
+              <div class="l-rail">
+                <div class="l-name">30 MIN</div>
+                <ul class="l-facts"><li>YOUR STORE</li><li>YOUR DATA</li><li>NO SLIDES</li></ul>
+              </div>
+              <div class="l-card">
+                <div class="t">DEMO · 1/1</div>
+                <div class="l-line">ASK IT SOMETHING YOU</div>
+                <div class="l-line">ALREADY KNOW THE ANSWER TO</div>
+                <div class="l-line">THAT IS THE WHOLE PITCH</div>
+              </div>
+            </div>
+            <div class="l-foot"><span>KYLE · THE FUTURE BASICS</span><span>2026</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="lens-cap">Camera-free · opt-in · your records only</div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer><div class="in2">
+  <span>cuesea · for the floor</span>
+  <span id="stamp">August 2026</span>
+</div></footer>
+
+<div class="scrim" id="shareScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Share">
+    <h3>Share this</h3>
+    <p>A link anyone can open. Add a company to personalise the header, or gate it to capture the email first.</p>
+    <label class="field"><span>Prepared for (optional)</span><input id="shareTo" type="text" placeholder="Reformation" autocomplete="off"></label>
+    <label style="display:flex;align-items:center;gap:10px;margin:14px 0 4px;cursor:pointer">
+      <input type="checkbox" id="shareGate" style="width:18px;height:18px;accent-color:#2E7FD0">
+      <span style="font-size:14px;color:var(--fg2)">Ask for an email before showing it</span>
+    </label>
+    <div class="linkbox" id="shareLink" style="margin-top:14px"></div>
+    <div class="acts">
+      <button class="btn pri" id="copyLink" type="button">Copy link</button>
+      <button class="btn" id="nativeShare" type="button" hidden>Send…</button>
+      <a class="btn" href="/cuesea-for-the-floor.pdf" download>Download PDF</a>
+      <button class="btn" id="closeShare" type="button">Close</button>
+    </div>
+    <div class="copied" id="copied">Copied to clipboard</div>
+  </div>
+</div>
+
+<div class="scrim" id="gateScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Continue">
+    <h3 id="gateTitle">cue<span class="hl">sea</span> — for the floor</h3>
+    <p>Tell us who you are and it opens. One line, no follow-up you didn't ask for.</p>
+    <label class="field"><span>Name</span><input id="gName" type="text" autocomplete="name"></label>
+    <label class="field"><span>Work email</span><input id="gEmail" type="email" inputmode="email" autocomplete="email"></label>
+    <label class="field"><span>Company (optional)</span><input id="gFirm" type="text" autocomplete="organization"></label>
+    <div class="acts"><button class="btn pri" id="gateGo" type="button">Open it</button></div>
+    <div class="copied" id="gateErr" style="color:var(--flame2)">A work email, please</div>
+  </div>
+</div>
+
+<script>
+/* The verticals reuse the deck sheet's pinned-room machinery. */
+window.CUE_ROOMS = [
+  { tag:"CUE", lat:"0.4S", name:"ROOM 3", facts:["OPEN 40S","DENIM","YOU"],
+    mod:"FLOOR \u00b7 1/3", zone:"DENIM WALL", idx:"1/3",
+    lines:["BARREL JEAN IN A 32","TWO ON THE DENIM WALL","NONE IN THE BACK"] },
+  { tag:"CUE", lat:"0.4S", name:"TABLE 12", facts:["RETURNING","NO SHELLFISH","2 GUESTS"],
+    mod:"FLOOR \u00b7 2/3", zone:"SECTION B", idx:"2/3",
+    lines:["ALLERGY ON FILE \u00b7 NO SHELLFISH","USUAL IS THE ALBARINO","LAST IN 14 MARCH"] },
+  { tag:"CUE", lat:"0.4S", name:"UNIT 44B", facts:["SERVICED 9 MO","WARRANTY 11 MO","PART 3F-220"],
+    mod:"FLOOR \u00b7 3/3", zone:"ROOF PLANT", idx:"3/3",
+    lines:["LAST CALL WAS THE SAME FAULT","CONDENSER FAN \u00b7 PART 3F-220","ONE IN THE VAN"] }
+];
+window.CUE_HERO = [];   /* the hero lens holds still here — the capability lens is the moving one */
+</script>
+<script src="/assets/deck.js" defer></script>
+<script>
+/* Capability switcher. Click-driven rather than timed: a sales page is read at
+   the reader's pace, and a lens that changes while someone is reading it is a
+   lens they stop trusting. */
+(function(){
+  var RM = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var CAPS = [
+    { tag:"VOICE", lat:"2.9S", name:"ASKED", facts:["SIZE 32","BARREL","DENIM"],
+      mod:"ANSWER \u00b7 1/1", zone:"DENIM WALL", idx:"HEARD",
+      lines:["TWO ON THE DENIM WALL","NONE IN THE BACK","30 AND 34 ALSO ON FLOOR"],
+      chips:["Grounded in your records","~3 seconds","Hands stay free"] },
+    { tag:"REQUEST", lat:"0.3S", name:"ROOM 3", facts:["OPEN 40S","NO NAME","DENIM"],
+      mod:"FLOOR \u00b7 1/2", zone:"NEAREST TO YOU", idx:"CLAIM",
+      lines:["FITTING ROOM 3 WANTS A 32","IN THE BARREL JEAN","TWO ON THE WALL"],
+      chips:["Names nobody","No CRM needed","Claim and resolve"] },
+    { tag:"CUE", lat:"0.4S", name:"SARAH CHEN", facts:["ICON","TOP M","BTM 28X30"],
+      mod:"CUE \u00b7 1/3", zone:"DENIM WALL \u00b7 4200 PTS", idx:"1/3",
+      lines:["LEFT THE CASHSOFT CREW","SWEATER IN THEIR CART","OFFER IT IN SIZE M"],
+      chips:["Opt-in only","Tap, scan or your app","Expires in 45 minutes"] },
+    { tag:"FLOOR", lat:"URGENT", name:"MAYA O.", facts:["FRONT","2 UNREAD","\u2192 YOU"],
+      mod:"MESSAGE \u00b7 1/2", zone:"FROM THE DESK", idx:"REPLY",
+      lines:["NEED BACKUP AT THE TILL","TWO IN THE QUEUE","ON MY WAY \u00b7 PRESS TO SEND"],
+      chips:["Urgent takes the frame","Typed or dictated","No phones on the floor"] }
+  ];
+  var $ = function(s){ return document.querySelector(s); };
+  var lines = Array.prototype.slice.call(document.querySelectorAll("[data-cl]"));
+  var caps = Array.prototype.slice.call(document.querySelectorAll(".cap"));
+  var cur = 0;
+  function show(i){
+    if (i === cur) return; cur = i;
+    var c = CAPS[i];
+    $("#cTag").textContent = c.tag; $("#cLat").textContent = c.lat;
+    $("#cName").textContent = c.name; $("#cMod").textContent = c.mod;
+    $("#cZone").textContent = c.zone; $("#cIdx").textContent = c.idx;
+    $("#cFacts").innerHTML = c.facts.map(function(f){ return "<li>" + f + "</li>"; }).join("");
+    $("#capFacts").innerHTML = c.chips.map(function(f){ return "<span>" + f + "</span>"; }).join("");
+    lines.forEach(function(el, n){
+      el.textContent = c.lines[n] || "";
+      if (RM) return;
+      el.style.transition = "none"; el.style.opacity = "0"; el.style.transform = "translateY(4px)";
+      setTimeout(function(){
+        el.style.transition = "opacity .32s ease " + (n*70) + "ms, transform .32s ease " + (n*70) + "ms";
+        el.style.opacity = "1"; el.style.transform = "none";
+      }, 20);
+    });
+    caps.forEach(function(b, n){ b.classList.toggle("on", n === i); });
+  }
+  caps.forEach(function(b){ b.addEventListener("click", function(){ show(+b.dataset.cap); }); });
+})();
+</script>
+</body>
+</html>
