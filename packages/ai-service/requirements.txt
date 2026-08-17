@@ -7,3 +7,6 @@ cryptography>=42.0
 zxing-cpp>=2.2
 Pillow>=10.3
 python-barcode>=0.15
+# Provisioning QR codes, generated at mint. Already the plate generator's QR
+# library — one QR implementation in the product, not two.
+segno>=1.6

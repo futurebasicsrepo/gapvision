@@ -59,10 +59,19 @@ def _device_or_404(me, device_id: str) -> dict:
 
 
 def _minted(tenant_slug: str, device: dict, token: str) -> dict:
+    """The one response that carries a token, and everything derived from it.
+
+    The QR is only for `even-g2`, because that is the only surface whose
+    provisioning medium is a thing you point a camera at. A Meta launch URL
+    goes into Meta's preview share flow and a sim URL goes into a browser tab;
+    a QR beside either would be an affordance for something nobody does.
+    """
+    url = devices.launch_url(device["surface"], tenant_slug, token)
     return {
         "device": device,
         "token": token,
-        "launch_url": devices.launch_url(device["surface"], tenant_slug, token),
+        "launch_url": url,
+        "qr": devices.qr_rows(url) if device["surface"] == "even-g2" else None,
     }
 
 

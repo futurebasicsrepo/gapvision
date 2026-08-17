@@ -126,8 +126,17 @@ export const api = {
   // Invites landed with the mailbox. Resend covers the two real cases: the
   // first one expired (a week), and it went to a typo'd address.
   resendInvite: (id) => request(`/api/admin/users/${id}/invite`, { method: "POST" }),
-  devices: (tenant) => request(`/api/admin/devices?tenant=${encodeURIComponent(tenant)}`),
+  devices: (tenant) => request(`/api/admin/tenants/${encodeURIComponent(tenant)}/devices`),
   updateDevice: (id, body) => request(`/api/admin/devices/${id}`, { method: "PATCH", body }),
+  // Minting returns the provision token, the launch URL derived from it, and
+  // (for a G2) a QR matrix. That response is the only place any of them exist
+  // — the token is stored hashed, so there is nothing to fetch it back from
+  // and deliberately no route that tries.
+  mintDevice: (tenant, body) =>
+    request(`/api/admin/tenants/${encodeURIComponent(tenant)}/devices`,
+            { method: "POST", body }),
+  reissueDevice: (id) => request(`/api/admin/devices/${id}/reissue`, { method: "POST" }),
+  revokeDevice: (id) => request(`/api/admin/devices/${id}/revoke`, { method: "POST" }),
 
   // --- retention ------------------------------------------------------------
   retention: () => request("/api/admin/retention"),
