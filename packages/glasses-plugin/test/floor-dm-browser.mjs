@@ -205,6 +205,32 @@ const sentRadio = () => wire.sent.filter((s) => s.event === "radio:send").map((s
       && (await p.$eval("#floor-status", (e) => e.className)).includes("warn"),
     await statusText(p));
 
+  // --- 3b. a failed send reaches the glass, not just the phone -------------
+  //
+  // The ring is why this matters: a canned phrase sent from the floor menu is
+  // sent with no phone in hand, so a NEED BACKUP that reached nobody would
+  // otherwise be silent everywhere the associate is looking.
+  wire.emit("radio:delivered", { id: "m2", reach: 0 });
+  await p.waitForTimeout(400);
+  const emptyGlass = await lensText(p);
+  check("a broadcast that reached nobody says so on the glass",
+    emptyGlass.includes("NOBODY ON THE FLOOR"),
+    emptyGlass.replace(/\s+/g, " ").slice(0, 160));
+
+  // Any press clears it — it is a message, not a decision to make.
+  await p.click('[data-event="click"][data-source="ring"]');
+  await p.waitForTimeout(300);
+  check("a press clears the notice rather than making them wait it out",
+    !(await lensText(p)).includes("NOBODY ON THE FLOOR"));
+
+  // Success stays on the phone. A lens that congratulated its wearer on every
+  // message would be unusable, and this is the assertion that keeps it so.
+  wire.emit("radio:delivered", { id: "m3", reach: 2 });
+  await p.waitForTimeout(400);
+  check("a delivered broadcast does not take the glass",
+    !(await lensText(p)).includes("ON THE FLOOR."),
+    (await lensText(p)).replace(/\s+/g, " ").slice(0, 120));
+
   // --- 4. the mark on the glass -------------------------------------------
   wire.emit("radio:message", {
     id: "r1", fromId: "sock-cass", from: "Cass",
