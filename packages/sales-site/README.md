@@ -47,6 +47,26 @@ Two environment variables, both optional and both worth setting:
 Console defaults to `https://sales.cuesea.ai`, so if the domain above is what
 you use, `VITE_SALES_URL` is belt and braces rather than required.
 
+### Why the headers in `vercel.json` are what they are
+
+The reasoning lives here rather than beside each header, because Vercel
+validates `vercel.json` against a schema that rejects unknown properties —
+JSON has no comments, and a `comment` key invented next to a real one fails
+the deploy rather than explaining it. Keep this file free of them.
+
+- **`X-Frame-Options: DENY`** — these decks are sent to people who will open
+  them at a laptop in an office they do not control. Nothing here should be
+  frameable, because a deck inside somebody else's chrome is a deck whose gate
+  can be dressed up as theirs.
+- **`X-Content-Type-Options: nosniff`** and
+  **`Referrer-Policy: strict-origin-when-cross-origin`** — the ordinary pair;
+  nothing about a sent document wants type guessing or a full referrer
+  travelling to whatever the recipient clicks next.
+- **`Cache-Control: public, max-age=86400` on `*.pdf`** — the leave-behind. A
+  long cache with a revision in the filename is the usual answer, but this file
+  is regenerated from the page it accompanies and keeps its name, so it must
+  not be cached past a day or a recipient re-downloads last week's argument.
+
 ## The one sentence that must not get softened
 
 **The gate is a lead gate, not authentication.** Anyone can delete `gate=1`

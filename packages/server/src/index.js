@@ -36,6 +36,67 @@ app.use(createAiProxy({
   allowRoster: process.env.GAPVISION_ALLOW_ROSTER === "true",
 }));
 
+/** The trailing digits of a Shopify GID, as POS wants ids, or null. */
+function numericGid(gid) {
+  const m = String(gid || "").match(/\/(\d+)$/);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * What the merchant's till may pull — the floor's live engagements.
+ *
+ * Called by the Cue POS UI extension (packages/pos-app) with a Shopify
+ * session token in the Authorization header. The AI service checks the
+ * token's signature against the client secret *that merchant* stored in
+ * Console, and answers with the tenant it names — so which floor a till
+ * sees is decided by cryptography against the merchant's own credential,
+ * never by a slug the extension chose to send.
+ *
+ * The answer is the handoff records verbatim: who is engaged, with which
+ * associate, and the cart lines in POS vocabulary. Ten at most, newest
+ * first — a till serves a queue, not an archive.
+ */
+app.get("/pos/handoff", async (req, res) => {
+  const auth = String(req.headers.authorization || "");
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (!token) {
+    return res.status(401).json({ detail: "Missing session token." });
+  }
+  let verdict;
+  try {
+    const r = await fetch(`${AI_SERVICE_URL}/api/pos/verify`, {
+      method: "POST",
+      headers: aiHeaders(AI_API_KEY),
+      body: JSON.stringify({ token }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      // The AI service wrote the sentence; pass it through untouched.
+      return res.status(r.status).json({ detail: body?.detail || "Refused." });
+    }
+    verdict = body;
+  } catch (e) {
+    console.error(`[pos] verify failed: ${e.message}`);
+    return res.status(502).json({ detail: "Cue could not check the token right now." });
+  }
+
+  const state = stateFor(verdict.tenant);
+  const sessions = [...state.posSessions.values()]
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)))
+    .slice(0, 10)
+    .map((s) => ({
+      guest: s.guestName,
+      tier: s.tier,
+      zone: s.zone,
+      at: s.at,
+      associate: s.associate,
+      engagement_id: s.engagementId,
+      customer_id: numericGid(s.guestId),
+      lines: s.cart,
+    }));
+  res.json({ tenant: verdict.tenant, sessions });
+});
+
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
@@ -132,6 +193,13 @@ function freshState(tenant) {
         ]
       : [],
     stats: { guestsToday: 0, scriptsServed: 0, radioMessages: 0, voiceQueries: 0 },
+    // What a Cue POS extension may pull into the till — one record per
+    // *live* engagement, keyed by the socket that owns it and deleted the
+    // moment the engagement ends. Deliberately a separate map rather than
+    // extra fields on `activeSessions`: that list is a display log the
+    // dashboard broadcasts, and the handoff record carries ids and cart
+    // lines the manager view has no business receiving as a side effect.
+    posSessions: new Map(), // socketId -> handoff record
   };
 }
 
@@ -403,6 +471,28 @@ async function enterGuest(socket, { guestId, zone, tenant, source } = {}) {
     });
     socket.data.engagementId = opened?.engagement_id || null;
 
+    // The handoff record — what "pull her into the till" needs and nothing
+    // more. Written after the engagement id exists so a POS-completed sale
+    // can be attributed back to this exact engagement.
+    state.posSessions.set(socket.id, {
+      at: new Date().toISOString(),
+      zone: zone || "Floor",
+      associate: state.associates.get(socket.id)?.name || null,
+      engagementId: socket.data.engagementId,
+      guestId,
+      guestName: context.guest.name,
+      tier: context.guest.loyalty_tier,
+      // The guest's open online cart, in POS vocabulary: numeric variant ids
+      // where the CRM had them (a real line the till can sell), title+price
+      // where it did not (a custom sale, priced as shown).
+      cart: (context.guest.open_cart_online || []).map((it) => ({
+        title: it.name || it.sku || "Item",
+        price: typeof it.price === "number" ? it.price : null,
+        variantId: numericGid(it.variant_id),
+        qty: 1,
+      })),
+    });
+
     // Push the monochrome overlay to the requesting associate's glasses...
     socket.emit("glasses:display", {
       // The cue as written for the glass; `lines` is the flat form the
@@ -588,6 +678,8 @@ io.on("connection", (socket) => {
     socket.data.engagementId = null;
     socket.data.guestId = null;
     socket.data.focusSku = null;
+    // An engagement that ended is not something a till should pull.
+    state.posSessions.delete(socket.id);
     broadcastDashboard(socket.data.tenant);
   });
 
@@ -1009,6 +1101,7 @@ io.on("connection", (socket) => {
       socket.data.engagementId = null;
     }
     stateFor(socket.data.tenant).associates.delete(socket.id);
+    stateFor(socket.data.tenant).posSessions.delete(socket.id);
     // The roster goes out too: a phone holding a picker full of people who
     // left would address messages to sockets that no longer exist.
     broadcastPresence(socket.data.tenant);

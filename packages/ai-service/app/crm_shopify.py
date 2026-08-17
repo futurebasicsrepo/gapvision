@@ -13,7 +13,8 @@ fallback for the original single-store pilot — `ShopifyCRM.from_env()`.
 
 Each merchant creates their own custom app in Shopify Admin → Settings → Apps
 and sales channels → Develop apps → Create app → Admin API scopes
-(read_customers, read_orders, read_products, read_inventory) → Install → reveal
+(read_customers, read_orders, read_products, read_inventory — plus
+write_draft_orders if the store wants floor checkout links) → Install → reveal
 token. No Shopify app review is involved. The token lives ONLY server-side,
 encrypted at rest, and is never returned by any API.
 
@@ -159,7 +160,7 @@ Q_VARIANT_LOOKUP = """
 query variantByCode($q: String!) {
   productVariants(first: 5, query: $q) {
     edges { node {
-      sku barcode price inventoryQuantity
+      id sku barcode price inventoryQuantity
       selectedOptions { name value }
       product { title handle totalInventory }
     } }
@@ -177,9 +178,27 @@ query abandoned($query: String!) {
   abandonedCheckouts(first: 1, query: $query, sortKey: CREATED_AT, reverse: true) {
     edges { node {
       lineItems(first: 5) { edges { node {
-        title quantity variant { price }
+        title quantity variant { id price }
       } } }
     } }
+  }
+}"""
+
+# The one write this adapter performs, and deliberately the mildest write
+# Shopify has: a draft order is an invoice waiting to be paid, not an order,
+# not a charge. `invoiceUrl` is a secure Shopify-hosted checkout for exactly
+# these lines — the guest opens it on their own phone and pays there (Shop
+# Pay included), so no Cue surface ever sees a card number. Requires the
+# `write_draft_orders` scope; a token without it fails here with a clear
+# error and nothing else in the adapter is affected.
+M_DRAFT_ORDER_CREATE = """
+mutation cueCheckoutLink($input: DraftOrderInput!) {
+  draftOrderCreate(input: $input) {
+    draftOrder {
+      id invoiceUrl currencyCode
+      totalPriceSet { presentmentMoney { amount currencyCode } }
+    }
+    userErrors { field message }
   }
 }"""
 
@@ -393,10 +412,16 @@ class ShopifyCRM:
             items = []
             for ledge in edges[0]["node"]["lineItems"]["edges"]:
                 li = ledge["node"]
+                variant = li.get("variant") or {}
                 items.append({
                     "sku": li["title"],
                     "name": li["title"],
-                    "price": float((li.get("variant") or {}).get("price") or 0),
+                    "price": float(variant.get("price") or 0),
+                    # Carried so a floor checkout can turn this line back into
+                    # a real variant line rather than a custom one — a custom
+                    # line never decrements inventory and never links to the
+                    # product the guest was actually looking at.
+                    "variant_id": variant.get("id"),
                 })
             return items[:3]
         except Exception:
@@ -440,8 +465,87 @@ class ShopifyCRM:
                 "stock": int(qty) if qty is not None else None,
                 "size": size,
                 "location": "Floor",  # per-zone via product metafield later
+                # The store's own id for this variant, so a checkout built
+                # from a scan sells the real thing, not a title that looks
+                # like it.
+                "variant_id": v.get("id"),
             }
         return self._cached(f"code:{wanted}", fetch)
+
+    # ---- floor checkout ---------------------------------------------------
+    def create_checkout_link(self, items: list[dict], *, guest_id: str | None = None,
+                             note: str | None = None) -> dict:
+        """A Shopify-hosted checkout for these lines. The guest pays on their
+        own phone; no POS, no card reader, no Cue surface in the payment path.
+
+        `items` — dicts with either a `variant_id` (GID, preferred: real
+        product line, inventory-aware) or a `title` + `price` (custom line,
+        the fallback for things a store's catalogue cannot name). `qty`
+        defaults to 1.
+
+        Never cached: every call is a new draft order by design, and two
+        guests must never share a link. Raises on refusal — the caller treats
+        an error as "no link", which must never render as a paid sale.
+        """
+        lines = []
+        for it in items or []:
+            try:
+                qty = max(1, int(it.get("qty") or 1))
+            except (TypeError, ValueError):
+                qty = 1
+            if it.get("variant_id"):
+                lines.append({"variantId": it["variant_id"], "quantity": qty})
+                continue
+            title = str(it.get("title") or it.get("name") or "").strip()
+            if not title:
+                continue
+            lines.append({
+                "title": title[:255],
+                "quantity": qty,
+                # Deprecated in favour of `originalUnitPriceWithCurrency`, kept
+                # deliberately: the currency-less form prices the line in the
+                # shop's own currency, which is the only correct answer for a
+                # sale happening on the shop's own floor.
+                "originalUnitPrice": f"{float(it.get('price') or 0):.2f}",
+            })
+        if not lines:
+            raise ValueError("A checkout link needs at least one line")
+
+        draft_input: dict = {
+            "lineItems": lines,
+            # Tagged so the store can see — and report on — which of its sales
+            # closed on the floor without a till. The tag is the attribution.
+            "tags": ["cuesea", "cuesea:floor-checkout"],
+        }
+        if note:
+            draft_input["note"] = str(note)[:500]
+        if guest_id:
+            # Attaching the customer is what makes the invoice theirs: Shopify
+            # pre-fills their details and offers Shop Pay one-tap.
+            draft_input["purchasingEntity"] = {"customerId": guest_id}
+
+        data = self.t.query(M_DRAFT_ORDER_CREATE, {"input": draft_input})
+        payload = (data or {}).get("draftOrderCreate") or {}
+        errors = payload.get("userErrors") or []
+        if errors:
+            first = errors[0] or {}
+            raise RuntimeError(
+                f"Shopify refused the draft order: {first.get('message') or errors[:1]}")
+        draft = payload.get("draftOrder") or {}
+        url = draft.get("invoiceUrl")
+        if not url:
+            # A draft with no invoice URL is not a checkout — most likely the
+            # token is missing write_draft_orders and the API answered thinly.
+            raise RuntimeError(
+                "Shopify created no invoice URL. Check the app token carries "
+                "the write_draft_orders scope.")
+        money = ((draft.get("totalPriceSet") or {}).get("presentmentMoney") or {})
+        return {
+            "url": url,
+            "draft_id": draft.get("id") or "",
+            "total": float(money.get("amount") or 0),
+            "currency": money.get("currencyCode") or draft.get("currencyCode") or "",
+        }
 
     # ---- live floor inventory -------------------------------------------
     def floor_inventory(self) -> list[dict]:
