@@ -47,9 +47,10 @@ const QR = Array.from({ length: 21 }, (_, y) =>
  * a reload after a mint or a revoke shows what the write left behind rather
  * than what the client hoped for.
  */
-async function boot({ devices = [] } = {}) {
+async function boot({ devices = [], ...opts } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
-  const state = { devices: [...devices], mints: [], revoked: [], reissued: [] };
+  const state = { devices: [...devices], mints: [], revoked: [], reissued: [],
+                  refuseHost: opts.refuseHost || false, preflight: opts.preflight };
   const user = {
     id: "u1", name: "Cue Staff", email: "staff@cuesea.ai",
     role: "cue_admin", tenant_slug: null,
@@ -66,6 +67,15 @@ async function boot({ devices = [] } = {}) {
     if (req.method() === "POST") {
       const body = JSON.parse(req.postData() || "{}");
       state.mints.push(body);
+      // The preflight refusal, as the server sends it: 409, nothing minted.
+      // Cleared once the caller says they know better, which is the only way
+      // past it and has to be exercised rather than assumed.
+      if (state.refuseHost && !body.despite_wrong_host) {
+        return json(route, {
+          detail: "https://pocket.cuesea.ai is serving “cue-console”, not “cue-pocket”. "
+            + "A token scanned from here would go to the wrong application. Nothing was minted.",
+        }, 409);
+      }
       const device = {
         id: `d${state.devices.length + 1}`, label: body.label, serial: body.serial,
         surface: body.surface, user_id: body.user_id, assigned_to: null,
@@ -76,6 +86,7 @@ async function boot({ devices = [] } = {}) {
         device, token: TOKEN,
         launch_url: `https://lens.cuesea.ai/?t=${TOKEN}&tenant=gap`,
         qr: body.surface === "even-g2" ? QR : null,
+        preflight: { state: state.preflight || "skipped" },
       }, 201);
     }
     return json(route, { devices: state.devices });
@@ -259,6 +270,85 @@ async function openTenant(p) {
     state.reissued.includes("d3") && (await p.textContent(".minted")).length > 0,
     JSON.stringify(state.reissued));
 
+  await ctx.close();
+}
+
+
+// --- the mint preflight ------------------------------------------------------
+//
+// A provision token *is* the store's identity, and on a phone it rides in a QR.
+// Pointed at the wrong application, that scan hands a live store credential to
+// whatever is actually there — its logs, its analytics, the phone's history —
+// while the pairing merely appears to fail, so nobody revokes it.
+//
+// `pocket.cuesea.ai` really did serve an old project for its first hours. The
+// server refuses this now; what the panel must do is make the refusal
+// actionable rather than a red box somebody clicks past.
+
+{
+  const { p, ctx, state } = await boot({ refuseHost: true });
+  await openTenant(p);
+  await p.locator('button:has-text("Add glasses")').first().click();
+  await p.waitForSelector(".mint-form", { timeout: 8_000 });
+  await p.selectOption(".mint-form select.assign", "phone");
+  await p.fill('.mint-form input[placeholder="Denim Wall pair 1"]', "Till 4");
+  await p.click('.mint-form button[type="submit"]');
+  await p.waitForTimeout(400);
+
+  const body = await p.textContent(".mint-form");
+  check("a refused mint says the hostname is serving something else",
+    /serving something else/i.test(body), body.slice(0, 200));
+  check("and names what it found, rather than a status code",
+    /cue-console/.test(body) && /cue-pocket/.test(body), body.slice(0, 300));
+
+  check("no token or QR is shown, because nothing was minted",
+    (await p.locator("[data-testid=launch-url]").count()) === 0
+      && (await p.locator(".qr").count()) === 0);
+
+  // The override exists because an operator mid-migration may know something
+  // the check cannot — and a guard with no way past it is a guard somebody
+  // switches off in the environment, permanently.
+  await p.click("button:has-text('Mint anyway')");
+  await p.waitForTimeout(400);
+  check("minting anyway is possible, and says so explicitly on the wire",
+    state.mints.some((m) => m.despite_wrong_host === true),
+    JSON.stringify(state.mints));
+  check("and then the token appears",
+    (await p.locator("[data-testid=launch-url]").count()) === 1);
+
+  await ctx.close();
+}
+
+{
+  // "We could not ask" is not "we checked". An admin about to hold a QR up is
+  // the only person who can act on the difference, and silence would read as
+  // verified.
+  const { p, ctx } = await boot({ preflight: "unreachable" });
+  await openTenant(p);
+  await p.locator('button:has-text("Add glasses")').first().click();
+  await p.waitForSelector(".mint-form", { timeout: 8_000 });
+  await p.selectOption(".mint-form select.assign", "phone");
+  await p.fill('.mint-form input[placeholder="Denim Wall pair 1"]', "Till 5");
+  await p.click('.mint-form button[type="submit"]');
+  await p.waitForTimeout(400);
+
+  const body = await p.textContent(".minted");
+  check("an unverified mint says the address could not be checked",
+    /could not reach that address/i.test(body), body.slice(0, 300));
+  await ctx.close();
+}
+
+{
+  const { p, ctx } = await boot({ preflight: "ok" });
+  await openTenant(p);
+  await p.locator('button:has-text("Add glasses")').first().click();
+  await p.waitForSelector(".mint-form", { timeout: 8_000 });
+  await p.selectOption(".mint-form select.assign", "phone");
+  await p.fill('.mint-form input[placeholder="Denim Wall pair 1"]', "Till 6");
+  await p.click('.mint-form button[type="submit"]');
+  await p.waitForTimeout(400);
+  check("a verified mint says it was checked",
+    /serving the right app/i.test(await p.textContent(".minted")));
   await ctx.close();
 }
 

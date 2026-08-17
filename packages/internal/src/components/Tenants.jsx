@@ -567,6 +567,21 @@ function MintedDevice({ minted, onDone }) {
         </p>
       )}
 
+      {/* Whether the host was actually checked. "Verified" and "we could not
+          ask" both mint, and the admin holding this QR up is the only person
+          who can act on the difference. Silence here would read as verified. */}
+      {minted.preflight?.state === "ok" && (
+        <p className="meta" style={{ margin: "0 0 12px" }}>
+          Checked: that address is serving the right app.
+        </p>
+      )}
+      {minted.preflight?.state === "unreachable" && (
+        <p className="meta flame" style={{ margin: "0 0 12px", lineHeight: 1.5 }}>
+          We could not reach that address to check what it serves. Open the
+          link yourself before anyone scans this.
+        </p>
+      )}
+
       {minted.qr && (
         <div style={{ marginBottom: 12 }}>
           <Qr rows={minted.qr} />
@@ -591,12 +606,18 @@ function MintDevice({ tenant, users, onCancel, onMinted }) {
   const [form, setForm] = useState({ surface: "even-g2", label: "", serial: "", user_id: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // The server refused because the launch URL's host is serving a different
+  // application. Held separately from `error` because it is not a failure to
+  // report and dismiss — it is a question, and the only honest answers are
+  // "fix the hostname" or "I know, do it anyway".
+  const [wrongHost, setWrongHost] = useState(null);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const surface = SURFACES.find((s) => s.id === form.surface);
 
-  async function submit(e) {
-    e.preventDefault();
+  async function submit(e, despite = false) {
+    if (e) e.preventDefault();
     setBusy(true); setError(null);
+    if (despite) setWrongHost(null);
     try {
       onMinted(await api.mintDevice(tenant.slug, {
         surface: form.surface,
@@ -606,9 +627,15 @@ function MintDevice({ tenant, users, onCancel, onMinted }) {
         // the next one.
         serial: form.surface === "even-g2" && form.serial.trim() ? form.serial.trim() : null,
         user_id: form.user_id || null,
+        despite_wrong_host: despite,
       }));
     } catch (err) {
-      setError(err.message);
+      // 409 is the preflight, and only the preflight, on this route.
+      if (err instanceof ApiError && err.status === 409 && /minted/i.test(err.message)) {
+        setWrongHost(err.message);
+      } else {
+        setError(err.message);
+      }
     } finally {
       setBusy(false);
     }
@@ -617,6 +644,28 @@ function MintDevice({ tenant, users, onCancel, onMinted }) {
   return (
     <form className="mint-form" onSubmit={submit}>
       {error && <div className="notice error" style={{ marginBottom: 12 }}>{error}</div>}
+
+      {/* Not an error dialog. The token in a QR *is* the store's identity, and
+          a QR pointed at the wrong application hands it to that application —
+          its logs, its analytics, the phone's history — while the pairing just
+          appears to fail. Nothing was minted, so the only cost of stopping
+          here is a minute. */}
+      {wrongHost && (
+        <div className="notice error" style={{ marginBottom: 12 }}>
+          <strong>That hostname is serving something else.</strong>
+          <p style={{ margin: "8px 0 12px", lineHeight: 1.55 }}>{wrongHost}</p>
+          <div className="btn-row">
+            <button type="button" className="btn small" onClick={() => setWrongHost(null)}>
+              I'll fix the hostname
+            </button>
+            <button type="button" className="btn small ghost" disabled={busy}
+                    onClick={() => submit(null, true)}>
+              Mint anyway
+            </button>
+          </div>
+        </div>
+      )}
+
       <label className="field">
         <span>Surface</span>
         <select className="assign" value={form.surface} onChange={set("surface")}>
