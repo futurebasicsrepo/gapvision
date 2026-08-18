@@ -1,0 +1,20 @@
+# What the tests need, on top of requirements.txt.
+#
+# Split out because these are not shipped: the Railway image installs
+# requirements.txt and nothing here, so a test-only dependency landing in that
+# file is weight in production for no reason.
+#
+# This file exists because of the first CI run. `starlette.testclient` needs an
+# HTTP client, and every developer machine already had `httpx` sitting there as
+# a transitive dependency of something else — so the suite passed locally for
+# months while depending on a package nothing declared. A clean checkout could
+# not run the tests at all, and until there was CI, no clean checkout ever
+# tried.
+#
+# httpx rather than httpx2: starlette prefers httpx2 now and says so in a
+# deprecation warning on every run, but httpx is what every local run and every
+# result quoted in a PR so far was produced with. Moving the test client's HTTP
+# stack is its own change with its own blast radius, not a thing to slip into a
+# CI fix.
+pytest>=8.0
+httpx>=0.27

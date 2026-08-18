@@ -284,27 +284,22 @@ const dump = (page) => page.evaluate(() => {
   await ctx.close();
 }
 
-// --- 4b. the built bundle does not point at a laptop -------------------------
+// --- 4b. the page loads its bundle at all ------------------------------------
 
 {
-  // The failure this catches is the one that survives every other check: the
-  // build succeeds, the deploy goes green, and the app talks to localhost —
-  // discovered by an associate whose sign-in does nothing. A deployed bundle
-  // whose only server URL is a loopback address is a broken app that looks
-  // fine from every angle except the one that matters.
   const res = await fetch(`${URL}/`);
   const html = await res.text();
   const src = (html.match(/src="([^"]*index-[^"]*\.js)"/) || [])[1];
   check("the page loads a bundle", !!src, html.slice(0, 200));
-
-  const bundle = await (await fetch(new global.URL(src, URL).href)).text();
-  const loopbacks = bundle.match(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g) || [];
-  const others = bundle.match(/https:\/\/[a-z0-9.-]+\.(app|ai|com)/g) || [];
-
-  check("a loopback URL is never the bundle's only server address",
-    loopbacks.length === 0 || others.length > 0,
-    `loopback: ${JSON.stringify([...new Set(loopbacks)])}, real: ${JSON.stringify([...new Set(others)])}`);
 }
+
+// The "a loopback URL is never the bundle's only server address" check used to
+// live here and could never pass: this suite runs against
+// `scripts/browser-suite.sh`, which builds against http://localhost:4000 on
+// purpose so the page under test talks to the local stack. The harness
+// falsified the assertion, so `browser-suite.sh pocket` was red by
+// construction. It is a property of a release build and now lives in
+// `packaged-bundle.test.mjs`, which reads a clean `dist/` and runs in CI.
 
 // --- 5. the manifest is installable ------------------------------------------
 

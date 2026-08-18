@@ -171,6 +171,67 @@ def test_size_availability_is_honest_without_variant_data():
     assert size_availability(item, None) == ("yes", 5)
 
 
+def test_a_waist_spoken_as_a_bare_number_finds_the_variant():
+    """The 18 Aug demo bug, and the most expensive kind there is.
+
+    Nobody on a floor asks for a 32x30. They ask for **a 32**, and the rail is
+    keyed by waist and inseam. This used to answer "No 32 ... on the floor"
+    with three of them hanging on the rail: a confident negative, which is the
+    one answer that costs an associate's trust permanently. It is also the
+    literal question the customer deck uses to sell the product.
+    """
+    item = jeans()                                  # 32x30 has 3
+    assert size_availability(item, "32") == ("yes", 3)
+    assert size_availability(item, "32x30") == ("yes", 3)   # exact still works
+
+
+def test_a_bare_waist_counts_every_inseam_it_names():
+    """One spoken waist can name several variants, and the associate asked
+    about the waist. Answering with only the first inseam found would under-
+    report the rail — "one left" when there are four is its own bad answer."""
+    item = {"name": "Jeans", "stock": 9,
+            "sizes": {"32x30": 3, "32x32": 1, "34x30": 2}}
+    assert size_availability(item, "32") == ("yes", 4)
+
+
+def test_a_bare_waist_that_really_is_gone_is_still_a_no():
+    """The fix must not turn every miss into a yes: 34x32 is carried and
+    empty, which is a real "no" and has to survive."""
+    item = jeans()                                  # 34x32 has 0
+    assert size_availability(item, "34") == ("no", 0)
+
+
+def test_a_size_we_cannot_classify_is_unknown_not_absent():
+    """The other half of the old bug. Any unmatched key fell through to a flat
+    ("no", 0), so a size we simply could not parse was reported to a merchant
+    as stock we do not have. Blindness must not be published as fact."""
+    item = jeans()
+    assert size_availability(item, "petite") == ("unknown", None)
+    # But a size in a scheme we *can* compare, genuinely not carried, is a no.
+    assert size_availability(item, "40") == ("no", 0)
+
+
+def test_alternatives_survive_the_scheme_crossing():
+    """Asking for a 32 that is gone should still offer what is on the rail.
+    Demanding identical schemes made `nearest_sizes` silent for exactly the
+    phrasing people use, which turns a recoverable miss into a dead end."""
+    item = {"name": "Jeans", "stock": 6, "sizes": {"30x30": 2, "32x30": 0, "34x32": 1}}
+    alts = nearest_sizes(item, "32")
+    assert alts, "a bare waist must still get alternatives"
+    assert all("x" in a for a in alts)
+    # The size they asked for is never offered back to them as an alternative.
+    assert not any(a.startswith("32x30") for a in nearest_sizes(jeans(), "32"))
+
+
+def test_the_decks_own_question_answers_correctly_end_to_end():
+    """Through `answer_query`, not just the helper — the deck's example
+    sentence, against the seeded store the deck offers to demo on."""
+    r = answer_query("do you have the barrel jean in a 32", crm.INVENTORY)
+    assert r["product"]["sku"] == "GAP-DNM-0498"
+    assert r["answer"].startswith("Yes"), r["answer"]
+    assert "3" in r["answer"]
+
+
 # --- answers -----------------------------------------------------------------
 
 def guest():

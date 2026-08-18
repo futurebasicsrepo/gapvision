@@ -30,11 +30,7 @@ app.use((req, res, next) =>
 
 // Static clients (plugin, dashboard) cannot hold the AI service key, so they
 // call us and we attach it server-side. Mounted before the socket wiring.
-app.use(createAiProxy({
-  aiServiceUrl: AI_SERVICE_URL,
-  apiKey: AI_API_KEY,
-  allowRoster: process.env.GAPVISION_ALLOW_ROSTER === "true",
-}));
+app.use(createAiProxy({ aiServiceUrl: AI_SERVICE_URL, apiKey: AI_API_KEY }));
 
 /** The trailing digits of a Shopify GID, as POS wants ids, or null. */
 function numericGid(gid) {

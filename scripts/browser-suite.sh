@@ -89,10 +89,13 @@ PIDS+=($!)
 wait_for "$RT_URL/health" "realtime server"
 
 # Each suite: the package to build and preview, and the port it expects.
+# The port belongs to the test file, not to this script — pocket previewed on
+# 5178 while `pocket-browser.mjs` connected to 5192, so this path had never
+# once worked. Change one of these only by reading the suite it serves.
 case "$SUITE" in
   gestures|widgets|floor-dm) PKG="glasses-plugin"; PORT=5180 ;;
   console|leads)             PKG="internal";      PORT=5176 ;;
-  pocket)                    PKG="pocket";        PORT=5178 ;;
+  pocket)                    PKG="pocket";        PORT=5192 ;;
   *) echo "unknown suite: $SUITE" >&2; exit 2 ;;
 esac
 

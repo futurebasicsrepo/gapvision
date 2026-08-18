@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from . import (capabilities, checkout, db, mailer, pos, retention, secrets_box,
                vision, widgets)
 from .auth import KeyHeader, guard, startup_check
+from . import crm_provider
 from .crm_provider import TenantNotConfigured, get_crm_for, tenant_status
 from .llm import get_provider
 from .personas import match_products
@@ -220,14 +221,31 @@ app.include_router(guest_analytics_router)
 
 @app.get("/api/guests")
 def list_guests(request: Request, tenant: str = "gap", x_gapvision_key: str | None = KeyHeader):
-    """Roster of opted-in guests for the given tenant.
+    """Roster of guests for a demo tenant, and only ever a demo tenant.
 
-    Dev affordance only. In production, tap check-in resolves one specific
-    guest on request — a roster of everyone is the shape this product exists
-    to avoid. Do not expose it to a client.
+    A list of everyone in a store is the exact shape tap-to-reveal exists to
+    eliminate, and it is enumerable: the ids it returns are the ids
+    `/api/guest-context` takes. It survives at all because picking a guest off
+    a list is how the simulator and the associate view stage an arrival with
+    no plate to tap.
+
+    So it is bounded by the only fact that cannot be typed by hand: whether
+    the adapter behind this tenant can name a real person. A mock-backed
+    tenant serves invented people and may list them. Anything holding a live
+    credential is refused here, whatever the tenant is called — which is what
+    makes "there is no endpoint that enumerates your customers" true rather
+    than merely intended.
     """
     guard(request, tenant, x_gapvision_key)
-    return _crm(tenant).all_guests()
+    crm = _crm(tenant)
+    if not crm_provider.serves_synthetic_guests(crm):
+        raise HTTPException(
+            status_code=403,
+            detail=("Roster listing is available for demo tenants only. This "
+                    "tenant has a live store connected, and CueSea has no "
+                    "endpoint that enumerates a real customer list."),
+        )
+    return crm.all_guests()
 
 
 @app.post("/api/guest-context")

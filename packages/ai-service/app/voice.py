@@ -286,39 +286,91 @@ def _names_absent_garment(transcript: str, inventory: list[dict]) -> bool:
     return not (spoken & stocked)
 
 
+def _size_keys_matching(sizes: dict, size: str) -> list[str]:
+    """The variant keys a spoken size refers to.
+
+    Exact match first. Failing that, the cross-scheme case that actually
+    happens on a floor: nobody asks for a 32x30, they ask for **a 32**, and the
+    rail is keyed by waist and inseam. One spoken waist can name several
+    variants, so this returns all of them rather than the first — "do you have
+    a 32" is answered by every 32 on the rail, whatever the inseam.
+    """
+    want = str(size).strip().lower()
+    exact = [k for k in sizes if str(k).strip().lower() == want]
+    if exact:
+        return exact
+
+    want_scheme = size_scheme(size)
+    if want_scheme == "numeric":
+        # "32" against 32x30 / 32x32.
+        return [k for k in sizes
+                if size_scheme(k) == "waist"
+                and str(k).strip().lower().split("x")[0] == want]
+    if want_scheme == "waist":
+        # The mirror: "32x30" against a rail keyed by waist alone.
+        waist = want.split("x")[0]
+        return [k for k in sizes
+                if size_scheme(k) == "numeric"
+                and str(k).strip().lower() == waist]
+    return []
+
+
 def size_availability(item: dict, size: str | None) -> tuple[str, int | None]:
     """('yes' | 'no' | 'unknown', units) for a size in a floor item.
 
     `sizes` is optional on inventory records: CRMs that expose variant-level
     counts (the Gap demo dataset; Shopify once variants land) fill it in, and
     the ones that don't get an honest 'unknown' rather than a guess.
+
+    That honesty has to survive the *key* not matching too, which is what this
+    used to get wrong: any unmatched size fell through to a flat ("no", 0). A
+    miss is only a "no" when the two sizes were comparable in the first place —
+    same scheme, or a waist spoken against a WxL rail. When they cannot be
+    lined up at all the answer is 'unknown', because "I can't see that size" is
+    a different sentence from "we don't have it", and a confidently wrong "no"
+    is the one failure that costs an associate's trust for good.
     """
     if not size:
         return ("yes" if item.get("stock", 0) > 0 else "no", item.get("stock", 0))
     sizes = item.get("sizes")
     if not isinstance(sizes, dict):
         return ("unknown", None)
-    for key, units in sizes.items():
-        if str(key).lower() == size.lower():
-            return ("yes" if units > 0 else "no", int(units))
-    return ("no", 0)
+
+    matched = _size_keys_matching(sizes, size)
+    if matched:
+        units = sum(int(sizes[k] or 0) for k in matched)
+        return ("yes" if units > 0 else "no", units)
+
+    # Nothing matched. Only claim "no" when the schemes could be compared at
+    # all — otherwise we would be reporting our own blindness as the store's
+    # stock, which is the exact mistake this function exists to avoid.
+    want, have = size_scheme(size), item_scheme(item)
+    comparable = bool(want) and bool(have) and (
+        want == have or {want, have} == {"numeric", "waist"})
+    return ("no", 0) if comparable else ("unknown", None)
 
 
 def nearest_sizes(item: dict, size: str | None, limit: int = 2) -> list[str]:
     """In-stock sizes to offer when the one they asked for is gone.
 
-    Same sizing scheme only — offering "S (8)" to someone asking for a 32x30
-    is worse than offering nothing.
+    Comparable schemes only — offering "S (8)" to someone asking for a 32x30 is
+    worse than offering nothing. A waist and a WxL rail *are* comparable, which
+    is why this asks the same question `size_availability` does rather than
+    demanding the two schemes be identical: ask for a 32 that is gone and the
+    useful reply is "30x30 (2), 34x32 (1)", not silence.
     """
     sizes = item.get("sizes")
     if not isinstance(sizes, dict):
         return []
     want = size_scheme(size)
+    already = set(_size_keys_matching(sizes, size)) if size else set()
     have = [
         f"{k} ({v})" for k, v in sizes.items()
-        if v > 0
-        and str(k).lower() != str(size).lower()
-        and (not want or size_scheme(k) == want)
+        if (v or 0) > 0
+        and k not in already
+        and (not want
+             or size_scheme(k) == want
+             or {want, size_scheme(k)} == {"numeric", "waist"})
     ]
     return have[:limit]
 
