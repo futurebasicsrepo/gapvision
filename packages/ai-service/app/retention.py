@@ -235,6 +235,18 @@ def sweep_all() -> list[dict[str, Any]]:
     except Exception as e:
         log.warning("retention could not redact deck leads: %s", e)
 
+    # The pipeline proper (`leads` + `lead_activities`, migration 014) is the
+    # same kind of table as `deck_leads` — ours, tenant-less, full of names —
+    # and gets the same treatment on the same window, separately, so a failure
+    # in one sweep does not silently skip the other.
+    try:
+        from . import growth
+        redacted = growth.sweep_leads()
+        if redacted:
+            log.info("retention redacted %s aged pipeline leads", redacted)
+    except Exception as e:
+        log.warning("retention could not redact pipeline leads: %s", e)
+
     return runs
 
 

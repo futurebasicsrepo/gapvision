@@ -1120,3 +1120,30 @@ body::before {
   .conn-summary { gap: 22px; }
   .conn-kind { margin-left: 0; width: 100%; }
 }
+
+/* --- the pipeline ------------------------------------------------------------
+   Stages are sea, because a stage is a measurement. Flame appears in exactly
+   one place: a lead whose last event is an unanswered reply — the pipeline's
+   only unforgivable state. The stage filter is the pill row, so "where is
+   everything" is one glance and zero clicks. */
+.stage-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
+.stage-row .pill { cursor: pointer; background: transparent; }
+
+.lead-add {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px; align-items: end; margin: 0 0 16px;
+  padding: 14px; border: 1px solid var(--slate-600); border-radius: 12px;
+}
+
+tr.lead-hot td:first-child { border-left: 2px solid var(--flame); }
+
+.lead-touch {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin: 10px 0;
+}
+.lead-touch input { flex: 1 1 220px; }
+
+.lead-log { list-style: none; margin: 6px 0 10px; padding: 0; }
+.lead-log li { padding: 5px 0; font-size: 13px; line-height: 1.5;
+               border-bottom: 1px solid rgba(255, 255, 255, 0.055); }
+.lead-log li:last-child { border-bottom: 0; }

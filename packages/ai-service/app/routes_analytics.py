@@ -12,7 +12,7 @@ thing that knows what actually happened on the floor.
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import analytics, capabilities, db, decks, identity, presence, shifts
+from . import analytics, capabilities, db, decks, growth, identity, presence, shifts
 from .auth import KeyHeader, guard
 from .identity import BearerHeader, current_user, require, scope_tenant
 
@@ -630,3 +630,124 @@ def post_deck_link(req: DeckLink, authorization: str | None = BearerHeader):
     return {"link": decks.create_link(
         deck=req.deck, token=req.token, prepared_for=req.preparedFor,
         gated=req.gated, created_by=me["id"])}
+
+
+# --- growth: the pipeline (ours, cue_admin only) -----------------------------
+#
+# Same boundary as the deck routes above, same reasoning: these rows are our
+# prospects, there is no tenant to scope by, and a retailer's manager reading
+# `/api/analytics/*` must never reach them. Module: `app/growth.py`.
+
+class SiteLead(BaseModel):
+    email: str | None = None
+    name: str | None = None
+    company: str | None = None
+    title: str | None = None
+    storeCount: int | str | None = None
+    pos: str | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_term: str | None = None
+    utm_content: str | None = None
+
+
+class LeadCreate(BaseModel):
+    email: str
+    name: str | None = None
+    company: str | None = None
+    title: str | None = None
+    storeCount: int | None = None
+    pos: str | None = None
+    source: str | None = None
+    stage: str | None = None
+    notes: str | None = None
+
+
+class LeadPatch(BaseModel):
+    stage: str | None = None
+    notes: str | None = None
+    owner: str | None = None
+
+
+class LeadActivity(BaseModel):
+    kind: str
+    direction: str | None = None
+    body: str | None = None
+
+
+@ingest.post("/site-lead", status_code=204)
+def ingest_site_lead(req: SiteLead, request: Request,
+                     x_gapvision_key: str | None = KeyHeader):
+    """A form fill from cuesea.ai, via the realtime server.
+
+    Service key, and **204 whatever happens** — the identical posture to
+    `/deck-lead`, for the identical reason: this call sits between a merchant
+    and the confirmation they were promised, and a form that errors costs
+    more than a dropped row the realtime server's log can recover.
+    """
+    guard(request, None, x_gapvision_key)
+    try:
+        growth.record_site_lead(req.model_dump())
+    except Exception as exc:   # pragma: no cover - diagnostics only
+        print(f"[cue] site lead dropped: {exc}", flush=True)
+    return None
+
+
+@router.get("/growth/leads")
+def get_growth_leads(stage: str | None = None, days: int = 365,
+                     authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    return {"leads": growth.leads(stage, days), "stages": list(growth.STAGES)}
+
+
+@router.post("/growth/leads", status_code=201)
+def post_growth_lead(req: LeadCreate, authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    lead = growth.create_lead(req.model_dump(), created_by=me["id"])
+    if lead is None:
+        raise HTTPException(status_code=400, detail="An email is required")
+    return {"lead": lead}
+
+
+@router.patch("/growth/leads/{lead_id}")
+def patch_growth_lead(lead_id: str, req: LeadPatch,
+                      authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    lead = growth.update_lead(lead_id, req.model_dump(exclude_unset=True),
+                              updated_by=me["id"])
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Unknown lead")
+    return {"lead": lead}
+
+
+@router.get("/growth/leads/{lead_id}/activities")
+def get_growth_activities(lead_id: str,
+                          authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    return {"activities": growth.activities(lead_id)}
+
+
+@router.post("/growth/leads/{lead_id}/activities", status_code=201)
+def post_growth_activity(lead_id: str, req: LeadActivity,
+                         authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    row = growth.add_activity(lead_id, req.model_dump(), created_by=me["id"])
+    if row is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Kind must be one of {', '.join(growth.ACTIVITY_KINDS)}")
+    return {"activity": row}
+
+
+@router.get("/growth/sources")
+def get_growth_sources(days: int = 90,
+                       authorization: str | None = BearerHeader):
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    return growth.sources(days)

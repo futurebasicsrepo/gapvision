@@ -11,6 +11,7 @@ import Retention from "./components/Retention.jsx";
 import LensSim from "./components/LensSim.jsx";
 import Sales from "./components/Sales.jsx";
 import Marketing from "./components/Marketing.jsx";
+import Leads from "./components/Leads.jsx";
 import Connections from "./components/Connections.jsx";
 import Architecture from "./components/Architecture.jsx";
 import Brand from "./components/Brand.jsx";
@@ -46,6 +47,9 @@ const SECTIONS = [
       // Platform, not Reference: the decks are live state — who has been sent
       // what, and who opened it — rather than something you read once.
       { key: "sales", name: "Sales", hint: "the decks, and who has them" },
+      // Between Sales and Marketing on purpose: a lead arrives from marketing
+      // and leaves as sales, and this is the screen that holds the middle.
+      { key: "leads", name: "Leads", hint: "the pipeline, and every touch" },
       { key: "marketing", name: "Marketing", hint: "assets, channels, learnings" },
     ],
   },
@@ -69,6 +73,7 @@ const TITLES = {
   retention: ["Retention", "Each store's window, and what the last sweep actually deleted."],
   plates: ["Plates", "Every printed door, how hard each is being used, and the one control that matters."],
   "lens-sim": ["Lens Sim", "The Meta lens, running the bundle the glasses run, with nothing to plug in."],
+  leads: ["Leads", "Everyone we are talking to, what stage they sit in, and every touch — the site form writes here, outbound is added by hand."],
   marketing: ["Marketing", "The assets, where outreach can happen, what can be run, and what we have actually learned."],
   sales: ["Sales", "Both decks, as things you can send \u2014 open one, share a link, gate it behind an email, or hand over the PDF."],
   architecture: ["Architecture", "The system, the decisions behind it, and what's still missing."],
@@ -241,6 +246,7 @@ export default function App() {
           {view === "retention" && <Retention />}
           {view === "lens-sim" && <LensSim />}
           {view === "sales" && <Sales />}
+          {view === "leads" && <Leads />}
           {view === "marketing" && <Marketing />}
           {view === "architecture" && <Architecture />}
           {view === "features" && (

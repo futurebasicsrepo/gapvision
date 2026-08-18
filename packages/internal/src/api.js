@@ -160,6 +160,24 @@ export const api = {
   // --- analytics, for the usage column -------------------------------------
   summary: (tenant, days = 7) =>
     request(`/api/analytics/summary?days=${days}&tenant=${encodeURIComponent(tenant)}`),
+
+  // --- growth: the pipeline (ours, cue_admin only) --------------------------
+  // Same origin note as plates: these live on /api/analytics because that is
+  // what the realtime proxy passes through, but the routes themselves require
+  // cue_admin — a manager's token gets a 403, not a filtered list.
+  growthLeads: (stage, days = 365) =>
+    request(`/api/analytics/growth/leads?days=${days}` +
+            (stage ? `&stage=${encodeURIComponent(stage)}` : "")),
+  createGrowthLead: (body) =>
+    request("/api/analytics/growth/leads", { method: "POST", body }),
+  updateGrowthLead: (id, body) =>
+    request(`/api/analytics/growth/leads/${id}`, { method: "PATCH", body }),
+  growthActivities: (id) =>
+    request(`/api/analytics/growth/leads/${id}/activities`),
+  addGrowthActivity: (id, body) =>
+    request(`/api/analytics/growth/leads/${id}/activities`, { method: "POST", body }),
+  growthSources: (days = 90) =>
+    request(`/api/analytics/growth/sources?days=${days}`),
 };
 
 /**

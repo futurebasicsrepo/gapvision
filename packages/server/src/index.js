@@ -1343,6 +1343,68 @@ async function finalizeVoice(socket, reason) {
 const PUBLIC_SOURCES = new Set(["nfc-plate", "qr-plate"]);
 
 /**
+ * The site's "book a pilot" form — the one lead door a browser can reach.
+ *
+ * cuesea.ai cannot hold the service key any more than a guest's phone can, so
+ * the form posts here and this server forwards to `/api/ingest/site-lead`
+ * with the key attached — the same shape as `/api/presence` below, pointed at
+ * our pipeline instead of a store's floor.
+ *
+ * Same posture as the deck gate (`sales-site/api/lead.js`): whitelisted
+ * fields, bounded, a per-IP speed bump that is honest about being a speed
+ * bump, and a success answer on every path that isn't abuse — a merchant who
+ * filled the form must never meet a 500 because our CRM hiccuped. The
+ * `website` field is a honeypot: it is invisible in the real form, so a body
+ * that fills it was not typed by a person, and it gets the same 204 as
+ * everyone else rather than a tell.
+ */
+const LEAD_FIELDS = ["email", "name", "company", "title", "storeCount", "pos",
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
+const LEAD_WINDOW_MS = 60_000;
+const LEAD_PER_WINDOW = 5;
+const leadHits = new Map();
+
+app.post("/api/growth/lead", async (req, res) => {
+  const ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
+  const now = Date.now();
+  const seen = (leadHits.get(ip) || []).filter((t) => now - t < LEAD_WINDOW_MS);
+  seen.push(now);
+  leadHits.set(ip, seen);
+  if (leadHits.size > 5_000) {
+    for (const [k, v] of leadHits) {
+      if (!v.length || now - v[v.length - 1] > LEAD_WINDOW_MS * 5) leadHits.delete(k);
+    }
+  }
+  if (seen.length > LEAD_PER_WINDOW) return res.status(429).json({ error: "Slow down" });
+
+  const body = req.body || {};
+  // Honeypot filled → a bot. Same answer as success, no row written.
+  if (typeof body.website === "string" && body.website.trim()) {
+    return res.status(204).end();
+  }
+
+  const lead = {};
+  for (const k of LEAD_FIELDS) {
+    const v = body[k];
+    if (typeof v === "string" && v.trim()) lead[k] = v.trim().slice(0, 200);
+    else if (k === "storeCount" && Number.isFinite(v)) lead[k] = v;
+  }
+  if (!lead.email || !lead.email.includes("@")) {
+    return res.status(400).json({ error: "An email is required" });
+  }
+
+  // Fire-and-forget into the control plane. A dropped row is recoverable
+  // from this log line; a merchant staring at a spinner is not.
+  //
+  // `ingestDetailed` rather than `ingest`: the ingest route answers 204 with
+  // no body on success, which `ingest` would collapse into the same null as
+  // a failure — and then every real lead would log as a dropped one.
+  const recorded = await ingestDetailed("site-lead", lead);
+  if (!recorded.ok) console.warn("[cue] site lead not recorded", lead.email);
+  return res.status(204).end();
+});
+
+/**
  * The front door a guest's own phone can reach.
  *
  * A plate tap or a QR scan opens a page in the guest's browser. That page
