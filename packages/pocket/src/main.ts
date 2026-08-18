@@ -36,8 +36,10 @@ import { ScreenWake } from "./wake.js";
 import * as session from "./session.js";
 import { SERVER_URL } from "./config.js";
 import {
-  type Chrome, deckScreen, idleScreen, notice, paint, settingsScreen, signInScreen, strip,
+  askButton, type Chrome, deckScreen, idleScreen, notice, paint, settingsScreen,
+  signInScreen, strip,
 } from "./render.js";
+import { createMic, micSupported, type Mic, type MicState } from "./voice.js";
 
 const APP_VERSION = "0.1.0";
 const SURFACE = "phone";
@@ -103,6 +105,16 @@ const queue = new ActionQueue({
 
 type Screen = "signin" | "idle" | "deck" | "settings";
 
+/** What `voice:result` carries. A subset: the fields this surface draws.
+ *  `packages/ai-service/app/voice.py` builds it and the glasses read the same
+ *  two, so a change there shows up here as an empty card rather than a crash. */
+interface VoiceResult {
+  cue?: { lines: string[]; meta?: string[] };
+  glasses_lines?: string[];
+  answer?: string;
+  ok?: boolean;
+}
+
 const state = {
   screen: "signin" as Screen,
   connected: false,
@@ -124,6 +136,24 @@ const state = {
   error: null as string | null,
   busy: false,
   message: null as string | null,
+
+  // --- asking out loud -------------------------------------------------------
+  // `voice` is the tenant's switch, read once at boot. It decides whether a
+  // microphone is *drawn*; the AI service re-checks it on every query, so a
+  // stale or unreachable copy here cannot let a store be transcribed against
+  // its own setting. That is why the failure case below leaves Ask visible:
+  // hiding a working feature because one fetch timed out is the worse error,
+  // and the binding gate is elsewhere.
+  voiceAllowed: true,
+  // "thinking" is the server's, not the mic's — the utterance is over and the
+  // answer is being made. Kept in one field so the button never claims to be
+  // listening while the answer is already on its way.
+  voiceState: (micSupported() ? "idle" : "unsupported") as MicState | "thinking",
+  level: 0,
+  // The reply, over whatever was on screen. The engagement underneath is left
+  // exactly as it was: a question asked mid-conversation must not cost the
+  // associate the guest they were serving.
+  answer: null as DeckState | null,
 };
 
 let socket: Socket | null = null;
@@ -174,12 +204,23 @@ function render(): void {
               onSelect: () => onGesture("select"),
               onBack: () => onGesture("back"),
               onEnd: () => endEngagement(),
-            })
-          : idleScreen(chrome(), { greeting: firstName(state.who) });
+            }, ask())
+          : idleScreen(chrome(), { greeting: firstName(state.who), ask: ask() });
       default:
-        return idleScreen(chrome(), { greeting: firstName(state.who) });
+        return idleScreen(chrome(), { greeting: firstName(state.who), ask: ask() });
     }
   })();
+
+  // An answer takes the stage while it is up. `endEngagement` is deliberately
+  // not reachable from here: dismissing a reply returns you to the guest, and
+  // the only way to end a conversation is from the conversation.
+  const stage = state.answer
+    ? deckScreen(state.answer, chrome(), {
+        onSelect: () => { state.answer = select(state.answer!).state; render(); },
+        onBack: () => { state.answer = back(state.answer!); render(); },
+        onEnd: () => dismissAnswer(),
+      }, ask())
+    : body;
 
   const bar = strip(chrome());
   // The status strip doubles as the way into settings. A gear icon in a corner
@@ -188,7 +229,18 @@ function render(): void {
     if (state.screen !== "settings") { state.screen = "settings"; render(); }
   });
 
-  paint(root, bar, banner, body);
+  paint(root, bar, banner, stage);
+}
+
+/** The Ask control, or nothing when this store has voice switched off. */
+function ask(): HTMLElement | null {
+  if (!state.voiceAllowed) return null;
+  return askButton({
+    state: state.voiceState,
+    level: state.level,
+    onStart: () => startAsking(),
+    onStop: () => stopAsking(),
+  });
 }
 
 const firstName = (n: string | null) => (n ? n.split(" ")[0] : null);
@@ -255,6 +307,114 @@ function endEngagement(): void {
   render();
 }
 
+/**
+ * What this store lets the floor do.
+ *
+ * One fetch, at boot, through the realtime server — which attaches the AI
+ * service key, because a static bundle cannot hold one.
+ *
+ * Only `voice` is read here, and only to decide whether to draw a microphone.
+ * A failure leaves Ask visible on purpose: the AI service re-checks the flag
+ * on every query and answers 403 when a store has it off, so the worst a
+ * missed fetch can do is let an associate press a button that politely
+ * refuses. Hiding a working feature because one request timed out on shop
+ * wifi is the larger failure, and it is the silent one.
+ */
+async function loadCapabilities(): Promise<void> {
+  try {
+    const r = await fetch(
+      `${SERVER_URL}/api/tenant/capabilities?tenant=${encodeURIComponent(state.tenant)}`);
+    if (!r.ok) return;
+    const caps = await r.json() as { voice?: boolean };
+    if (caps.voice === false) {
+      state.voiceAllowed = false;
+      render();
+    }
+  } catch {
+    // Left as-is. See above: the binding gate is the service, not this.
+  }
+}
+
+// --- asking ------------------------------------------------------------------
+
+/**
+ * The microphone, wired to the same protocol the glasses speak.
+ *
+ * Everything it emits goes straight out on the socket rather than through
+ * `queue`: a question is not an action to be replayed later. An utterance
+ * recorded on a dead network and delivered twenty minutes afterwards would be
+ * answered against a floor that has moved on, to an associate who has stopped
+ * waiting — worse than not answering at all. The queue exists for claims and
+ * messages, which *are* still true when they arrive late.
+ */
+const mic: Mic = createMic({
+  emit: (event, payload) => { if (socket?.connected) socket.emit(event, payload); },
+  onLevel: (level) => {
+    // The meter moves far more often than anything else on screen. Repainting
+    // the whole app at frame rate for one bar is how a mid-range handset drops
+    // the audio it is supposed to be capturing.
+    state.level = level;
+    const fill = document.querySelector<HTMLElement>(".ask-fill");
+    if (fill) fill.style.width = `${Math.min(100, Math.round(level * 400))}%`;
+  },
+  onState: (micState) => {
+    state.voiceState = micState;
+    if (micState === "denied") {
+      state.message = null;   // the button says it; a banner would say it twice
+    }
+    render();
+  },
+});
+
+function startAsking(): void {
+  if (!socket?.connected) {
+    state.message = "Not connected — a question needs the floor.";
+    render();
+    return;
+  }
+  const payload = ephemeral.get("payload") as DisplayPayload | null;
+  void mic.start({
+    // Who the associate is standing with, when there is anyone. It is what
+    // makes "what did she buy last time" answerable rather than a guess.
+    guestId: (payload as { guest_id?: string } | null)?.guest_id ?? null,
+    // No focus sku, deliberately. On the glasses that field carries whatever
+    // is *on the lens*, which is how "do you have these in a 32" resolves; a
+    // `DisplayPayload` has no sku on it — recommendations carry names and
+    // prices — so there is nothing true to send. Sending the first
+    // recommendation's name would make "these" mean something the associate
+    // never looked at, which is worse than making them say the product.
+    focusSku: null,
+  });
+}
+
+function stopAsking(): void {
+  if (mic.state() !== "listening") return;
+  mic.stop();
+  state.voiceState = "thinking";
+  render();
+}
+
+/** An answer arrives. Drawn over the engagement, never instead of it. */
+function showAnswer(result: VoiceResult): void {
+  const lensMode = durable.get("lens_mode") === "classic" ? "classic" : "meta";
+  // `cue` is the AI service's own glass grammar — the same three lines the
+  // lens gets — so this reuses the card deck rather than inventing a second
+  // way to render an answer that would drift from it.
+  const payload: DisplayPayload = {
+    cue: result.cue ?? { lines: result.glasses_lines ?? [] },
+    zone: state.zone,
+  };
+  state.answer = deckOf(payload, lensMode);
+  state.voiceState = mic.state();
+  if (caps.vibrate) navigator.vibrate?.(20);
+  render();
+}
+
+function dismissAnswer(): void {
+  state.answer = null;
+  render();
+}
+
 // --- the socket --------------------------------------------------------------
 
 function connect(): void {
@@ -303,6 +463,18 @@ function connect(): void {
   socket.on("roster:you", ({ name }: { name?: string }) => {
     if (name && !state.who) { state.who = name; render(); }
   });
+
+  // The server narrates the utterance: listening → thinking → idle. Only
+  // `thinking` is worth taking, because the mic itself already knows the other
+  // two and it knows them sooner.
+  socket.on("voice:state", ({ state: s }: { state?: string } = {}) => {
+    if (s === "thinking" && state.voiceState !== "thinking") {
+      state.voiceState = "thinking";
+      render();
+    }
+  });
+
+  socket.on("voice:result", (result: VoiceResult) => showAnswer(result));
 }
 
 /**
@@ -438,6 +610,10 @@ watchForInstall(() => render());
 // --- start -------------------------------------------------------------------
 
 (async function start() {
+  // Not awaited: what a store lets the floor do is worth knowing and is never
+  // worth delaying the floor for. It arrives, and Ask disappears if it must.
+  void loadCapabilities();
+
   if (mode === "managed" && storeToken) {
     // A handheld works before anybody signs in: the device is the store, and a
     // shop that cannot answer its floor because nobody has logged in yet is a

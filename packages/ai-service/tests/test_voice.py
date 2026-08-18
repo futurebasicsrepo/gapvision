@@ -6,6 +6,7 @@ about a size or a count traces back to a record in the fixture inventory.
 import base64
 import json
 import math
+import os
 import struct
 
 import pytest
@@ -600,3 +601,60 @@ def test_a_guest_with_no_address_says_so_rather_than_guessing():
     r = voice.answer_query("what's her address", inventory=[],
                            guest={"name": "Nobody Here", "sizes": {}})
     assert "no address" in r["answer"].lower()
+
+# --- the tenant's switch, enforced where it binds ----------------------------
+
+def test_voice_is_refused_when_the_tenant_turned_it_off(monkeypatch):
+    """The gate this endpoint did not have.
+
+    `for_tenant` has always reported a `voice` flag and both clients honoured
+    it — but honouring it was the *whole* mechanism. A store with voice off was
+    protected only by a client choosing not to draw a microphone, so one build
+    shipping before the flag was read, or one new surface forgetting to ask,
+    and the retailer's decision quietly did not hold. Pocket becoming the
+    second surface that can ask is what made that worth fixing rather than
+    noting.
+
+    The camera has been enforced server-side since it shipped. Same rule, late.
+    """
+    from fastapi.testclient import TestClient
+    from app import capabilities, main
+
+    monkeypatch.setattr(capabilities, "_config", lambda slug: {"voice": False})
+    c = TestClient(main.app)
+    r = c.post("/api/voice-query",
+               headers={"x-gapvision-key": os.environ["GAPVISION_API_KEY"]},
+               json={"tenant": "gap", "transcript": "do you have these in a 32"})
+    assert r.status_code == 403, r.text
+    detail = r.json()["detail"]
+    assert "config.voice" in detail, (
+        f"the 403 has to name the flag an operator would flip: {detail}")
+
+
+def test_voice_is_allowed_when_the_store_never_said_no(monkeypatch):
+    """The converse, because a gate that refuses everything also passes the
+    test above. Absent config means on — same posture as floor comms."""
+    from fastapi.testclient import TestClient
+    from app import capabilities, main
+
+    monkeypatch.setattr(capabilities, "_config", lambda slug: {})
+    c = TestClient(main.app)
+    r = c.post("/api/voice-query",
+               headers={"x-gapvision-key": os.environ["GAPVISION_API_KEY"]},
+               json={"tenant": "gap", "transcript": "do you have these in a 32"})
+    assert r.status_code == 200, r.text
+
+
+def test_the_flag_is_checked_before_the_audio_is(monkeypatch):
+    """Order matters: a store with voice off should never have a recording of
+    its floor decoded or sent to a transcription vendor, however large."""
+    from fastapi.testclient import TestClient
+    from app import capabilities, main
+
+    monkeypatch.setattr(capabilities, "_config", lambda slug: {"voice": False})
+    c = TestClient(main.app)
+    r = c.post("/api/voice-query",
+               headers={"x-gapvision-key": os.environ["GAPVISION_API_KEY"]},
+               json={"tenant": "gap", "audio_b64": "!!!not base64 at all!!!"})
+    assert r.status_code == 403, (
+        f"expected the consent gate before the payload, got {r.status_code}: {r.text}")

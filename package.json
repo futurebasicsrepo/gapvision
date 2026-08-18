@@ -86,6 +86,8 @@
     "test:telemetry-browser": "node packages/glasses-plugin/test/telemetry-browser.mjs",
     "test:geometry": "node packages/glasses-plugin/test/geometry.test.mjs",
     "test:shift": "node packages/glasses-plugin/test/shift.test.mjs",
-    "test:pocket-bundle": "node packages/pocket/test/packaged-bundle.test.mjs"
+    "test:pocket-bundle": "node packages/pocket/test/packaged-bundle.test.mjs",
+    "test:pocket-ask": "node packages/pocket/test/ask-browser.mjs",
+    "stack:pocket-ask": "bash scripts/browser-suite.sh pocket-ask"
   }
 }

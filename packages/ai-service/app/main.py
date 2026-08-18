@@ -288,6 +288,15 @@ def voice_query(req: VoiceQueryRequest, request: Request, x_gapvision_key: str |
     """
     guard(request, req.tenant, x_gapvision_key)
 
+    slug = (req.tenant or "gap").lower()
+    if not capabilities.voice(slug):
+        raise HTTPException(
+            status_code=403,
+            detail=(f"Voice is off for tenant '{slug}' (config.voice). A "
+                    f"tenant admin turns it on in Console → Tenants. Until "
+                    f"then this store's floor is not transcribed at all."),
+        )
+
     crm = _crm(req.tenant)
     stt = get_stt()
 

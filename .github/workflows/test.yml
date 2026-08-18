@@ -213,3 +213,8 @@ jobs:
       - run: bash scripts/browser-suite.sh widgets
       - run: bash scripts/browser-suite.sh floor-dm
       - run: bash scripts/browser-suite.sh pocket
+      # The whole Ask chain on a phone: fake microphone, real PCM, real socket,
+      # real answer. Slower than the others because it holds a button for a
+      # second of audio, and worth it — every layer has a test and none of them
+      # would notice if the layers stopped meeting.
+      - run: bash scripts/browser-suite.sh pocket-ask
