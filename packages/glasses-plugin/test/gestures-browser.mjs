@@ -4,9 +4,13 @@
  * The simulator buttons emit the same protobuf-shaped payloads the Even App
  * sends, so this exercises the real decoder — not a dev shortcut around it.
  *
- *   node packages/glasses-plugin/test/gestures-browser.mjs
+ *   npm run stack:gestures
  *
- * Expects `vite preview` on :5180 plus the realtime + AI services running.
+ * That script stands the whole stack up and tears it down again. Running the
+ * file directly still works, but needs `vite preview` on :5180 built with
+ * VITE_SERVER_URL pointed at a local realtime server, and an AI service in
+ * GAPVISION_AUTH_MODE=demo — miss any one and this fails as a selector
+ * timeout rather than as a message about what is wrong.
  */
 import { chromium } from "playwright";
 
@@ -41,6 +45,20 @@ const inspector = () => page.$eval("#event-inspector", (e) => e.textContent);
 const ring = (action) => page.click(`[data-event="${action}"][data-source="ring"]`);
 const settle = () => page.waitForTimeout(350);
 
+// The deck's position strip: "SIZES · 2/10". It used to read "2 OF 10", and
+// these assertions were still matching the retired grammar long after the
+// card deck replaced it — so they failed on a working carousel.
+const AT = (n) => new RegExp(`\\u00b7\\s*${n}/\\d`);
+
+// Deck positions are 1-based over the whole deck, and card 1 is the cue —
+// so the first recommendation is 2, not 1. The retired "N OF M" strip counted
+// recommendations on their own, which is why these numbers moved.
+const CUE = 1;
+const FIRST_ITEM = CUE + 1;
+const SECOND_ITEM = CUE + 2;
+const AT_ANY = /\u00b7\s*\d+\/\d+/;
+const CLOCK = /\d\d\u00b7\d\d/;
+
 // Engage a guest so there are recommendations to scroll through.
 await page.waitForSelector("#beacon-roster button");
 await page.click("#beacon-roster button");
@@ -66,25 +84,26 @@ await settle();
 await ring("scroll-down");
 await settle();
 let view = await lens();
-let meta = await lensMeta();
-// The position indicator is a supporting fact, not one of the three lines.
+// The position strip is a supporting fact, not one of the three lines.
 check("scroll enters the recommendation carousel",
-  meta.some((l) => /1 OF \d/.test(l || "")), JSON.stringify(view.slice(0, 2)));
-const firstItem = view[0];
+  view.some((l) => AT(FIRST_ITEM).test(l || "")), JSON.stringify(view.slice(0, 3)));
+// The card's own text, not `view[0]` — that is the clock, which reads the
+// same on every card and so can never witness that the deck moved.
+const body = (v) => v.filter((l) => !AT_ANY.test(l || "") && !CLOCK.test(l || "")).join("|");
+const firstItem = body(view);
 
 await ring("scroll-down");
 await settle();
 view = await lens();
-meta = await lensMeta();
 check("scroll advances to the next item",
-  meta.some((l) => /2 OF \d/.test(l || "")) && view[0] !== firstItem,
-  JSON.stringify(view.slice(0, 1)));
+  view.some((l) => AT(SECOND_ITEM).test(l || "")) && body(view) !== firstItem,
+  JSON.stringify(view.slice(0, 3)));
 
 await ring("scroll-up");
 await settle();
-meta = await lensMeta();
+view = await lens();
 check("scroll back returns to the first item",
-  meta.some((l) => /1 OF \d/.test(l || "")), JSON.stringify(meta));
+  view.some((l) => AT(FIRST_ITEM).test(l || "")), JSON.stringify(view.slice(0, 3)));
 
 await ring("scroll-up");
 await settle();
@@ -120,15 +139,31 @@ check("nothing landed as UNDECODED", !/UNDECODED/.test(insp),
 // Even Hub rejects apps whose root-page double-tap doesn't raise the system
 // exit dialog. This is the check that keeps that from regressing.
 
-// Get back to the root page. It takes three: the first click dismisses the
-// voice answer, the second backs out of the carousel, the third ends the
-// engagement. That layering is deliberate — a press should never end a guest
-// session while something else is still on the glass.
-await ring("click");
+// Get back to the root page. Each click peels one layer: the voice answer,
+// then the carousel, then the engagement. That layering is deliberate — a
+// press should never end a guest session while something else is still on
+// the glass.
+//
+// Clicked until idle rather than a fixed three times. The count is a
+// function of how many cards the deck is carrying, and the deck stopped
+// being a fixed length when widgets arrived — three was right when a guest
+// had three recommendations and silently stopped being right afterwards,
+// which cost this suite every assertion below it.
+//
+// The route home is scroll-up to the cue, then one press. A press is not a
+// general "back": on a recommendation it *enters* the card, and pressing
+// again leaves it — so pressing repeatedly oscillates between those two and
+// never reaches idle. Only card 0, the cue, treats a press as "end the
+// engagement", and that is deliberate: ending a session in front of a
+// customer should not be reachable by accident from card seven.
+await ring("click");            // dismiss the voice answer
 await settle();
-await ring("click");
-await settle();
-await ring("click");
+for (let i = 0; i < 12; i++) {
+  if ((await lens()).some((l) => AT(CUE).test(l || ""))) break;
+  await ring("scroll-up");
+  await settle();
+}
+await ring("click");            // at the cue, a press ends the engagement
 await settle();
 check("back on the idle root page",
   (await lens()).some((l) => (l || "").includes("AWAITING GUEST SIGNAL")),
