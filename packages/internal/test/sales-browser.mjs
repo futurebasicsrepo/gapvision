@@ -44,6 +44,15 @@ const browser = await chromium.launch(
  */
 async function boot({ leads = null, links = [] } = {}) {
   const posted = [];
+  // Every deck request the page actually made: url and headers.
+  //
+  // Playwright's `**/api/...` globs match any origin, so a *relative* URL
+  // resolved against the console's own host matched these stubs exactly as
+  // well as a correct absolute one. That is why this suite stayed green while
+  // production silently recorded nothing: the panel was calling itself, on a
+  // static host with no such route, and the catch rendered it as "absent".
+  // The stub can never see that. Only the request can.
+  const seen = [];
   const ctx = await browser.newContext({
     viewport: { width: 1500, height: 1200 },
     permissions: ["clipboard-read", "clipboard-write"],
@@ -57,9 +66,12 @@ async function boot({ leads = null, links = [] } = {}) {
 
   await ctx.route("**/api/**", (r) => json(r, {}));
   await ctx.route("**/auth/me", (r) => json(r, { user }));
-  await ctx.route("**/api/analytics/deck-leads**", (r) =>
-    (leads === null ? r.fulfill({ status: 404, body: "" }) : json(r, { leads })));
+  await ctx.route("**/api/analytics/deck-leads**", (r) => {
+    seen.push({ url: r.request().url(), headers: r.request().headers() });
+    return leads === null ? r.fulfill({ status: 404, body: "" }) : json(r, { leads });
+  });
   await ctx.route("**/api/analytics/deck-links**", (route) => {
+    seen.push({ url: route.request().url(), headers: route.request().headers() });
     if (links === null) return route.fulfill({ status: 404, body: "" });
     if (route.request().method() === "POST") {
       const body = JSON.parse(route.request().postData() || "{}");
@@ -83,7 +95,7 @@ async function boot({ leads = null, links = [] } = {}) {
   await p.waitForTimeout(800);
   await p.locator(".rail-item").filter({ hasText: "Sales" }).first().click();
   await p.waitForSelector(".sales", { timeout: 8_000 });
-  return { p, ctx, posted };
+  return { p, ctx, posted, seen };
 }
 
 // --- 1. an absent lead endpoint ----------------------------------------------
@@ -208,6 +220,41 @@ async function boot({ leads = null, links = [] } = {}) {
   const investorBody = await p.textContent(".sales");
   check("switching deck switches the leads too",
     investorBody.includes("sam@acme.vc") && !investorBody.includes("dana@reformation.com"));
+
+  await ctx.close();
+}
+
+// --- 6. the panel talks to the API, not to itself ----------------------------
+//
+// The regression that motivated these. On 18 Aug two deck links were created
+// and sent, and neither was recorded: the panel called `fetch` on a *relative*
+// URL with `credentials: "include"`, so in production it asked the console's
+// own static host for `/api/analytics/deck-links` — which has no such route —
+// and authenticated with a cookie against an API that reads bearer tokens.
+// Every call failed, every failure was caught, and the panel rendered the
+// result as "no link store on this deployment".
+//
+// Neither property is observable through a stub that matches any origin, so
+// they are asserted on the request itself.
+
+{
+  const { ctx, seen } = await boot({ leads: [], links: [] });
+
+  check("the panel asked for deck links and leads at all", seen.length >= 2,
+    JSON.stringify(seen.map((r) => r.url)));
+
+  // `URL` the global is shadowed by this module's console address, so parse
+  // through globalThis rather than renaming a constant the whole file uses.
+  const origin = new globalThis.URL(URL).origin;
+  const sameOrigin = seen.filter((r) => new globalThis.URL(r.url).origin === origin);
+  check("no deck request went to the console's own origin",
+    sameOrigin.length === 0,
+    `a relative URL resolves to the static host, which serves no API: ` +
+    JSON.stringify(sameOrigin.map((r) => r.url)));
+
+  check("every deck request carried a bearer token",
+    seen.every((r) => /^Bearer /.test(r.headers.authorization || "")),
+    JSON.stringify(seen.map((r) => r.headers.authorization || "(none)")));
 
   await ctx.close();
 }
