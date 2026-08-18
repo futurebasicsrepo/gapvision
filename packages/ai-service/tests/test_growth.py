@@ -315,3 +315,174 @@ def test_a_deck_open_with_no_email_writes_no_pipeline_row():
     before = len(growth.leads())
     assert decks.record_lead({"deck": "floor", "name": "Anonymous"}) is None
     assert len(growth.leads()) == before
+
+
+# --- the work queue: what to do first ----------------------------------------
+#
+# The Leads table sorts by `updated_at` — the order things happened, which is
+# right for reading history and useless for deciding what to do this morning.
+# These assert the other question, and the ordering *is* the product: a queue
+# that puts a stalled demo above an unanswered reply is a queue that costs a
+# merchant.
+
+def _touch(lead_id, kind, direction, days_ago):
+    from app import db
+    db.execute(
+        """
+        INSERT INTO lead_activities (lead_id, kind, direction, body, at)
+        VALUES (%s, %s, %s, 'x', now() - make_interval(days => %s))
+        """,
+        (lead_id, kind, direction, days_ago),
+    )
+
+
+def _fresh(email, stage="contacted"):
+    from app import db, growth
+    db.execute("DELETE FROM leads WHERE lower(email) = lower(%s)", (email,))
+    lead = growth.create_lead({"email": email, "source": "outbound"})
+    if stage != "new":
+        growth.update_lead(str(lead["id"]), {"stage": stage})
+    return str(lead["id"])
+
+
+def _row(email):
+    from app import growth
+    return next((r for r in growth.work_queue()
+                 if r["email"].lower() == email.lower()), None)
+
+
+def test_a_reply_we_have_not_answered_is_the_first_thing_in_the_queue():
+    from app import growth
+
+    # The reply is deliberately the *older* event. Sorted by recency alone the
+    # quiet one would win; only reason-priority puts the reply first, which is
+    # the property being asserted. An earlier version of this test had the
+    # reply as the newer event and passed under a plain recency sort — it was
+    # agreeing with the code by coincidence rather than testing it.
+    quiet = _fresh("quiet@wq.example.com")
+    _touch(quiet, "email", "out", 6)                 # recent, but unanswered
+
+    waiting = _fresh("waiting@wq.example.com")
+    _touch(waiting, "email", "out", 40)
+    _touch(waiting, "email", "in", 39)               # answered us long ago
+
+    q = [r["email"] for r in growth.work_queue()]
+    assert q.index("waiting@wq.example.com") < q.index("quiet@wq.example.com"), q
+    assert _row("waiting@wq.example.com")["reason"] == "awaiting_reply"
+
+
+def test_a_deck_open_with_nothing_since_is_its_own_reason():
+    """The warmest unsolicited signal there is. Before #30 the pipeline could
+    not even see it."""
+    from app import decks
+
+    decks.record_lead({"deck": "floor", "email": "opened@wq.example.com",
+                       "name": "Opened"})
+    row = _row("opened@wq.example.com")
+    assert row is not None
+    assert row["reason"] == "opened_untouched"
+
+
+def test_an_open_we_have_already_followed_up_on_leaves_the_queue():
+    from app import decks, db, growth
+
+    decks.record_lead({"deck": "floor", "email": "followed@wq.example.com"})
+    lead = next(r for r in growth.leads()
+                if r["email"] == "followed@wq.example.com")
+    # We replied after the open — nothing is owed.
+    _touch(str(lead["id"]), "email", "out", 0)
+    assert _row("followed@wq.example.com") is None
+
+
+def test_silence_becomes_a_nudge_only_after_the_threshold():
+    from app import growth
+
+    recent = _fresh("recent@wq.example.com")
+    _touch(recent, "email", "out", growth.QUIET_DAYS - 1)
+    assert _row("recent@wq.example.com") is None, "too soon to chase"
+
+    ripe = _fresh("ripe@wq.example.com")
+    _touch(ripe, "email", "out", growth.QUIET_DAYS + 1)
+    assert _row("ripe@wq.example.com")["reason"] == "gone_quiet"
+
+
+def test_a_live_deal_nobody_has_touched_is_stalled():
+    from app import db, growth
+
+    lead = _fresh("stalled@wq.example.com", stage="demo")
+    # Everything backdated, including the stage change itself. Moving a stage
+    # *is* a touch — a deal restaged this morning is not stalled — so leaving
+    # that activity at `now` was the test lying, not the rule being wrong.
+    db.execute(
+        "UPDATE lead_activities SET at = now() - make_interval(days => %s) "
+        "WHERE lead_id = %s", (growth.STALL_DAYS + 2, lead))
+    db.execute(
+        "UPDATE leads SET updated_at = now() - make_interval(days => %s) "
+        "WHERE id = %s", (growth.STALL_DAYS + 2, lead))
+
+    row = _row("stalled@wq.example.com")
+    assert row is not None, "a demo untouched for longer than the threshold"
+    assert row["reason"] == "stalled"
+
+
+def test_a_deal_restaged_today_is_not_stalled():
+    """The converse, and the reason the test above needed fixing rather than
+    the rule: a stage change is a touch."""
+    from app import db, growth
+
+    lead = _fresh("restaged@wq.example.com", stage="demo")
+    db.execute(
+        "UPDATE leads SET updated_at = now() - make_interval(days => %s) "
+        "WHERE id = %s", (growth.STALL_DAYS + 30, lead))
+    # The stage-change activity stays at `now`.
+    assert _row("restaged@wq.example.com") is None
+
+
+def test_won_lost_and_nurture_never_appear():
+    """`nurture` is the stage that means 'not now, on purpose'. Surfacing it
+    would break the one honest way to defer something."""
+    from app import growth
+
+    for stage in ("won", "lost", "nurture"):
+        lead = _fresh(f"{stage}@wq.example.com", stage=stage)
+        _touch(lead, "email", "in", 1)          # would otherwise flame
+        assert _row(f"{stage}@wq.example.com") is None, stage
+
+
+def test_within_a_reason_the_longest_waiting_comes_first():
+    from app import growth
+
+    old = _fresh("old@wq.example.com")
+    _touch(old, "email", "out", 40)
+    new = _fresh("new@wq.example.com")
+    _touch(new, "email", "out", 7)
+
+    q = [r["email"] for r in growth.work_queue() if r["reason"] == "gone_quiet"]
+    assert q.index("old@wq.example.com") < q.index("new@wq.example.com"), q
+
+
+def test_each_row_carries_one_reason_and_how_long_it_has_waited():
+    """One reason per lead: a row listing three problems is a row somebody has
+    to think about before acting."""
+    from app import growth
+
+    lead = _fresh("counted@wq.example.com")
+    _touch(lead, "email", "out", 12)
+    row = _row("counted@wq.example.com")
+    assert isinstance(row["reason"], str)
+    assert row["waiting_days"] >= 12
+
+
+def test_a_retailer_cannot_read_the_work_queue(client, auth):
+    for who in ("admin@growth.example.com", "mgr@growth.example.com"):
+        r = client.get("/api/analytics/growth/work-queue", headers=auth(who))
+        assert r.status_code == 403, who
+
+
+def test_the_route_reports_the_thresholds_it_actually_used(client, auth):
+    from app import growth
+    r = client.get("/api/analytics/growth/work-queue",
+                   headers=auth("cue@growth.example.com"))
+    assert r.status_code == 200
+    assert r.json()["quiet_days"] == growth.QUIET_DAYS
+    assert r.json()["stall_days"] == growth.STALL_DAYS

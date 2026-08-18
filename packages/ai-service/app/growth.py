@@ -14,6 +14,7 @@ deliverability and authenticity go to die.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 from . import db
@@ -295,6 +296,128 @@ def add_activity(lead_id: str, payload: dict,
         # flames any lead whose last_reply is newer than its last outbound
         # touch — that read comes free from the log, no column needed.
     return row
+
+
+# How long before silence becomes a nudge, and a stage becomes stale.
+#
+# Judgement, not measurement, and worth saying so: nobody has enough pipeline
+# yet to know the real numbers. They are here as named constants so that when
+# somebody does know, the fix is one line rather than an archaeology exercise
+# through SQL. Deliberately generous — a queue that cries every third day is a
+# queue that gets ignored, and an ignored queue is worse than none because it
+# looks like coverage.
+QUIET_DAYS = 5          # we reached out, they said nothing
+STALL_DAYS = 10         # a live deal (demo or later) with nothing on it
+
+# Ranked hardest-to-forgive first. The whole value of a work queue is that it
+# says what to do *first*, so the order is the product.
+WORK_REASONS = ("awaiting_reply", "opened_untouched", "gone_quiet", "stalled")
+
+
+def work_queue(days: int = 120) -> list[dict]:
+    """Who to chase today, ordered by what is rotting.
+
+    The Leads table answers "what is in the pipeline". It sorts by
+    `updated_at`, which is the order things *happened* — useful for reading
+    history, useless for deciding what to do on a Tuesday morning. This answers
+    the other question, and it is the one a founder actually has.
+
+    Four reasons, and the order between them is the opinion:
+
+    1. **awaiting_reply** — they answered and we have not. The one unforgivable
+       failure at this volume: a warm merchant going cold in an inbox. It
+       outranks everything, including a deal further along, because a reply is
+       a person waiting on us rather than a stage waiting on time.
+    2. **opened_untouched** — somebody typed their email to read the deck and
+       nothing has happened since. The warmest unsolicited signal this company
+       gets, and until #30 it was not even visible to the pipeline.
+    3. **gone_quiet** — we reached out, they did not answer, and enough days
+       have passed that a nudge is not pestering.
+    4. **stalled** — a demo or a pilot with nothing on it for a while. Last
+       because a live deal has its own momentum and a founder rarely forgets
+       it; the earlier three are the ones that vanish.
+
+    Excluded, each for its own reason:
+
+    · `won` and `lost` are finished. A queue that keeps offering them trains
+      people to skim it.
+    · `nurture` is *deliberately* parked — it is the stage that means "not now,
+      on purpose", and surfacing it would make the one honest way to defer
+      something stop working.
+
+    Within a reason, oldest first: the thing that has been waiting longest is
+    the thing most likely to be lost. Returned whole rather than paginated —
+    if this list is ever long enough to need a page, the answer is not a page.
+    """
+    rows = db.query(
+        """
+        SELECT l.id, l.email, l.name, l.company, l.stage, l.source,
+               l.updated_at,
+               (SELECT max(a.at) FROM lead_activities a
+                 WHERE a.lead_id = l.id)                        AS last_touch,
+               (SELECT max(a.at) FROM lead_activities a
+                 WHERE a.lead_id = l.id AND a.direction = 'in')  AS last_reply,
+               (SELECT max(a.at) FROM lead_activities a
+                 WHERE a.lead_id = l.id AND a.direction = 'out') AS last_outbound,
+               (SELECT max(a.at) FROM lead_activities a
+                 WHERE a.lead_id = l.id AND a.kind = 'deck')     AS last_open
+          FROM leads l
+         WHERE l.stage NOT IN ('won', 'lost', 'nurture')
+           AND l.redacted_at IS NULL
+           AND l.updated_at > now() - make_interval(days => %s)
+         LIMIT 500
+        """,
+        (max(1, min(int(days or 120), 3650)),),
+    )
+
+    now = datetime.now(timezone.utc)
+    out: list[dict] = []
+    for r in rows:
+        reason, since = _why_it_needs_you(r, now)
+        if not reason:
+            continue
+        out.append({**r, "reason": reason, "waiting_since": since,
+                    "waiting_days": (now - since).days if since else None})
+
+    # Reason first, then oldest — the two halves of "what is rotting".
+    out.sort(key=lambda r: (WORK_REASONS.index(r["reason"]),
+                            r["waiting_since"] or now))
+    return out
+
+
+def _why_it_needs_you(r: dict, now) -> tuple[str | None, Any]:
+    """The single most urgent reason this lead wants attention, and since when.
+
+    One reason per lead on purpose. A row that lists three problems is a row
+    somebody has to think about before acting, and the point of this list is
+    that the next action is obvious from the line itself.
+    """
+    reply, outbound = r.get("last_reply"), r.get("last_outbound")
+    opened, touch = r.get("last_open"), r.get("last_touch")
+
+    # 1. They answered and we have not. Compared against our last *outbound*
+    #    touch, never against `last_touch` — a note to self or a second deck
+    #    open would otherwise read as us having replied, which is the exact
+    #    way this check silently stops working.
+    if reply and (not outbound or reply >= outbound):
+        return "awaiting_reply", reply
+
+    # 2. They read the deck and nothing has gone out since.
+    if opened and (not outbound or opened >= outbound):
+        return "opened_untouched", opened
+
+    # 3. We reached out and heard nothing back.
+    if outbound and (not reply or reply < outbound):
+        if (now - outbound).days >= QUIET_DAYS:
+            return "gone_quiet", outbound
+
+    # 4. A live deal nobody has touched.
+    if r.get("stage") in ("demo", "pilot_scoped", "pilot_live"):
+        last = touch or r.get("updated_at")
+        if last and (now - last).days >= STALL_DAYS:
+            return "stalled", last
+
+    return None, None
 
 
 def sources(days: int = 90) -> dict:

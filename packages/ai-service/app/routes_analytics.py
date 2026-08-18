@@ -702,6 +702,26 @@ def get_growth_leads(stage: str | None = None, days: int = 365,
     return {"leads": growth.leads(stage, days), "stages": list(growth.STAGES)}
 
 
+@router.get("/growth/work-queue")
+def get_growth_work_queue(days: int = 120,
+                          authorization: str | None = BearerHeader):
+    """What to do first. Same boundary as every other growth route.
+
+    The thresholds ride along in the response rather than being hardcoded in
+    the panel: the console should say "no reply in 5 days" because the service
+    said 5, not because a number was typed into a component and then drifted
+    from the one the query actually used.
+    """
+    me = current_user(authorization)
+    require(me, "cue_admin")
+    return {
+        "queue": growth.work_queue(days),
+        "reasons": list(growth.WORK_REASONS),
+        "quiet_days": growth.QUIET_DAYS,
+        "stall_days": growth.STALL_DAYS,
+    }
+
+
 @router.post("/growth/leads", status_code=201)
 def post_growth_lead(req: LeadCreate, authorization: str | None = BearerHeader):
     me = current_user(authorization)

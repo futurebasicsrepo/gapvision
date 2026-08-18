@@ -77,6 +77,8 @@
     "stack:gestures": "bash scripts/browser-suite.sh gestures",
     "stack:console": "bash scripts/browser-suite.sh console",
     "stack:widgets": "bash scripts/browser-suite.sh widgets",
-    "test:lead": "node --test packages/sales-site/test/lead.test.mjs"
+    "test:lead": "node --test packages/sales-site/test/lead.test.mjs",
+    "test:leads": "node packages/internal/test/leads-browser.mjs",
+    "stack:leads": "bash scripts/browser-suite.sh leads"
   }
 }
