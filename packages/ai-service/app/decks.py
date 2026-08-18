@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import db
+from . import db, growth
 
 DECKS = ("floor", "fundraise")
 
@@ -61,7 +61,7 @@ def record_lead(payload: dict) -> dict | None:
     deck = payload.get("deck")
     deck = deck if deck in DECKS else None
 
-    return db.query_one(
+    row = db.query_one(
         """
         INSERT INTO deck_leads (deck, name, email, firm, prepared_for, token, ref)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -71,6 +71,26 @@ def record_lead(payload: dict) -> dict | None:
          _clip(payload.get("preparedFor")) or _clip(payload.get("to")),
          _clip(payload.get("token")), _clip(payload.get("ref"))),
     )
+
+    # …and again into the pipeline, where somebody will actually act on it.
+    #
+    # `deck_leads` stays the raw record of who opened what and when — it is the
+    # evidence, and it survives the pipeline row being merged, restaged or
+    # redacted. `growth.record_deck_open` is the *consequence*: the lead exists,
+    # with the open in its touch log, next to the emails and calls.
+    #
+    # Guarded, and deliberately after the write above. The merchant is standing
+    # in front of a deck that will not open until this returns, so a pipeline
+    # that is mid-migration or briefly unhappy must cost them nothing — the
+    # gated open still succeeds and the evidence is still recorded. Losing the
+    # pipeline row is recoverable from `deck_leads`; making somebody stare at a
+    # failed form is not.
+    try:
+        growth.record_deck_open(payload)
+    except Exception as exc:   # pragma: no cover - diagnostics only
+        print(f"[cue] deck open not mirrored to pipeline: {exc}", flush=True)
+
+    return row
 
 
 def leads(days: int = 90) -> list[dict]:
@@ -83,11 +103,19 @@ def leads(days: int = 90) -> list[dict]:
     """
     return db.query(
         """
-        SELECT id, deck, name, email, firm, prepared_for, token, ref,
-               created_at AS at, redacted_at
-          FROM deck_leads
-         WHERE created_at > now() - make_interval(days => %s)
-         ORDER BY created_at DESC
+        SELECT d.id, d.deck, d.name, d.email, d.firm, d.prepared_for, d.token,
+               d.ref, d.created_at AS at, d.redacted_at,
+               -- What became of them. Joined on the email rather than a stored
+               -- id so an open recorded before the pipeline existed still finds
+               -- its lead, and so a lead merged by hand does not orphan its
+               -- opens. Null means the pipeline has no row for this address —
+               -- which now only happens for opens predating the join.
+               g.stage AS lead_stage, g.id AS lead_id
+          FROM deck_leads d
+          LEFT JOIN leads g
+                 ON lower(g.email) = lower(d.email) AND g.redacted_at IS NULL
+         WHERE d.created_at > now() - make_interval(days => %s)
+         ORDER BY d.created_at DESC
          LIMIT 500
         """,
         (max(1, min(int(days or 90), 3650)),),
@@ -99,7 +127,13 @@ def links(days: int = 365) -> list[dict]:
         """
         SELECT l.id, l.deck, l.token, l.prepared_for, l.gated, l.created_at AS at,
                u.name AS created_by,
-               (SELECT count(*) FROM deck_leads d WHERE d.token = l.token) AS opens
+               (SELECT count(*) FROM deck_leads d WHERE d.token = l.token) AS opens,
+               -- Distinct people, not opens: one merchant reading a deck four
+               -- times is one lead, and a link that reads "4" when a single
+               -- person looked at it four times is a link that gets chased as
+               -- though four rooms are interested.
+               (SELECT count(DISTINCT lower(d.email)) FROM deck_leads d
+                 WHERE d.token = l.token)                          AS openers
           FROM deck_links l LEFT JOIN users u ON u.id = l.created_by
          WHERE l.created_at > now() - make_interval(days => %s)
          ORDER BY l.created_at DESC

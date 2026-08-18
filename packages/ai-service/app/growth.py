@@ -23,7 +23,14 @@ STAGES = ("new", "contacted", "replied", "demo", "pilot_scoped",
 
 SOURCES = ("site", "outbound", "ads", "referral", "event", "deck", "other")
 
-ACTIVITY_KINDS = ("email", "linkedin", "video", "call", "meeting", "note", "stage")
+ACTIVITY_KINDS = ("email", "linkedin", "video", "call", "meeting", "note", "stage",
+                  # A gated deck open. Recorded as a touch with *no* direction:
+                  # it is plainly something they did, but it is not a reply, and
+                  # `last_reply` is what the panel flames on. A deck open that
+                  # counted as a reply would flame every opener and turn the one
+                  # colour reserved for "a warm merchant is waiting on you" into
+                  # noise within a week.
+                  "deck")
 
 #: Same window and same posture as `decks.LEAD_RETENTION_DAYS`: long enough
 #: that a pilot which took three quarters to close keeps its origin, short
@@ -39,6 +46,11 @@ MAX_NOTES = 4000
 #: "whatever was in the query string" because this arrives from the open
 #: internet and a jsonb column is a tempting place to park a kilobyte.
 UTM_KEYS = ("utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content")
+
+# What to call each deck in a touch line. Spelled out here rather than imported
+# from `decks` so the pipeline does not fail to import when a deck is renamed;
+# an unknown deck degrades to "the deck", which is still a true sentence.
+DECK_LABELS = {"floor": "the floor deck", "fundraise": "the pre-seed deck"}
 
 
 def _clip(value: Any, limit: int = MAX_FIELD) -> str | None:
@@ -92,6 +104,60 @@ def record_site_lead(payload: dict) -> dict | None:
     )
 
 
+def record_deck_open(payload: dict) -> dict | None:
+    """A gated deck open, as pipeline movement rather than a row in a side table.
+
+    Somebody typing their email to read the deck is the warmest unsolicited
+    signal this company gets, and until now it landed in `deck_leads` where the
+    pipeline never saw it. Whoever opened it had to be noticed by a human
+    reading a second table and copied across by hand — which is the definition
+    of a lead that goes cold on a Friday.
+
+    Three rules, each of which is a way this could quietly do harm:
+
+    **The source is first-touch.** A new lead is `deck`. An existing one keeps
+    whatever door actually produced it — a merchant we cold-emailed who then
+    opens the deck came from `outbound`, and rewriting that to `deck` would
+    make the Sources card credit the deck for pipeline outbound created. The
+    open is a touch on that lead, not a new origin for it.
+
+    **The stage is never moved.** An open is not a reply and not a demo. It is
+    tempting to advance `new → contacted` here, and wrong: we may not be the
+    reason they have the link. Somebody forwards a deck to a colleague and the
+    colleague opens it, and a stage that moved on its own is a stage nobody
+    can trust afterwards.
+
+    **The touch carries no direction.** See `ACTIVITY_KINDS`.
+    """
+    email = _clip(payload.get("email"))
+    if not email or "@" not in email:
+        return None
+
+    lead = db.query_one(
+        """
+        INSERT INTO leads (email, name, company, source)
+        VALUES (%s, %s, %s, 'deck')
+        ON CONFLICT (lower(email)) WHERE redacted_at IS NULL
+        DO UPDATE SET
+            name       = COALESCE(leads.name, EXCLUDED.name),
+            company    = COALESCE(leads.company, EXCLUDED.company),
+            updated_at = now()
+        RETURNING *
+        """,
+        (email, _clip(payload.get("name")), _clip(payload.get("firm"))),
+    )
+    if not lead:
+        return None
+
+    deck = payload.get("deck")
+    label = DECK_LABELS.get(deck, "the deck")
+    prepared = _clip(payload.get("preparedFor")) or _clip(payload.get("to"))
+    body = f"Opened {label}" + (f" — prepared for {prepared}" if prepared else "")
+
+    add_activity(str(lead["id"]), {"kind": "deck", "body": body})
+    return lead
+
+
 def create_lead(payload: dict, created_by: str | None = None) -> dict | None:
     """A lead added by hand from Console — an outbound target, a referral."""
     email = _clip(payload.get("email"))
@@ -138,7 +204,13 @@ def leads(stage: str | None = None, days: int = 365) -> list[dict]:
                (SELECT max(a.at) FROM lead_activities a
                  WHERE a.lead_id = l.id)                       AS last_touch,
                (SELECT max(a.at) FROM lead_activities a
-                 WHERE a.lead_id = l.id AND a.direction = 'in') AS last_reply
+                 WHERE a.lead_id = l.id AND a.direction = 'in') AS last_reply,
+               -- Our last *outbound* touch, which is the only thing an
+               -- unanswered reply should be measured against. Comparing a
+               -- reply to `last_touch` meant any later activity of any kind —
+               -- a note to self, a deck open — read as us having answered.
+               (SELECT max(a.at) FROM lead_activities a
+                 WHERE a.lead_id = l.id AND a.direction = 'out') AS last_outbound
           FROM leads l LEFT JOIN users u ON u.id = l.owner
          {where}
          ORDER BY l.updated_at DESC

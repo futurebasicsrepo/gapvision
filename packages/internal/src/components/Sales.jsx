@@ -37,6 +37,23 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 /** One origin serves both decks. Set VITE_SALES_URL per environment. */
 const ORIGIN = (import.meta.env?.VITE_SALES_URL || "https://sales.cuesea.ai").replace(/\/$/, "");
 
+/** Stage names, matching the Leads panel so one vocabulary covers both. */
+const STAGE_LABELS = {
+  new: "New", contacted: "Contacted", replied: "Replied", demo: "Demo",
+  pilot_scoped: "Pilot scoped", pilot_live: "Pilot live",
+  won: "Won", lost: "Lost", nurture: "Nurture",
+};
+
+/**
+ * Stages where somebody read the deck and nothing has happened since.
+ *
+ * This is the whole point of showing the stage next to the open: a gated open
+ * is the warmest signal this company gets, and "opened it, still sitting at
+ * new" is the row worth a Tuesday morning. Won and lost are finished; demo and
+ * beyond are already being worked.
+ */
+const NEEDS_WORK = new Set(["new", "contacted"]);
+
 const DECKS = [
   {
     id: "floor",
@@ -287,6 +304,7 @@ export default function Sales() {
                 <th>Created</th>
                 <th>Token</th>
                 <th>Opens</th>
+                <th>People</th>
                 <th aria-label="actions" />
               </tr>
             </thead>
@@ -302,6 +320,13 @@ export default function Sales() {
                   <td data-label="Opens" className="mono">
                     {r.unsaved ? <span className="muted">not recorded</span>
                       : r.opens > 0 ? r.opens : <span className="muted">—</span>}
+                  </td>
+                  {/* Distinct addresses, beside raw opens. One merchant reading
+                      a deck four times is one room interested, and a link that
+                      only reports "4" gets chased as though it were four. */}
+                  <td data-label="People" className="mono">
+                    {r.unsaved || r.openers == null ? <span className="muted">—</span>
+                      : r.openers > 0 ? r.openers : <span className="muted">—</span>}
                   </td>
                   <td className="right">
                     <button className="btn small" onClick={() => copy(linkFor(deck, r), r.token)}>
@@ -331,7 +356,17 @@ export default function Sales() {
 
       {/* ── leads ────────────────────────────────────────────── */}
       <section className="card">
-        <p className="k">Who opened a gated link</p>
+        <div className="sales-rowhead">
+          <p className="k">Who opened a gated link</p>
+          <p className="meta">
+            {deckLeads.filter((l) => NEEDS_WORK.has(l.lead_stage)).length} to follow up
+          </p>
+        </div>
+        <p className="card-note">
+          Every open here is also a lead in the pipeline, with the open in its
+          touch log — <strong>Leads</strong> is where you work it. Highlighted
+          stages are the ones nobody has moved yet.
+        </p>
         {leads.state === "loading" && <p className="empty">Checking…</p>}
         {leads.state === "absent" && (
           <p className="empty">
@@ -352,6 +387,7 @@ export default function Sales() {
                 <th>Company</th>
                 <th>Prepared for</th>
                 <th>Opened</th>
+                <th>Pipeline</th>
               </tr>
             </thead>
             <tbody>
@@ -360,8 +396,19 @@ export default function Sales() {
                   <td data-label="Name">{l.name}</td>
                   <td data-label="Email" className="mono">{l.email}</td>
                   <td data-label="Company">{l.firm || <span className="muted">—</span>}</td>
-                  <td data-label="Prepared for">{l.preparedFor || <span className="muted">—</span>}</td>
+                  {/* `prepared_for`, not `preparedFor` — the route passes the row
+                      through as it comes off the table, so the camelCase read
+                      here silently rendered an em-dash for every open there has
+                      ever been. */}
+                  <td data-label="Prepared for">{l.prepared_for || <span className="muted">—</span>}</td>
                   <td data-label="Opened" className="mono">{new Date(l.at).toLocaleString()}</td>
+                  <td data-label="Pipeline">
+                    {l.lead_stage
+                      ? <span className={"tag" + (NEEDS_WORK.has(l.lead_stage) ? " on" : "")}>
+                          {STAGE_LABELS[l.lead_stage] || l.lead_stage}
+                        </span>
+                      : <span className="muted">— not in pipeline —</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
