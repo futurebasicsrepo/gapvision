@@ -99,7 +99,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: pip install -r packages/ai-service/requirements.txt pytest
+      - run: pip install -r packages/ai-service/requirements.txt -r packages/ai-service/requirements-dev.txt
       - run: npm ci
 
       - name: migrate
@@ -194,6 +194,13 @@ jobs:
       - run: pip install -r packages/ai-service/requirements.txt
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+
+      # The console suite reads Studio's built bundle to check that no console
+      # component has leaked into it, and *skips that check* when
+      # `packages/web/dist` is missing — printing SKIP and passing anyway. The
+      # first CI run went green at 28/28 where a local run is 29/29, with the
+      # cross-bundle leak check quietly not running. Build Studio so it does.
+      - run: npm run build:web
 
       # `browser-suite.sh` is the same script used locally: it migrates, seeds,
       # starts both services, builds the package against the local realtime
