@@ -129,6 +129,56 @@ export const api = {
   devices: async (tenant) => { await wait(200); return { devices: DEVICES[tenant] || [] }; },
 
   summary: async () => ({ summary: {} }),
+
+  // --- growth ---------------------------------------------------------------
+  // Same discipline as the platform fixture: not all quiet. One lead carries
+  // an unanswered reply so the preview shows the flame state on the day it
+  // matters, and one row is redacted so that state renders too.
+  growthLeads: async () => {
+    await wait(260);
+    return {
+      stages: ["new", "contacted", "replied", "demo", "pilot_scoped",
+               "pilot_live", "won", "lost", "nurture"],
+      leads: [
+        { id: "l1", email: "retail@tecovas.example", name: "Kim H.",
+          company: "Tecovas", source: "outbound", stage: "replied",
+          touches: 3, last_touch: iso(-2880), last_reply: iso(-190),
+          redacted_at: null },
+        { id: "l2", email: "ops@studs.example", name: "Anna H.",
+          company: "Studs", source: "outbound", stage: "contacted",
+          touches: 1, last_touch: iso(-5760), last_reply: null, redacted_at: null },
+        { id: "l3", email: "form@merchant.example", name: "Site form fill",
+          company: "Marine Layer", source: "site", stage: "new",
+          touches: 0, last_touch: null, last_reply: null, redacted_at: null },
+        { id: "l4", email: "redacted", name: null, company: "—",
+          source: "deck", stage: "lost", touches: 2,
+          last_touch: iso(-590000), last_reply: null, redacted_at: iso(-43000) },
+      ],
+    };
+  },
+  createGrowthLead: async () => { throw new ApiError(403, "Preview build — nothing here writes."); },
+  updateGrowthLead: async () => { throw new ApiError(403, "Preview build — nothing here writes."); },
+  growthActivities: async () => ({
+    activities: [
+      { id: "a1", kind: "email", direction: "in", body: "Sounds interesting — can you do Tuesday?", at: iso(-190), created_by: null },
+      { id: "a2", kind: "video", direction: "out", body: "Sent the fitting-room loop Loom", at: iso(-2880), created_by: "Kyle" },
+      { id: "a3", kind: "email", direction: "out", body: "First touch — the walk to the back", at: iso(-10080), created_by: "Kyle" },
+    ],
+  }),
+  addGrowthActivity: async () => { throw new ApiError(403, "Preview build — nothing here writes."); },
+  growthSources: async () => ({
+    days: 90,
+    by_source: [
+      { source: "outbound", leads: 8, live: 7, advanced: 2 },
+      { source: "site", leads: 5, live: 5, advanced: 0 },
+      { source: "deck", leads: 3, live: 2, advanced: 1 },
+    ],
+    by_stage: { new: 5, contacted: 4, replied: 3, demo: 2, lost: 2 },
+    by_campaign: [
+      { utm_source: "google", utm_campaign: "clienteling-search", leads: 3 },
+      { utm_source: "linkedin", utm_campaign: "abm-first-200", leads: 2 },
+    ],
+  }),
 };
 
 export async function probe(name) {

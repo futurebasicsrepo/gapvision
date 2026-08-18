@@ -37,6 +37,7 @@ import { defaultPrefs, effectivePrefs, loadPrefs, normaliseZone, savePref,
          visiblePrefs, MAX_ZONE_CHARS, type FloorComms, type PrefKey,
          type Prefs } from "./prefs";
 import { ShiftController, TELEMETRY_NOTICE } from "./shift";
+import { fetchFeeds, feedCards, FEEDS_REFRESH_MS, type Feeds } from "./feeds";
 
 /**
  * Everything goes through the realtime server. The plugin is a static bundle,
@@ -656,6 +657,41 @@ const WIDGETS_KEY = "cue.pref.widgets";
 let widgetPrefs: WidgetPrefs = { ...DEFAULT_PREFS, order: [...DEFAULT_PREFS.order] };
 
 /**
+ * Content for the widgets that are data rather than code.
+ *
+ * Held here and refreshed on a timer rather than fetched when a guest arrives:
+ * a promotion is a property of the store and the hour, not of the person
+ * standing in front of somebody, and putting a network round trip between a
+ * beacon and a cue is the one thing this product cannot afford.
+ */
+let feeds: Feeds = {};
+
+/**
+ * Rows the deck should carry for feed-backed widgets, as cards.
+ *
+ * Called from `onDisplay`, so a promotion appears beside a guest rather than on
+ * the idle screen. That is not an omission: `cards` is emptied at idle, so the
+ * whole deck — `customer`, `inventory`, `messaging` and now this — is an
+ * engaged-state carousel, and beside a guest is where a promotion is worth
+ * something anyway. An associate reads "20% off denim this weekend" while
+ * standing with somebody holding jeans, not while waiting by the fitting rooms.
+ */
+function feedDeckCards(): Card[] {
+  const out: Card[] = [];
+  for (const spec of WIDGETS) {
+    if (spec.content !== "feed") continue;
+    for (const kind of spec.kinds) out.push(...feedCards(kind, feeds[spec.id] || []));
+  }
+  return out;
+}
+
+async function refreshFeeds(): Promise<void> {
+  feeds = await fetchFeeds(SERVER_URL, TENANT);
+  const counts = Object.entries(feeds).map(([w, i]) => `${w}=${i.length}`).join(" ");
+  if (counts) log(`feeds: ${counts}`);
+}
+
+/**
  * Whether the store permits a deck at all.
  *
  * Reads the same way floor comms does and for the same reason: a capability
@@ -668,18 +704,56 @@ function widgetsAllowed(): boolean {
   return !(capabilities.known && capabilities.widgets === false);
 }
 
+/**
+ * The person's deck if the server knows one, this handset's copy otherwise.
+ *
+ * Set by the realtime server at register from `/api/auth/device`, which
+ * resolves the device to whoever it is assigned to. Null means we have not
+ * been told — a device assigned to nobody, an older server, or a socket that
+ * has not registered yet — and in every one of those cases the phone's own
+ * copy is the best answer available.
+ */
+let serverPrefs: WidgetPrefs | null = null;
+
 async function loadWidgetPrefs() {
+  // The server's copy wins when there is one: it follows the associate to
+  // whatever hardware they pick up, which is the whole reason this moved off
+  // the handset. The local copy stays as the offline fallback the design
+  // asked for — a shop with no signal must still get a deck, and it must be
+  // *this* associate's deck if they have used this pair before.
+  if (serverPrefs) {
+    widgetPrefs = serverPrefs;
+    // Mirrored down so the next cold boot on a dead network is still theirs.
+    try { await bridge.setLocalStorage(WIDGETS_KEY, JSON.stringify(widgetPrefs)); }
+    catch { /* the deck still works; it just will not survive offline */ }
+    return;
+  }
   let raw: string | null = null;
   try { raw = await bridge.getLocalStorage(WIDGETS_KEY); } catch { raw = null; }
   try { widgetPrefs = normalisePrefs(raw ? JSON.parse(raw) : null); }
   catch { widgetPrefs = normalisePrefs(null); }
 }
 
-/** Returns whether it landed. A layout that silently did not save is a layout
- *  the associate will arrange twice. */
+/**
+ * Save, locally first and then upward.
+ *
+ * Returns whether it landed *on this phone*, which is deliberately the weaker
+ * claim: a layout that silently did not save is a layout the associate
+ * arranges twice, and the local write is the one that makes the next boot
+ * right whatever the network did. The server write is emitted through the
+ * socket — the phone holds no session of its own, so the realtime server,
+ * which resolved this device to a person, is the only thing that can say
+ * whose prefs these are.
+ */
 async function saveWidgetPrefs(): Promise<boolean> {
-  try { return await bridge.setLocalStorage(WIDGETS_KEY, JSON.stringify(widgetPrefs)); }
-  catch { return false; }
+  let ok = false;
+  try { ok = await bridge.setLocalStorage(WIDGETS_KEY, JSON.stringify(widgetPrefs)); }
+  catch { ok = false; }
+  // Fire and forget on purpose. An associate dragging a widget must not wait
+  // on a round trip, and a failed sync costs them nothing today — the local
+  // copy already holds it, and the next successful save carries it up.
+  try { socket?.emit("widgets:save", { prefs: widgetPrefs }); } catch { /* no socket yet */ }
+  return ok;
 }
 
 /** Where scrolling has got to: 0 is the cue, 1..n the recommendations. */
@@ -1008,7 +1082,7 @@ async function onDisplay(payload: DisplayPayload) {
   // holds, `deckFrom` says which of them appear and in what order, and the
   // store's master switch can take the right side away entirely.
   cards = deckFrom(
-    [...cardsFor(payload), { kind: "FLOOR", lines: [] }],
+    [...cardsFor(payload), { kind: "FLOOR", lines: [] }, ...feedDeckCards()],
     widgetPrefs,
     widgetsAllowed(),
   );
@@ -2675,6 +2749,29 @@ async function main() {
   // The server's answer about which shift this phone is on — or that the store
   // has this switched off after all, in which case the controller stops rather
   // than re-queueing records the retailer has declined.
+  /**
+   * The deck this associate arranged, from whichever pair they last used it on.
+   *
+   * Arrives after register, because that is when the server knows who is
+   * holding these glasses. The phone has already painted from its local copy
+   * by now, which is deliberate — a deck that waits for the network is a deck
+   * that is blank on a bad wifi — so this is a correction rather than a first
+   * draw, and it only redraws when it actually differs.
+   */
+  socket.on("widgets:prefs", (msg: { prefs?: unknown }) => {
+    const next = normalisePrefs(msg?.prefs ?? null);
+    const changed = next.order.join(",") !== widgetPrefs.order.join(",");
+    serverPrefs = next;
+    if (!changed) return;
+    widgetPrefs = next;
+    try { void bridge.setLocalStorage(WIDGETS_KEY, JSON.stringify(next)); } catch { /* offline copy only */ }
+    log(`widgets ← ${next.order.join(",") || "(none)"}`);
+    mountWidgetsCard();
+    // A deck that changed under somebody mid-engagement is worse than one that
+    // corrects itself at the next guest, so the cards on screen are left alone
+    // and the new order takes effect on the next display.
+  });
+
   socket.on("shift:state", (state: any) => void shift.onState(state));
   socket.on("telemetry:replayed", ({ accepted }: { accepted?: number }) =>
     void shift.onReplayed(Number(accepted) || 0));
@@ -2823,6 +2920,11 @@ async function main() {
   mountCheckoutCard(capabilities);
   await loadWidgetPrefs();
   mountWidgetsCard();
+  // Feed-backed widgets, fetched once at boot and refreshed on a timer. Not
+  // awaited into the critical path: a promotion is worth having and is never
+  // worth delaying a cue for.
+  void refreshFeeds();
+  setInterval(() => void refreshFeeds(), FEEDS_REFRESH_MS);
   // Said before anything is sent, deliberately. If the first record of a shift
   // reaches the server before the sentence reaches the page, there is a window
   // — however short — in which somebody is being measured and their own phone

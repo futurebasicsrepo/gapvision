@@ -58,8 +58,8 @@ what the G2 would show.
   defaulting to the tenant's own ("Denim Wall" for gap, "Front Table" for
   shopify) and stored on the phone. Associate login is still outstanding: the
   glasses identify themselves by serial, and there is no sign-in.
-- **Fonts are fetched from Google and are not in the manifest whitelist** — see
-  "Shipping to Even Hub" below. Decide before submitting.
+- ~~**Fonts are fetched from Google and are not in the manifest whitelist.**~~
+  Resolved: the phone page ships no webfonts. See "Shipping to Even Hub" below.
 
 ## Shipping to Even Hub
 
@@ -80,13 +80,32 @@ voice is demoable in a browser — and MockBridge only runs when there is no
 native bridge, which on a G2 is never. Packing it shipped 93 KB of dead weight
 in a 140 KB package; without it the package is 55 KB.
 
-**Unresolved before submission: the phone page fetches Instrument Sans, IBM Plex
-Mono and Doto from `fonts.googleapis.com` and `fonts.gstatic.com`, neither of
-which is in `app.json`'s network whitelist.** The manifest tells a reviewer
-"all requests go to cuesea's own service", and that is currently not true.
-Either self-host the faces, drop to system fonts on the phone page, or add the
-two hosts and give up the single-host claim. A retail floor on store wifi is
-also a poor place to depend on a CDN at launch.
+**Resolved — the manifest's single-host claim is now true.** The phone page
+used to fetch Instrument Sans, IBM Plex Mono and Doto from
+`fonts.googleapis.com` and `fonts.gstatic.com`, neither of which is in
+`app.json`'s network whitelist, while the manifest told a reviewer "all
+requests go to cuesea's own service". Of the three options — self-host, drop
+to system fonts, or add the hosts and give up the claim — the third was the
+one worth refusing, because a retail floor on store wifi is a poor place to
+depend on a CDN. The faces are gone; named faces stay first in each stack, so
+adding `@font-face` later restores them without touching a rule.
+
+The claim is checked, not asserted: the built bundle contains exactly one
+external origin, the Railway host in the whitelist. To re-verify after a
+change:
+
+```bash
+npm run build --workspace=packages/glasses-plugin
+grep -ohE 'https://[a-zA-Z0-9.-]+' packages/glasses-plugin/dist/assets/*.js \
+  packages/glasses-plugin/dist/*.html | sort -u
+```
+
+The only other match is `https://socket.io`, which appears inside a socket.io
+version-mismatch *error string* and is never fetched.
+
+**The five-minute locked-phone test passed on real hardware (17 Aug 2026),** so
+submission is no longer gated on it either. The session survives a locked
+phone, which is what `foreground-exit` was written to assume.
 
 Then upload the `.ehpk` in the dev portal. **That is the whole upload** — there
 is nothing else to attach for a Test build.

@@ -126,7 +126,7 @@ that open every subsequent one.
 
 1. **Normalize size labels.** Parse `W30 L32`, `EU 41`, `UK 9`, `15 / 33`, `S/M` into a structured size with the label preserved for display. Generalize `size_scheme()` while you're in there — see Phase 3, this is the same seam.
 2. **Make "I can't see stock right now" a distinct outcome.** `crm.floor_inventory()` needs to distinguish empty from unreachable, and the answer engine needs to say which. One data source makes this a bug; two make it a liability.
-3. **The five-minute locked-phone test**, on real hardware. It gates Even Hub submission and settles a live coin-flip in `foreground-exit`.
+3. ~~**The five-minute locked-phone test**, on real hardware.~~ **Done, 17 Aug 2026 — passed.** The session survives a locked phone, so the `foreground-exit` handler stays as written. Even Hub submission is no longer gated on it. (The related webfont blocker is also cleared — the phone page ships no external faces, so `app.json`'s single-host claim is true.)
 4. **Fix DNS.** SPF, DKIM in Workspace, `_dmarc` at `p=none`. An afternoon, and every outbound sales email lands better forever.
 5. **Ship the pilot scorecard as a product feature.** Attributed sales per associate-hour, assist rate, question coverage, answered-correctly rate — the data is already collected. A pilot that produces its own case study is worth more than any deck we write about it.
 
