@@ -2,7 +2,7 @@
   "name": "cue",
   "private": true,
   "version": "0.5.0",
-  "description": "CueSea — e-commerce level intelligence for retail floor associates, in-lens.",
+  "description": "CueSea \u2014 e-commerce level intelligence for retail floor associates, in-lens.",
   "workspaces": [
     "packages/lens-core",
     "packages/pocket",
@@ -79,6 +79,13 @@
     "stack:widgets": "bash scripts/browser-suite.sh widgets",
     "test:lead": "node --test packages/sales-site/test/lead.test.mjs",
     "test:leads": "node packages/internal/test/leads-browser.mjs",
-    "stack:leads": "bash scripts/browser-suite.sh leads"
+    "stack:leads": "bash scripts/browser-suite.sh leads",
+    "test:guest-privacy": "node packages/server/test/guest-privacy.mjs",
+    "test:prefs": "node packages/glasses-plugin/test/prefs.test.mjs",
+    "test:prefs-browser": "node packages/glasses-plugin/test/prefs-browser.mjs",
+    "test:telemetry-browser": "node packages/glasses-plugin/test/telemetry-browser.mjs",
+    "test:geometry": "node packages/glasses-plugin/test/geometry.test.mjs",
+    "test:shift": "node packages/glasses-plugin/test/shift.test.mjs",
+    "test:pocket-bundle": "node packages/pocket/test/packaged-bundle.test.mjs"
   }
 }

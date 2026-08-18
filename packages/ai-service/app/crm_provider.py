@@ -111,6 +111,18 @@ class TenantNotConfigured(Exception):
 
 
 _MOCK = MockCRM()
+
+
+def serves_synthetic_guests(crm: object) -> bool:
+    """True when every person this adapter can name is invented.
+
+    The one question worth asking before handing out a roster. It is answered
+    by which adapter got built — not by the tenant's slug, which is a label a
+    human typed and can be typed again. A store called "gap" that has a real
+    Shopify credential behind it is a real store with real customers, and the
+    demo affordance must not follow the name.
+    """
+    return isinstance(crm, MockCRM)
 _cache: dict[str, dict] = {}
 _lock = threading.Lock()
 

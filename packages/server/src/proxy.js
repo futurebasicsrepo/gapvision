@@ -33,7 +33,7 @@ import express from "express";
 export const VISION_PATH = "/api/vision/analyze";
 export const VISION_BODY_LIMIT = "6mb";
 
-export function createAiProxy({ aiServiceUrl, apiKey, allowRoster = false }) {
+export function createAiProxy({ aiServiceUrl, apiKey }) {
   const router = express.Router();
 
   if (!apiKey) {
@@ -51,20 +51,20 @@ export function createAiProxy({ aiServiceUrl, apiKey, allowRoster = false }) {
   /**
    * Roster passthrough.
    *
-   * Off by default. A list of every customer in the store is the exact shape
-   * the tap-to-reveal design exists to eliminate, and it is enumerable: the
-   * ids it returns are the ids the context endpoint takes. Enable it only for
-   * the demo roster on synthetic tenants.
+   * This used to decide for itself who could have a roster, with a rule of the
+   * form `tenant !== "gap"` — which meant the demo affordance followed a
+   * *name*. A real store provisioned under that slug would have had its
+   * customer list served to anyone who asked, and a second demo tenant under
+   * any other name was refused something harmless. A slug is a label somebody
+   * typed; it is not a fact about whose data is behind it.
+   *
+   * So the decision moved to the only place that holds that fact: the AI
+   * service knows which adapter it built, refuses the roster for anything with
+   * a live credential, and says so in a sentence. This forwards and passes the
+   * refusal back verbatim.
    */
   router.get("/api/guests", async (req, res) => {
     const tenant = String(req.query.tenant ?? "gap").toLowerCase();
-
-    if (!allowRoster && tenant !== "gap") {
-      return res.status(403).json({
-        error: "roster_disabled",
-        message: "Roster listing is available for demo tenants only.",
-      });
-    }
 
     try {
       const r = await fetch(
@@ -79,30 +79,25 @@ export function createAiProxy({ aiServiceUrl, apiKey, allowRoster = false }) {
     }
   });
 
-  /**
-   * Guest context.
+  /*
+   * Guest context is deliberately NOT proxied.
    *
-   * Note this is still open to anyone who can reach the realtime server — the
-   * proxy protects the AI service, it does not authorize the caller. Once tap
-   * check-in is live, this route should require a session id issued by
-   * /v1/checkin/complete, so a guest card can only be fetched for a guest who
-   * just consented. Until then, keep the realtime server's URL out of public
-   * pages.
+   * It was, and it took a guest id and returned the whole clienteling package
+   * — name, address, contact, purchase history, sizes, tier — to any caller
+   * that could reach this server. Its own comment admitted as much and offered
+   * a mitigation, "keep the realtime server's URL out of public pages", which
+   * was never true: that URL is compiled into the glasses bundle, and
+   * `packaged-bundle.test.mjs` asserts it is there.
+   *
+   * Nothing called it. The real path is `enterGuest()` in index.js, which
+   * fetches the card server-side after a guest has actually arrived, with the
+   * service key attached, and pushes it to the one associate who should see
+   * it. That path is reached only through a check-in, which is the consent.
+   *
+   * A route that cannot be reached cannot be misused, so the fix is its
+   * absence. If a client ever genuinely needs this, it needs an authenticated
+   * caller and a live presence for that guest first — not a passthrough.
    */
-  router.post("/api/guest-context", express.json(), async (req, res) => {
-    try {
-      const r = await fetch(`${aiServiceUrl}/api/guest-context`, {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify(req.body ?? {}),
-      });
-      const body = await r.text();
-      res.status(r.status).type("application/json").send(body);
-    } catch (e) {
-      console.error(`[proxy] context failed: ${e.message}`);
-      res.status(502).json({ error: "upstream_unavailable" });
-    }
-  });
 
   /**
    * What the plugin is allowed to offer.

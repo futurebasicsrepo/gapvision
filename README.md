@@ -211,7 +211,6 @@ Pin one transcript for a scripted demo with
 | `GAPVISION_API_KEY` | — | **Required in production.** Service key for the AI service; the realtime server holds it and attaches it. Generate with `openssl rand -hex 32` |
 | `GAPVISION_AUTH_MODE` | `strict` | `strict` = every data call needs the key; `demo` = mock-data tenants readable without one (real CRMs always need it) |
 | `GAPVISION_ALLOWED_ORIGINS` | localhost:5173,5180 | CORS allowlist for the AI service |
-| `GAPVISION_ALLOW_ROSTER` | `false` | Let the proxy pass roster listings for non-demo tenants. Leave off |
 | `CUE_STT` | `mock` | STT provider: `mock`, `openai`, `groq`, `deepgram` |
 | `CUE_STT_MODEL` | per-provider | Override the transcription model |
 | `CUE_STT_MOCK_TRANSCRIPT` | — | Pin the mock transcript for demos |

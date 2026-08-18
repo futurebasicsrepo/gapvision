@@ -1,0 +1,208 @@
+# The tests, on every pull request.
+#
+# Until this file existed, every check on every PR was a Vercel build. Green
+# meant "it compiled" and nothing more, and the Studio dashboard suite sat
+# broken for days because nothing ran it. Eight merges shipped on a local test
+# run and somebody's word for it.
+#
+# Three jobs, split by what they need rather than by package: unit work that
+# needs nothing, service work that needs a database, and browser work that also
+# needs a built frontend and a headless Chromium. They run in parallel and fail
+# independently, so a flaky browser run never hides a real unit failure.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to the same PR makes the first one irrelevant.
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned so the console and spine suites can sign in. These seed a throwaway
+  # Postgres that exists for the length of one job; they are not credentials
+  # for anything that outlives it.
+  #
+  # `.example.com`, not `.test` — the login route's email validator rejects
+  # reserved TLDs, so a `.test` address seeds fine and then cannot sign in.
+  CUE_ADMIN_EMAIL: staff@cuesea.example.com
+  CUE_ADMIN_PASSWORD: ci-staff-pw
+  CUE_DEMO_PASSWORD: ci-demo-pw
+
+jobs:
+  # --- everything that needs no database and no browser ----------------------
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      # Named individually rather than looped, so a failure names the suite in
+      # the job log without anybody opening it.
+      - run: npm run test:lead
+      - run: npm run test:lens-core
+      - run: npm run test:pocket
+      - run: npm run test:gestures
+      - run: npm run test:endpointing
+      - run: npm run test:pageshape
+      - run: npm run test:widgets
+      - run: npm run test:cards
+      - run: npm run test:feeds
+      - run: npm run test:capabilities
+      - run: npm run test:geometry
+      - run: npm run test:prefs
+      - run: npm run test:shift
+
+      # Reads packages/glasses-plugin/dist, so it needs a build first — and a
+      # *clean* one. Building against anything but the default server URL is
+      # what this suite exists to catch, so it must not inherit one.
+      - run: npm run build:plugin
+      - run: npm run test:bundle
+      - run: npm run build:pocket
+      - run: npm run test:pocket-bundle
+
+  # --- the control plane, against a real Postgres -----------------------------
+  service:
+    name: service
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cue
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CUE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cue
+      CUE_CRED_KEY: '1111111111111111111111111111111111111111111111111111111111111111'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: pip install -r packages/ai-service/requirements.txt pytest
+      - run: npm ci
+
+      - name: migrate
+        run: python -c "from app import db; db.migrate()"
+        working-directory: packages/ai-service
+
+      - name: pytest
+        run: python -m pytest tests -q
+        working-directory: packages/ai-service
+
+      # A suite that cannot see a database still exits 0 — it just skips two
+      # thirds of itself. That is a green tick over an untested control plane,
+      # which is worse than a red one, so the skip count is an assertion.
+      - name: the database-backed tests actually ran
+        run: |
+          skipped=$(python -m pytest tests -q 2>&1 | grep -oE '[0-9]+ skipped' | grep -oE '[0-9]+' || echo 0)
+          echo "skipped: $skipped"
+          if [ "$skipped" -gt 20 ]; then
+            echo "::error::$skipped tests skipped — Postgres was not reachable, so this run proves almost nothing."
+            exit 1
+          fi
+        working-directory: packages/ai-service
+
+      - name: seed
+        run: python -m app.seed --demo
+        working-directory: packages/ai-service
+
+      - name: start the ai service
+        run: |
+          GAPVISION_AUTH_MODE=demo python -m uvicorn app.main:app --port 8000 &
+          for _ in $(seq 1 40); do curl -sf http://localhost:8000/health && break; sleep 1; done
+        working-directory: packages/ai-service
+
+      # Most of these spawn their own realtime server against a stub control
+      # plane. `test:voice` and `test:spine` do not — they drive a running one,
+      # so it has to be here, and its absence shows up as `ECONNREFUSED
+      # 127.0.0.1:4000` and a socket timeout rather than as anything about a
+      # missing server.
+      - name: start the realtime server
+        env:
+          AI_SERVICE_URL: http://localhost:8000
+        run: |
+          PORT=4000 node packages/server/src/index.js &
+          for _ in $(seq 1 30); do curl -sf http://localhost:4000/health && break; sleep 1; done
+
+      - name: realtime integration suites
+        env:
+          AI_SERVICE_URL: http://localhost:8000
+          SERVER_URL: http://localhost:4000
+          CUE_MANAGER_PASSWORD: ci-demo-pw
+        run: |
+          npm run test:guest-privacy
+          npm run test:tenants
+          npm run test:doors
+          npm run test:floor-dm
+          npm run test:voice
+          npm run test:device-register
+          npm run test:phone-byod
+          npm run test:widget-prefs
+          npm run test:spine
+
+  # --- the frontends, in a real browser --------------------------------------
+  browser:
+    name: browser
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cue
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CUE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cue
+      CUE_CRED_KEY: '1111111111111111111111111111111111111111111111111111111111111111'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: pip install -r packages/ai-service/requirements.txt
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      # `browser-suite.sh` is the same script used locally: it migrates, seeds,
+      # starts both services, builds the package against the local realtime
+      # server and previews it. Running the identical path here is deliberate —
+      # a CI-only harness drifts from the one people actually use, and then
+      # only one of them works.
+      - run: bash scripts/browser-suite.sh console
+      - run: bash scripts/browser-suite.sh leads
+      - run: bash scripts/browser-suite.sh gestures
+      - run: bash scripts/browser-suite.sh widgets
+      - run: bash scripts/browser-suite.sh floor-dm
+      - run: bash scripts/browser-suite.sh pocket
