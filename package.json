@@ -76,6 +76,7 @@
     "test:widget-prefs": "node packages/server/test/widget-prefs.mjs",
     "stack:gestures": "bash scripts/browser-suite.sh gestures",
     "stack:console": "bash scripts/browser-suite.sh console",
-    "stack:widgets": "bash scripts/browser-suite.sh widgets"
+    "stack:widgets": "bash scripts/browser-suite.sh widgets",
+    "test:lead": "node --test packages/sales-site/test/lead.test.mjs"
   }
 }

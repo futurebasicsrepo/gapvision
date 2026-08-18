@@ -63,8 +63,19 @@ function clean(body) {
  * wagging the dog; the log line still catches the lead either way.
  */
 async function deliver(record) {
-  const base = (process.env.CUE_AI_URL || "").replace(/\/$/, "");
-  const key = process.env.CUE_API_KEY;
+  // Trimmed, both of them.
+  //
+  // A dashboard copy-paste picks up a trailing newline about as often as not,
+  // and an env var with one on the end is invisible in every UI that shows it.
+  // Untrimmed, that newline reaches the control plane inside the header and
+  // comes back as a flat 401 — a status that reads as "wrong key" and sends
+  // somebody hunting for the wrong secret, when the value was right and only
+  // its whitespace was not. This exact 401 happened on 18 Aug.
+  //
+  // Safe to do: an API key with meaningful leading or trailing whitespace is
+  // not a thing, and neither is a URL with one.
+  const base = (process.env.CUE_AI_URL || "").trim().replace(/\/$/, "");
+  const key = (process.env.CUE_API_KEY || "").trim();
   if (!base || !key) {
     // Loudly, and naming which half is missing.
     //
@@ -92,7 +103,18 @@ async function deliver(record) {
       body: JSON.stringify(record),
       signal: ctl.signal,
     });
-    if (!res.ok) console.warn(`[cuesea-lead] control plane → ${res.status}`);
+    if (res.status === 401) {
+      // Named, because this is the one failure whose cause is not guessable
+      // from the number. The lead is lost either way, so the log line has to
+      // carry enough to fix it on the first attempt.
+      console.error(
+        `[cuesea-lead] DROPPED — control plane rejected our key (401). ` +
+        `CUE_API_KEY on this deployment does not match GAPVISION_API_KEY on ` +
+        `the ai-service. The lead is in the line above and nowhere else.`,
+      );
+    } else if (!res.ok) {
+      console.warn(`[cuesea-lead] control plane → ${res.status}`);
+    }
   } catch (err) {
     console.warn(`[cuesea-lead] control plane unreachable: ${err.message}`);
   } finally {
