@@ -179,6 +179,27 @@ def require_key(tenant: str | None, request: Request, supplied: str | None) -> N
     # about whitespace to be correct.
     supplied = (supplied or "").strip()
     if not supplied or not hmac.compare_digest(supplied, expected):
+        # Lengths only, and only on refusal.
+        #
+        # A 401 says "these two strings differ" and nothing else, which on
+        # 18 Aug cost several hours and three wrong diagnoses: the key was
+        # copied from the right place, the header name matched, both ends
+        # trimmed, and it still refused. Lengths separate the cases that
+        # actually happen — a truncated copy, or a Railway `${{...}}`
+        # reference pasted literally instead of its resolved value — from
+        # "two different keys of the same length", which for a random key
+        # means they came from different sources.
+        #
+        # A length is not key material. It is not a prefix, not a hash, and
+        # not reversible; it narrows a brute force by nothing an attacker
+        # did not already assume. Anything that *is* key material — even
+        # eight characters of a digest — stays out of a log line, because a
+        # log is read by more people and kept longer than anyone intends.
+        print(
+            f"[cue] service key refused: expected {len(expected)} chars, "
+            f"supplied {len(supplied)}",
+            flush=True,
+        )
         # Same response whether the header was absent or wrong.
         raise HTTPException(status_code=401, detail="Unauthorized")
 
