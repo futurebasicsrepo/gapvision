@@ -207,3 +207,111 @@ def test_sweep_clears_the_person_and_keeps_the_shape():
     acts = db.query("SELECT body FROM lead_activities WHERE lead_id = %s",
                     (lead["id"],))
     assert all(a["body"] is None for a in acts), "the words go with the person"
+
+
+# --- the join: a gated deck open is pipeline, not a side table ----------------
+#
+# Before this, `decks.record_lead` wrote to `deck_leads` and stopped. The
+# warmest signal the company gets — somebody typing their email to read the
+# deck — lived in a table the pipeline never read, and reached a human only if
+# one thought to check it. These assert the join, and the three ways it could
+# quietly do harm.
+
+def test_a_gated_deck_open_creates_a_lead_with_the_open_in_its_log():
+    from app import decks, growth
+
+    row = decks.record_lead({
+        "deck": "floor", "email": "opener@merchant.example.com",
+        "name": "Dana Opener", "firm": "Merchant Co", "preparedFor": "Merchant Co",
+    })
+    assert row is not None                       # the raw evidence still lands
+
+    lead = next(l for l in growth.leads()
+                if l["email"] == "opener@merchant.example.com")
+    assert lead["source"] == "deck"
+    acts = growth.activities(str(lead["id"]))
+    assert [a["kind"] for a in acts] == ["deck"]
+    assert "floor deck" in acts[0]["body"]
+    assert "Merchant Co" in acts[0]["body"]
+
+
+def test_an_open_does_not_rewrite_the_door_that_actually_produced_the_lead():
+    """First-touch attribution. A merchant we cold-emailed who later opens the
+    deck came from outbound — crediting the deck would let the Sources card
+    quietly take credit for pipeline outbound built."""
+    from app import decks, growth
+
+    growth.create_lead({"email": "chased@merchant.example.com", "name": "Chased",
+                        "source": "outbound"})
+    decks.record_lead({"deck": "floor", "email": "chased@merchant.example.com"})
+
+    lead = next(l for l in growth.leads()
+                if l["email"] == "chased@merchant.example.com")
+    assert lead["source"] == "outbound"
+
+
+def test_an_open_never_moves_the_stage():
+    """An open is not a reply and not a demo — and the opener may be a
+    colleague the deck was forwarded to, not the person we are working."""
+    from app import decks, growth
+
+    lead = growth.create_lead({"email": "staged@merchant.example.com",
+                               "source": "outbound", "stage": "demo"})
+    growth.update_lead(str(lead["id"]), {"stage": "demo"})
+    decks.record_lead({"deck": "floor", "email": "staged@merchant.example.com"})
+
+    after = next(l for l in growth.leads()
+                 if l["email"] == "staged@merchant.example.com")
+    assert after["stage"] == "demo"
+
+
+def test_an_open_does_not_read_as_a_reply_we_have_answered():
+    """The regression this join could have introduced.
+
+    The panel flames a lead whose reply is newer than our last *outbound*
+    touch. If a deck open counted as any kind of touch for that comparison, a
+    merchant who replied and then re-opened the deck would stop flaming — the
+    exact failure the colour exists to prevent, arriving silently.
+    """
+    from app import decks, growth
+
+    lead = growth.create_lead({"email": "waiting@merchant.example.com",
+                               "source": "outbound"})
+    lid = str(lead["id"])
+    growth.add_activity(lid, {"kind": "email", "direction": "out", "body": "first touch"})
+    growth.add_activity(lid, {"kind": "email", "direction": "in", "body": "interested!"})
+    decks.record_lead({"deck": "floor", "email": "waiting@merchant.example.com"})
+
+    row = next(l for l in growth.leads()
+               if l["email"] == "waiting@merchant.example.com")
+    # A reply still outstanding: newer than anything we sent.
+    assert row["last_reply"] is not None
+    assert row["last_outbound"] is not None
+    assert row["last_reply"] >= row["last_outbound"]
+    # And the open itself is not a reply.
+    assert row["last_reply"] < row["last_touch"]
+
+
+def test_the_deck_list_says_what_became_of_each_opener():
+    """Sales shows the stage beside the open, so a link is readable as
+    pipeline rather than as a number of clicks."""
+    from app import decks, growth
+
+    decks.record_lead({"deck": "floor", "email": "became@merchant.example.com",
+                       "name": "Became"})
+    lead = next(l for l in growth.leads()
+                if l["email"] == "became@merchant.example.com")
+    growth.update_lead(str(lead["id"]), {"stage": "demo"})
+
+    entry = next(d for d in decks.leads()
+                 if d["email"] == "became@merchant.example.com")
+    assert entry["lead_stage"] == "demo"
+    assert entry["lead_id"] is not None
+
+
+def test_a_deck_open_with_no_email_writes_no_pipeline_row():
+    from app import decks, growth
+
+    before = len(growth.leads())
+    assert decks.record_lead({"deck": "floor", "name": "Anonymous"}) is None
+    assert len(growth.leads()) == before

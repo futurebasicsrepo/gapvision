@@ -56,8 +56,8 @@ const CHANNELS = [
     note: "No account connected. Supermetrics reaches 150+ sources once you authorise one." },
   { name: "Product analytics", wired: false,
     note: "Google Analytics is not connected. Vercel's own web analytics is available on the deck site." },
-  { name: "Deck opens", wired: false,
-    note: "Captured at the deck host and written to its runtime log. They reach Console when /api/analytics/deck-leads exists — contract in claude/sales-deck.md." },
+  { name: "Deck opens", wired: true,
+    note: "A gated open is recorded and mirrored into the pipeline as a lead with the open in its touch log — see Sales for who opened, Leads to work it. Ungated opens are not counted: there is nobody to count." },
 ];
 
 /** Grouped by what it costs to say yes, which is the only grouping that helps
@@ -78,8 +78,8 @@ const RUNNABLE = [
     ["Channel reporting", "Connect an ad account or Analytics and the Channels card stops being blank."],
   ] },
   { group: "Wanted, honestly not built", items: [
-    ["A CRM", "Links live in a browser, leads in a log. \"Who did we talk to in July\" has no answer."],
-    ["Open-to-pilot attribution", "Gated opens on one side, tenants on the other, nothing joining them."],
+    ["Sequences", "The Leads log records what was sent and what came back. Nothing fires on a schedule, deliberately — a sequencer can be built on a log, a log cannot be recovered from a sequencer."],
+    ["Open-to-pilot attribution", "Half of it exists: a gated deck open becomes a pipeline lead, so open → stage is answerable. The other half is not — no pipeline lead is joined to the tenant it becomes, so \"which opens turned into paying floors\" still has no answer."],
   ] },
 ];
 
