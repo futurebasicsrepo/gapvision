@@ -193,6 +193,10 @@ export const api = {
     request(`/api/analytics/growth/leads/${id}/activities`, { method: "POST", body }),
   growthSources: (days = 90) =>
     request(`/api/analytics/growth/sources?days=${days}`),
+  // What to do first, as opposed to what exists. Thresholds come back with it
+  // so the panel quotes the number the query actually used.
+  growthWorkQueue: (days = 120) =>
+    request(`/api/analytics/growth/work-queue?days=${days}`),
 };
 
 /**

@@ -26,6 +26,24 @@ const STAGE_LABELS = {
   won: "Won", lost: "Lost", nurture: "Nurture",
 };
 
+/**
+ * The queue's four reasons, in the order the service ranks them.
+ *
+ * Each line is written as the *next action*, not as a status. "Reply to them"
+ * is something you can do; "awaiting_reply" is something you have to decode
+ * first, and a queue you decode is a queue you skim.
+ *
+ * Only the first is flame. The colour is reserved for a person waiting on us
+ * in an inbox — spend it on all four and it stops meaning anything, which is
+ * the failure mode every dashboard with six red badges already has.
+ */
+const REASONS = {
+  awaiting_reply:   { do: "Reply — they answered you", flame: true },
+  opened_untouched: { do: "Follow up — they read the deck", flame: false },
+  gone_quiet:       { do: "Nudge — no answer yet", flame: false },
+  stalled:          { do: "Move it on — nothing has happened", flame: false },
+};
+
 const KINDS = [
   ["email", "Email"], ["linkedin", "LinkedIn"], ["video", "Video"],
   ["call", "Call"], ["meeting", "Meeting"], ["note", "Note"],
@@ -39,6 +57,7 @@ const awaitingUs = (l) =>
 export default function Leads() {
   const [data, setData] = useState(null);
   const [sources, setSources] = useState(null);
+  const [queue, setQueue] = useState(null);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState(null);        // lead id with the log open
@@ -53,6 +72,10 @@ export default function Leads() {
       .then(setData)
       .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
     api.growthSources().then(setSources).catch(() => setSources(null));
+    // Null on failure, never an empty list: "nothing to chase" and "we could
+    // not ask" are different sentences, and only one of them lets somebody
+    // close the tab.
+    api.growthWorkQueue().then(setQueue).catch(() => setQueue(null));
   }
   useEffect(load, [filter]);
 
@@ -103,6 +126,76 @@ export default function Leads() {
 
   return (
     <>
+      {/* ── what to do first ──────────────────────────────────────────
+          Above the pipeline on purpose. The table below answers "what do we
+          have"; this answers "what do I do this morning", and the morning
+          question is the one somebody opens this panel holding. */}
+      <div className="card span-12">
+        <div className="card-head">
+          <h2>Needs you</h2>
+          {queue?.queue?.length > 0 && (
+            <span className="meta">{queue.queue.length} waiting</span>
+          )}
+        </div>
+
+        {queue === null ? (
+          <p className="empty">
+            Not available — the work queue didn't answer. That is different
+            from having nothing to chase, and only one of them means you can
+            close this tab.
+          </p>
+        ) : queue.queue.length === 0 ? (
+          <p className="empty">
+            Nothing is waiting on you. Every reply is answered, every deck open
+            has been followed up, and nothing has gone quiet for more than{" "}
+            {queue.quiet_days} days.
+          </p>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Do</th><th>Who</th><th>Company</th>
+                <th>Stage</th><th className="num">Waiting</th>
+              </tr>
+            </thead>
+            <tbody>
+              {queue.queue.map((r) => {
+                const reason = REASONS[r.reason] || { do: r.reason };
+                return (
+                  <tr key={r.id}>
+                    <td>
+                      <span className={reason.flame ? "tag on" : "tag"}>
+                        {reason.do}
+                      </span>
+                    </td>
+                    <td>
+                      {r.name || <span className="muted">—</span>}
+                      <br />
+                      <span className="muted mono">{r.email}</span>
+                    </td>
+                    <td>{r.company || <span className="muted">—</span>}</td>
+                    <td>{STAGE_LABELS[r.stage] || r.stage}</td>
+                    {/* Days, not a date. "11 days" is the number somebody acts
+                        on; a timestamp makes them do the subtraction. */}
+                    <td className="num mono">
+                      {r.waiting_days === 0 ? "today" : `${r.waiting_days}d`}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        <p className="card-note">
+          Ordered by what is rotting, not by what changed last. A reply you
+          have not answered outranks everything — including a deal further
+          along — because it is a person waiting on you rather than a stage
+          waiting on time. Won, lost and nurture never appear: nurture means
+          "not now, on purpose", and surfacing it would break the only honest
+          way to defer something.
+        </p>
+      </div>
+
       <div className="card span-12">
         <div className="card-head">
           <h2>Pipeline</h2>

@@ -31,7 +31,7 @@ set -euo pipefail
 
 SUITE="${1:-}"
 if [ -z "$SUITE" ]; then
-  echo "usage: scripts/browser-suite.sh <gestures|console|widgets|floor-dm|pocket>" >&2
+  echo "usage: scripts/browser-suite.sh <gestures|console|leads|widgets|floor-dm|pocket>" >&2
   exit 2
 fi
 
@@ -91,7 +91,7 @@ wait_for "$RT_URL/health" "realtime server"
 # Each suite: the package to build and preview, and the port it expects.
 case "$SUITE" in
   gestures|widgets|floor-dm) PKG="glasses-plugin"; PORT=5180 ;;
-  console)                   PKG="internal";      PORT=5176 ;;
+  console|leads)             PKG="internal";      PORT=5176 ;;
   pocket)                    PKG="pocket";        PORT=5178 ;;
   *) echo "unknown suite: $SUITE" >&2; exit 2 ;;
 esac
@@ -111,6 +111,7 @@ case "$SUITE" in
   widgets)  TEST="packages/glasses-plugin/test/widgets-browser.mjs" ;;
   floor-dm) TEST="packages/glasses-plugin/test/floor-dm-browser.mjs" ;;
   pocket)   TEST="packages/pocket/test/pocket-browser.mjs" ;;
+  leads)    TEST="packages/internal/test/leads-browser.mjs" ;;
   console)
     TEST="packages/internal/test/console-browser.mjs"
     export CONSOLE_STAFF_EMAIL="$CUE_ADMIN_EMAIL"
