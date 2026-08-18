@@ -42,8 +42,23 @@ _hits: dict[str, deque[float]] = defaultdict(deque)
 
 
 def _configured_key() -> str | None:
-    key = os.environ.get("GAPVISION_API_KEY")
-    return key if key else None
+    """The service key this deployment expects, whitespace and all removed.
+
+    Trimmed, and that is not cosmetic. A key is set by pasting it into a
+    dashboard, and a paste carries a trailing newline about as often as not —
+    invisible in every UI that displays the value. Untrimmed, that newline
+    becomes part of what we *demand*, so a caller who copied the same key
+    cleanly is rejected with a 401 that says "wrong key" about a key that is
+    right. That is exactly what happened on 18 Aug: the deck host was fixed to
+    trim what it *sends*, and the mismatch survived, because the whitespace
+    was on this side.
+
+    Trimming both ends is the only version that converges. It costs nothing —
+    a service key with meaningful leading or trailing whitespace is not a
+    thing — and an attacker still needs the whole key.
+    """
+    key = (os.environ.get("GAPVISION_API_KEY") or "").strip()
+    return key or None
 
 
 def startup_check() -> dict:
@@ -159,6 +174,10 @@ def require_key(tenant: str | None, request: Request, supplied: str | None) -> N
             detail="Service is not configured to serve this tenant.",
         )
 
+    # The header is trimmed for the same reason, and separately: a proxy or a
+    # hand-rolled client may pad it, and neither end should have to be careful
+    # about whitespace to be correct.
+    supplied = (supplied or "").strip()
     if not supplied or not hmac.compare_digest(supplied, expected):
         # Same response whether the header was absent or wrong.
         raise HTTPException(status_code=401, detail="Unauthorized")
