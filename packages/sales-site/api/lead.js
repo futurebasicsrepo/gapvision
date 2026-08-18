@@ -110,7 +110,10 @@ async function deliver(record) {
       console.error(
         `[cuesea-lead] DROPPED — control plane rejected our key (401). ` +
         `CUE_API_KEY on this deployment does not match GAPVISION_API_KEY on ` +
-        `the ai-service. The lead is in the line above and nowhere else.`,
+        `the ai-service. We sent ${key.length} chars (after trimming); the ` +
+        `ai-service logs what it expected. Different lengths mean a ` +
+        `truncated copy, or a Railway \${{...}} reference pasted literally ` +
+        `instead of its value. The lead is in the line above and nowhere else.`,
       );
     } else if (!res.ok) {
       console.warn(`[cuesea-lead] control plane → ${res.status}`);
