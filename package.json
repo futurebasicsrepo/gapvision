@@ -71,6 +71,8 @@
     "test:phone-byod": "node packages/server/test/phone-byod.mjs",
     "test:phone": "cd packages/ai-service && python -m pytest tests/test_phone.py -q",
     "test:connections": "node packages/internal/test/connections-browser.mjs",
-    "test:connections-api": "cd packages/ai-service && python -m pytest tests/test_connections.py -q"
+    "test:connections-api": "cd packages/ai-service && python -m pytest tests/test_connections.py -q",
+    "test:feeds": "npx esbuild packages/glasses-plugin/src/feeds.ts --bundle --format=esm --external:./bridge --outfile=packages/glasses-plugin/dist-test/feeds.js && node --test packages/glasses-plugin/test/feeds.test.mjs",
+    "test:widget-prefs": "node packages/server/test/widget-prefs.mjs"
   }
 }

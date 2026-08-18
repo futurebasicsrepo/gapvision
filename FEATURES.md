@@ -290,9 +290,18 @@ were allowed to disagree once and the voice answer lost the postcode.
 
 ## Two things to run before building anything else
 
-1. **The five-minute locked-phone test.** It gates Even Hub submission, decides
-   whether floor comms is messaging or an inbox, and settles a live coin-flip
-   in the plugin's `foreground-exit` handling.
+1. ~~**The five-minute locked-phone test.**~~ **Run, 17 Aug 2026 — passed.**
+   The session survives a locked phone, which is the answer that matters: the
+   `foreground-exit` handler was written to do nothing and resume from
+   `sessionStorage`, and ending the session there would have killed a live
+   engagement the moment an associate pocketed their phone. The cheaper mistake
+   was the right one and it stays.
+
+   What a pass does *not* settle: whether the host also backgrounds the WebView
+   during ordinary glasses use, with the phone in hand. The locked-phone case
+   cannot distinguish the two, so the comment in `main.ts` stays open on
+   purpose. It only becomes a question again if a phantom "engaged" row shows
+   up on a manager dashboard with the phone unlocked.
 2. **Install `0.1.9` and confirm the socket connects** — the last three
    packages dialled localhost, so no guest could arrive and no voice question
    could reach anything. Fixed and guarded, but unverified on hardware.

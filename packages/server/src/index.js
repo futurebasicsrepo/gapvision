@@ -655,6 +655,10 @@ io.use(async (socket, next) => {
     console.warn("[cue] admitting a lens without device identity — auth unreachable");
   } else if (device.device_id) {
     socket.data.deviceId = device.device_id;
+    // The deck belonging to whoever this device is assigned to. Arrives on the
+    // same reply as the identity that determines it, so there is no window
+    // where the lens has registered and does not yet know what to draw.
+    socket.data.widgetPrefs = device.widget_prefs || null;
     socket.data.deviceUserId = device.user_id || null;
     socket.data.deviceSurface = device.surface || null;
     // The tenant off the row. `register` binds from this in preference to the
@@ -739,6 +743,17 @@ io.on("connection", (socket) => {
       // Their own id back, so the phone can tell an addressed message apart
       // from the room and leave itself out of its own roster picker.
       socket.emit("roster:you", { id: socket.id, name: socket.data.displayName || "Associate" });
+
+      // The deck this associate arranged, wherever they last arranged it.
+      //
+      // Sent only when the control plane actually had one. An empty emit would
+      // be indistinguishable from "you have no widgets" and would wipe a
+      // perfectly good local copy on a device whose person is simply not
+      // assigned — the phone falls back to its own copy on silence, which is
+      // the behaviour a shop with bad wifi needs anyway.
+      if (socket.data.widgetPrefs) {
+        socket.emit("widgets:prefs", { prefs: socket.data.widgetPrefs });
+      }
     }
   });
 
@@ -960,6 +975,36 @@ io.on("connection", (socket) => {
   socket.on("voice:cancel", () => {
     endVoiceSession(socket);
     socket.emit("voice:state", { state: "idle" });
+  });
+
+  /**
+   * The associate rearranged their deck.
+   *
+   * Attributed from `socket.data.deviceUserId` — resolved from the device's own
+   * provision token at handshake — and never from anything the phone sent. A
+   * client naming its own user id would be a client that could rewrite a
+   * colleague's layout, and the phone has no session with which to prove
+   * otherwise.
+   *
+   * Silently ignored for a device assigned to nobody. There is no person whose
+   * preference this is, and inventing one would attach a deck to a handset,
+   * which is the thing this whole change moved away from.
+   */
+  socket.on("widgets:save", async ({ prefs } = {}) => {
+    const userId = socket.data.deviceUserId;
+    if (!userId || !prefs) return;
+    try {
+      const res = await fetch(`${AI_SERVICE_URL}/api/tenant/widget-prefs`, {
+        method: "PUT",
+        headers: aiHeaders(AI_API_KEY),
+        body: JSON.stringify({ user_id: userId, prefs }),
+      });
+      if (!res.ok) console.warn(`[cue] widget prefs → ${res.status}`);
+    } catch (err) {
+      // The phone already saved locally, so the associate loses nothing today
+      // and the next successful save carries it up.
+      console.warn(`[cue] widget prefs failed: ${err.message}`);
+    }
   });
 
   /**
