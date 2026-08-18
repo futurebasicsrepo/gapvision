@@ -65,7 +65,23 @@ function clean(body) {
 async function deliver(record) {
   const base = (process.env.CUE_AI_URL || "").replace(/\/$/, "");
   const key = process.env.CUE_API_KEY;
-  if (!base || !key) return;
+  if (!base || !key) {
+    // Loudly, and naming which half is missing.
+    //
+    // This used to `return` in silence, and it cost a real lead: a gated open
+    // on 18 Aug was logged here and delivered nowhere, and because the drop
+    // said nothing, the deck looked fine, the function returned 204, and the
+    // only evidence was this log line sitting under a panel that showed an
+    // empty list. Staying quiet about an unconfigured deployment is only
+    // defensible for the *reader* — the deck must still open — and never for
+    // us, because we are the ones who can fix it.
+    console.error(
+      `[cuesea-lead] DROPPED — not forwarded to the control plane. Missing ` +
+      `${!base ? "CUE_AI_URL" : ""}${!base && !key ? " and " : ""}${!key ? "CUE_API_KEY" : ""} ` +
+      `on this deployment. The lead is in the line above and nowhere else.`,
+    );
+    return;
+  }
 
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 3_000);

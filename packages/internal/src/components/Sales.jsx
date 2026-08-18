@@ -33,6 +33,7 @@
  * `absent` as a first-class state rather than an error nobody can act on.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, ApiError } from "../api.js";
 
 /** One origin serves both decks. Set VITE_SALES_URL per environment. */
 const ORIGIN = (import.meta.env?.VITE_SALES_URL || "https://sales.cuesea.ai").replace(/\/$/, "");
@@ -122,16 +123,19 @@ export default function Sales() {
      yet" is a real condition rather than a bug, and it has to read differently
      from "no links yet". */
   const loadLinks = useCallback(() => {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 6000);
-    fetch("/api/analytics/deck-links?days=365", { signal: ctl.signal, credentials: "include" })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    api.deckLinks(365)
       .then((d) => setLinks({ state: "ok", items: (d.links || []).map((l) => ({
         ...l, to: l.prepared_for || "", gate: l.gated, at: l.at,
       })) }))
-      .catch(() => setLinks({ state: "absent", items: [] }))
-      .finally(() => clearTimeout(t));
-    return () => ctl.abort();
+      // A 404 is genuinely "this deployment has no link store". Anything else
+      // — unreachable, 401, 500 — is a fault, and calling it "absent" is how
+      // this panel spent its whole life reporting a broken client as an
+      // unwired backend.
+      .catch((e) => setLinks({
+        state: e instanceof ApiError && e.status === 404 ? "absent" : "error",
+        items: [],
+        detail: e instanceof ApiError ? `${e.status} ${e.message || ""}`.trim() : String(e),
+      }));
   }, []);
 
   useEffect(() => loadLinks(), [loadLinks]);
@@ -140,17 +144,14 @@ export default function Sales() {
      never renders as a pass, the same rule the Health panel keeps. */
   useEffect(() => {
     let live = true;
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 6000);
-    fetch("/api/analytics/deck-leads?days=90", { signal: ctl.signal, credentials: "include" })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    api.deckLeads(90)
       .then((d) => live && setLeads({ state: "ok", items: d.leads || [] }))
-      .catch(() => live && setLeads({ state: "absent", items: [] }))
-      .finally(() => clearTimeout(t));
-    return () => {
-      live = false;
-      ctl.abort();
-    };
+      .catch((e) => live && setLeads({
+        state: e instanceof ApiError && e.status === 404 ? "absent" : "error",
+        items: [],
+        detail: e instanceof ApiError ? `${e.status} ${e.message || ""}`.trim() : String(e),
+      }));
+    return () => { live = false; };
   }, []);
 
   const copy = (text, id) => {
@@ -182,14 +183,8 @@ export default function Sales() {
     copy(linkFor(deck, row), row.token);
 
     try {
-      const res = await fetch("/api/analytics/deck-links", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ deck: row.deck, token: row.token,
-                               preparedFor: row.to || null, gated: row.gate }),
-      });
-      if (!res.ok) throw new Error(String(res.status));
+      await api.createDeckLink({ deck: row.deck, token: row.token,
+                                 preparedFor: row.to || null, gated: row.gate });
       loadLinks();
     } catch {
       /* Show it anyway, marked, rather than dropping it out of a list the
@@ -338,6 +333,16 @@ export default function Sales() {
             </tbody>
           </table>
         )}
+        {links.state === "error" && (
+          <p className="warn-note">
+            <strong>The link store did not answer ({links.detail}).</strong> Links
+            you create are still valid — a link is only a URL — but nothing is
+            being recorded, so this list will be empty on your next visit. This
+            is a fault, not an unwired deployment; the panel used to report the
+            two identically, which is how a broken client read as a missing
+            backend for as long as it did.
+          </p>
+        )}
         {links.state === "absent" && (
           <p className="warn-note">
             No link store on this deployment, so nothing here is being recorded — the
@@ -368,6 +373,13 @@ export default function Sales() {
           stages are the ones nobody has moved yet.
         </p>
         {leads.state === "loading" && <p className="empty">Checking…</p>}
+        {leads.state === "error" && (
+          <p className="warn-note">
+            <strong>The lead store did not answer ({leads.detail}).</strong> Gated
+            opens may still be arriving — check the deck host — but this panel
+            cannot see them.
+          </p>
+        )}
         {leads.state === "absent" && (
           <p className="empty">
             No lead endpoint on this deployment. Gated opens are written to the deck host's runtime

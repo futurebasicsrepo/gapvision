@@ -91,6 +91,21 @@ export const api = {
     request("/auth/reset", { method: "POST", auth: false, body: { token, password } }),
   me: () => request("/auth/me"),
 
+  // --- sales decks ----------------------------------------------------------
+  //
+  // These exist because the Sales panel did not have them and called `fetch`
+  // directly, with a *relative* URL and `credentials: "include"`. Both are
+  // wrong in production and each is enough on its own: the console is a static
+  // site on its own origin, so `/api/analytics/deck-links` resolved to the
+  // console host rather than the API, and this API authenticates with a bearer
+  // token rather than a cookie. Every call failed, every failure was caught and
+  // rendered as "absent", and links a person had created and sent were never
+  // recorded anywhere.
+  deckLinks: (days = 365) => request(`/api/analytics/deck-links?days=${days}`),
+  deckLeads: (days = 90) => request(`/api/analytics/deck-leads?days=${days}`),
+  createDeckLink: (link) =>
+    request("/api/analytics/deck-links", { method: "POST", body: link }),
+
   // --- platform -------------------------------------------------------------
   platform: () => request("/api/admin/platform"),
   mailTest: () => request("/api/admin/mail/test", { method: "POST" }),
