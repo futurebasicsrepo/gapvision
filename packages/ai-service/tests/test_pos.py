@@ -114,9 +114,17 @@ def test_endpoint_requires_the_service_key():
     assert r.status_code == 401
 
 
-def test_endpoint_without_a_database_says_so(auth_headers):
-    """The sandbox has no control plane; the refusal must be the 503 sentence,
-    never a 500 — a till mid-shift reads sentences, not stack traces."""
+def test_endpoint_without_a_database_says_so(auth_headers, monkeypatch):
+    """No control plane: the refusal must be the 503 sentence, never a 500 —
+    a till mid-shift reads sentences, not stack traces.
+
+    The unreachable database is forced rather than inherited from the
+    environment. This test used to assert the sandbox's own emptiness, which
+    made it pass with no database configured and fail with one — so it
+    reported on the machine it ran on instead of on the code, and it failed
+    on exactly the setup a developer running the full suite would have.
+    """
+    monkeypatch.setattr(pos.db, "configured", lambda: False)
     r = client.post("/api/pos/verify", headers=auth_headers,
                     json={"token": make_token()})
     assert r.status_code == 503

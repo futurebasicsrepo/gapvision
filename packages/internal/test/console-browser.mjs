@@ -5,13 +5,17 @@
  * cuesea staff the right numbers is table stakes; a console that shows a
  * retailer's admin anything at all is the thing that ends a pilot.
  *
- *   node packages/internal/test/console-browser.mjs
+ *   npm run stack:console
  *
- * Expects `vite preview` on :5176 plus the realtime + AI services running,
- * and two accounts passed in:
+ * That script seeds both accounts and stands the stack up. Running the file
+ * directly still works, but needs `vite preview` on :5176, the realtime + AI
+ * services, and two accounts passed in:
  *
  *   CONSOLE_STAFF_EMAIL / CONSOLE_STAFF_PASSWORD    a cue_admin
  *   CONSOLE_TENANT_EMAIL / CONSOLE_TENANT_PASSWORD  a client_admin
+ *
+ * `db:seed --demo` makes both, but pin CUE_ADMIN_PASSWORD and
+ * CUE_DEMO_PASSWORD or it generates one per run and only prints it.
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -101,8 +105,20 @@ const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(String(e)));
 
 /** Navigate by the rail item's visible label, so the test breaks when a
- *  destination is renamed rather than when the list is reordered. */
-const go = (name) => page.click(`.rail-item:has(.rail-item-name:text-is("${name}"))`);
+ *  destination is renamed rather than when the list is reordered.
+ *
+ *  Matched with a `hasText` regex rather than `:text-is`. The rail renders its
+ *  labels through `Decode`, which wraps every character in its own span for
+ *  the type-on animation — so the label's *text* is "Tenants" while no single
+ *  node holds that string, and `:text-is` matched nothing. It failed as a
+ *  thirty-second timeout on a rail that was on screen and correct.
+ */
+const go = (name) =>
+  page.locator(".rail-item")
+    .filter({ has: page.locator(".rail-item-name")
+      .filter({ hasText: new RegExp(`^\\s*${name}\\s*$`) }) })
+    .first()
+    .click();
 
 await signIn(page, STAFF);
 await page.waitForSelector(".rail-item", { timeout: 10_000 });
@@ -127,8 +143,19 @@ check("schema check is present and passing",
 // detail line explaining what was actually asserted.
 check("passing checks say what they proved",
   checkRows.filter((r) => /\bok\b/.test(r.cls)).every((r) => (r.detail || "").trim().length > 0));
-check("retention is honestly flagged",
-  checkRows.some((r) => /retention/i.test(r.label || "") && /\bwarn\b/.test(r.cls)));
+// Retention is reported honestly, which is not the same as reported `warn`.
+// All three of ok / warn / unknown are truthful answers depending on whether
+// the sweep has run, is behind, or cannot be determined — so this used to
+// pass only on a deployment whose sweep happened to be stale, and failed on a
+// healthy one. What must never happen is `ok` with nothing behind it: that is
+// the shape of a check that reports success for a sweep that silently stopped.
+const retention = checkRows.find((r) => /retention/i.test(r.label || ""));
+check("retention is reported at all", !!retention, JSON.stringify(checkRows.map((r) => r.label)));
+check("retention carries a truthful status",
+  /\b(ok|warn|unknown)\b/.test(retention?.cls || ""), retention?.cls);
+check("retention never claims ok without saying when it swept",
+  !/\bok\b/.test(retention?.cls || "") || /swept/i.test(retention?.detail || ""),
+  `${retention?.cls} — ${retention?.detail}`);
 
 const statValues = await page.$$eval(".stat-value", (els) => els.map((e) => e.textContent));
 check("fleet counts render", statValues.length === 4 && statValues.every((v) => v !== "—"),
