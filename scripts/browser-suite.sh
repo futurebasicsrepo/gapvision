@@ -31,7 +31,7 @@ set -euo pipefail
 
 SUITE="${1:-}"
 if [ -z "$SUITE" ]; then
-  echo "usage: scripts/browser-suite.sh <gestures|console|leads|widgets|floor-dm|pocket>" >&2
+  echo "usage: scripts/browser-suite.sh <gestures|console|leads|widgets|floor-dm|pocket|pocket-ask>" >&2
   exit 2
 fi
 
@@ -76,6 +76,11 @@ echo "== migrate + seed"
 ( cd packages/ai-service && python -m app.seed --demo >"$LOGS/seed.log" 2>&1 ) \
   || { tail -20 "$LOGS/seed.log"; exit 1; }
 
+# Pinned so `pocket-ask` can assert the answer rather than the transcriber.
+# The mock STT otherwise rotates its script by clip duration, which makes a
+# real assertion about the reply impossible to write.
+export CUE_STT_MOCK_TRANSCRIPT="${CUE_STT_MOCK_TRANSCRIPT:-do you have the barrel jean in a 32}"
+
 echo "== ai service (demo auth) on :$AI_PORT"
 ( cd packages/ai-service && GAPVISION_AUTH_MODE=demo \
     python -m uvicorn app.main:app --port "$AI_PORT" >"$LOGS/ai.log" 2>&1 ) &
@@ -95,7 +100,7 @@ wait_for "$RT_URL/health" "realtime server"
 case "$SUITE" in
   gestures|widgets|floor-dm) PKG="glasses-plugin"; PORT=5180 ;;
   console|leads)             PKG="internal";      PORT=5176 ;;
-  pocket)                    PKG="pocket";        PORT=5192 ;;
+  pocket|pocket-ask)         PKG="pocket";        PORT=5192 ;;
   *) echo "unknown suite: $SUITE" >&2; exit 2 ;;
 esac
 
@@ -114,6 +119,11 @@ case "$SUITE" in
   widgets)  TEST="packages/glasses-plugin/test/widgets-browser.mjs" ;;
   floor-dm) TEST="packages/glasses-plugin/test/floor-dm-browser.mjs" ;;
   pocket)   TEST="packages/pocket/test/pocket-browser.mjs" ;;
+  pocket-ask)
+    TEST="packages/pocket/test/ask-browser.mjs"
+    export SERVER_URL="$RT_URL"
+    export CUE_ASSOCIATE_EMAIL="${CUE_ASSOCIATE_EMAIL:-alex@example.com}"
+    ;;
   leads)    TEST="packages/internal/test/leads-browser.mjs" ;;
   console)
     TEST="packages/internal/test/console-browser.mjs"

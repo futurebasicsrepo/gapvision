@@ -70,7 +70,7 @@ export function notice(text: string, opts: { calm?: boolean; onDismiss?: () => v
  */
 export function deckScreen(deck: DeckState, chrome: Chrome, actions: {
   onSelect: () => void; onBack: () => void; onEnd: () => void;
-}): HTMLElement {
+}, ask?: HTMLElement | null): HTMLElement {
   const root = el("div", "stage");
   const card = el("div", `card${deck.clickedIn ? " clicked-in" : ""}`);
   const current = deck.cards[deck.index];
@@ -103,15 +103,116 @@ export function deckScreen(deck: DeckState, chrome: Chrome, actions: {
   bar.append(back, open);
   root.append(bar);
 
+  // Standing with a guest is exactly when a question gets asked — "do you have
+  // this in a 32" is a sentence said *at* somebody, not away from them. The
+  // control is below the deck actions so a thumb reaching for Open never
+  // opens a microphone by accident.
+  if (ask) root.append(ask);
+
   return root;
 }
 
+/**
+ * Ask, as a thumb holds it.
+ *
+ * Press and hold to talk, release to send — the idiom every messaging app on
+ * this phone already taught the associate, and the reason Pocket needs none of
+ * the glasses' endpointing: the finger *is* the endpoint.
+ *
+ * The meter is not decoration. A microphone that is open and hearing nothing
+ * looks exactly like a microphone that is open and working, and the difference
+ * is a question the associate has to ask twice in front of a guest.
+ *
+ * `pointer` events rather than touch/mouse pairs: one code path for a gloved
+ * thumb, a stylus and a desktop test, and `setPointerCapture` keeps the
+ * release ours even when the finger slides off the button mid-sentence — which
+ * is otherwise a mic left open until the twelve-second cap.
+ */
+export function askButton(opts: {
+  state: "idle" | "listening" | "thinking" | "denied" | "unsupported";
+  level: number;
+  onStart: () => void;
+  onStop: () => void;
+}): HTMLElement {
+  const wrap = el("div", `ask ${opts.state}`);
+
+  if (opts.state === "unsupported") {
+    wrap.append(el("div", "ask-note", "This phone has no microphone Cue can use."));
+    return wrap;
+  }
+  if (opts.state === "denied") {
+    // The browser will not ask twice. Saying which switch to flip is the only
+    // useful thing left, and it is not obvious on either platform.
+    wrap.append(el("div", "ask-note",
+      "Microphone blocked. Turn it on for this site in your browser settings, then try again."));
+    return wrap;
+  }
+
+  const btn = el("button", "ask-btn",
+    opts.state === "listening" ? "Listening — release to ask"
+      : opts.state === "thinking" ? "Thinking…"
+      : "Hold to ask") as HTMLButtonElement;
+  btn.type = "button";
+  btn.disabled = opts.state === "thinking";
+
+  // The release is listened for on the *window*, not on the button.
+  //
+  // Pointer capture is the textbook answer and it is not enough on its own:
+  // a thumb that slides off mid-sentence, a gesture the browser steals, a
+  // capture that silently fails to bind — each leaves the button waiting for a
+  // `pointerup` that lands somewhere else, and the mic stays open until the
+  // twelve-second cap. That is the worst failure this control has: the
+  // associate believes they asked, the light stays on, and the answer arrives
+  // long after they stopped caring.
+  //
+  // So the button starts the utterance and the window ends it, whatever the
+  // finger did in between. `onStop` is idempotent — it returns early unless
+  // the mic is actually listening — so the duplicate that pointer capture
+  // still delivers costs nothing.
+  let release: ((e: PointerEvent) => void) | null = null;
+
+  const down = (e: PointerEvent) => {
+    e.preventDefault();
+    try { btn.setPointerCapture(e.pointerId); } catch { /* not captureable */ }
+    release = (ev: PointerEvent) => {
+      window.removeEventListener("pointerup", release!);
+      window.removeEventListener("pointercancel", release!);
+      release = null;
+      try { btn.releasePointerCapture(ev.pointerId); } catch { /* already gone */ }
+      opts.onStop();
+    };
+    window.addEventListener("pointerup", release);
+    // A cancelled pointer — a call arrives, the gesture is stolen — must close
+    // the mic on exactly the same path.
+    window.addEventListener("pointercancel", release);
+    opts.onStart();
+  };
+  btn.addEventListener("pointerdown", down);
+  wrap.append(btn);
+
+  const meter = el("div", "ask-meter");
+  const fill = el("div", "ask-fill");
+  // Mean amplitude is small even when someone is talking clearly; scaled so
+  // the bar reads as a voice rather than as a flicker.
+  fill.style.width = `${Math.min(100, Math.round(opts.level * 400))}%`;
+  meter.append(fill);
+  if (opts.state === "listening") wrap.append(meter);
+
+  return wrap;
+}
+
 /** Waiting for the floor. */
-export function idleScreen(chrome: Chrome, opts: { greeting: string | null }): HTMLElement {
+export function idleScreen(chrome: Chrome, opts: {
+  greeting: string | null;
+  ask?: HTMLElement | null;
+}): HTMLElement {
   const root = el("div", "idle");
   root.append(el("div", "big", opts.greeting ? `Ready, ${opts.greeting}` : "Ready"));
   root.append(el("div", "sub",
     "When a guest needs you, the card arrives here. You do not have to watch this screen."));
+  // Ask is the one thing on this screen the associate starts. Everything else
+  // here arrives; this is the surface saying it also answers.
+  if (opts.ask) root.append(opts.ask);
   root.append(el("div", "zone", `${chrome.tenantLabel} · ${chrome.zone}`));
   return root;
 }

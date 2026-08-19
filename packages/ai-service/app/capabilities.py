@@ -116,6 +116,26 @@ def checkout_links(slug: str | None) -> bool:
     return _config(slug or "").get("checkout_links") is not False
 
 
+def voice(slug: str | None) -> bool:
+    """May this tenant's floor ask a question out loud?
+
+    Read from `config`, like floor comms and checkout links: on unless a store
+    we actually reached said no.
+
+    Checked server-side on every query, which it was not until Pocket became
+    the second surface that can ask. `for_tenant` has always reported this
+    flag and both clients honoured it, but honouring it was all that stopped a
+    store with voice switched off from being transcribed — the gate lived
+    entirely in whether a client chose to draw a microphone. One client
+    getting that wrong, or one build shipping before the flag was read, and
+    the retailer's decision simply did not hold.
+
+    The camera has been enforced here since it shipped. This is the same rule,
+    late: the client's copy decides what to draw, never what the service does.
+    """
+    return _config(slug or "").get("voice") is not False
+
+
 def exists(slug: str | None) -> bool:
     """Is there a tenant with this slug at all?
 
@@ -159,7 +179,7 @@ def for_tenant(slug: str | None) -> dict[str, bool]:
     return {
         CAMERA_CAPTURE: camera_capture(slug),
         SHIFT_TELEMETRY: shift_telemetry(slug),
-        "voice": cfg.get("voice") is not False,
+        "voice": voice(slug),
         "floor_comms": cfg.get("floor_comms") is not False,
         # The right-hand deck. Kyle's call, 17 Aug 2026: whether a store has
         # widgets at all is an admin decision made in Studio, while their order

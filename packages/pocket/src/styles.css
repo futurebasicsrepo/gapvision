@@ -213,3 +213,57 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 @media (prefers-reduced-motion: no-preference) {
   .card { transition: border-color .12s ease; }
 }
+
+/* ---------- Ask ----------
+   The one control on this app the associate starts rather than receives, so it
+   is the only thing here that looks like a button waiting to be pressed.
+
+   Sized for a thumb at arm's length with a guest in front of them: full width,
+   and tall enough that it is hit without looking. `touch-action: none` because
+   a press-and-hold on a phone is otherwise a scroll gesture, and the utterance
+   would end the moment the page moved a pixel. */
+.ask { margin-top: 20px; }
+
+.ask-btn {
+  width: 100%;
+  min-height: 56px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg, #f6f6f4);
+  font: inherit;
+  font-size: 17px;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.ask-btn:disabled { opacity: 0.6; }
+
+/* Listening is a state worth being unmistakable about: a microphone that is
+   open and does not look open is the one thing a floor should never wonder. */
+.ask.listening .ask-btn {
+  background: rgba(127, 182, 214, 0.18);
+  border-color: rgba(127, 182, 214, 0.55);
+}
+
+.ask-meter {
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.ask-fill {
+  height: 100%;
+  width: 0;
+  background: #7fb6d6;
+  /* Fast enough to read as a voice, slow enough not to strobe on a plosive. */
+  transition: width 90ms linear;
+}
+
+.ask-note {
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.75;
+  padding: 12px 0;
+}
