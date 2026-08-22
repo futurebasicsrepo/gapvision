@@ -1,0 +1,113 @@
+{
+  "$comment": "LAYOUT PREVIEW ONLY - NOT THE OUSTER SELECTION. These are the seven ACTIVE products really present in the connected Future Basics Shopify store, pulled live on 2026-08-22 via the Shopify Admin API. They exist here so the grid, card, badge and sort behaviour can be seen working before the real Ouster data arrives. `starred` is a demonstration of the badge, not a claim about any Figma marker. This file is only loaded when the page is opened with ?preview=1, and the page shows a loud banner when it is.",
+  "collection": {
+    "title": "Layout preview",
+    "handle": "layout-preview",
+    "subtitle": "Future Basics live catalogue - stand-in data",
+    "source": {
+      "origin": "Shopify Admin API, connected store: Future Basics",
+      "pulledAt": "2026-08-22",
+      "status": "stand-in"
+    }
+  },
+  "products": [
+    {
+      "id": "8825070485701",
+      "title": "Collegiate T Shirt",
+      "handle": "collegiate-t-shirt-1",
+      "vendor": "Future Basics",
+      "price": 60.0,
+      "currency": "USD",
+      "image": "https://cdn.shopify.com/s/files/1/0535/2606/9445/files/C7928318-9E1D-4831-AC9B-0AEF27B9A744.png?v=1777550110",
+      "variantCount": 5,
+      "inventory": 8,
+      "status": "ACTIVE",
+      "starred": true,
+      "note": "Premium slub cotton graphic tee."
+    },
+    {
+      "id": "8140483854533",
+      "title": "Cytoshift XTrainer",
+      "handle": "cytoshift-trainer",
+      "vendor": "Future Basics",
+      "price": 160.0,
+      "currency": "USD",
+      "image": "https://cdn.shopify.com/s/files/1/0535/2606/9445/files/IMG_28462-ezgif.com-optimize.gif?v=1765749283",
+      "variantCount": 9,
+      "inventory": 19,
+      "status": "ACTIVE",
+      "starred": true,
+      "note": "Lightweight performance cross-trainer, Gray Matter colourway."
+    },
+    {
+      "id": "8820340293829",
+      "title": "Future Basics Flyer Jacket",
+      "handle": "future-basics-flyer-jacket",
+      "vendor": "Future Basics",
+      "price": 140.0,
+      "currency": "USD",
+      "image": "https://cdn.shopify.com/s/files/1/0535/2606/9445/files/Flyer_Jacket_Zipped.png?v=1777548349",
+      "variantCount": 5,
+      "inventory": 3,
+      "status": "ACTIVE",
+      "starred": true,
+      "note": "Lightweight tailored technical jacket."
+    },
+    {
+      "id": "8825001836741",
+      "title": "Future Basics Flyer Pant",
+      "handle": "future-basics-flyer-pant",
+      "vendor": "Future Basics",
+      "price": 140.0,
+      "currency": "USD",
+      "image": "https://cdn.shopify.com/s/files/1/0535/2606/9445/files/FlyerPantfront.png?v=1777546052",
+      "variantCount": 5,
+      "inventory": 6,
+      "status": "ACTIVE",
+      "starred": false,
+      "note": "Tailored technical trouser, layers with the Flyer Jacket."
+    },
+    {
+      "id": "8825067405509",
+      "title": "Non Linear Evolution T Shirt",
+      "handle": "non-linear-evolution-t-shirt",
+      "vendor": "Future Basics",
+      "price": 60.0,
+      "currency": "USD",
+      "image": "https://cdn.shopify.com/s/files/1/0535/2606/9445/files/48376CBD-84C8-4A82-B072-0DB68EE58E29.png?v=1777549882",
+      "variantCount": 5,
+      "inventory": 6,
+      "status": "ACTIVE",
+      "starred": false,
+      "note": "Premium slub cotton graphic tee."
+    },
+    {
+      "id": "7598108475589",
+      "title": "De Milo Fingerboard",
+      "handle": "tech-deck-fingerboard",
+      "vendor": "Future Basics",
+      "price": 16.0,
+      "currency": "USD",
+      "image": "https://cdn.shopify.com/s/files/1/0535/2606/9445/files/IMG-2695.png?v=1704425807",
+      "variantCount": 1,
+      "inventory": 20,
+      "status": "ACTIVE",
+      "starred": false,
+      "note": "Skate-able mini board, Venus de Milo edition."
+    },
+    {
+      "id": "7512404951237",
+      "title": "Skateboard",
+      "handle": "skateboard",
+      "vendor": "Future Basics",
+      "price": 80.0,
+      "currency": "USD",
+      "image": "https://cdn.shopify.com/s/files/1/0535/2606/9445/files/bottomwheels.png?v=1704411186",
+      "variantCount": 1,
+      "inventory": 0,
+      "status": "ACTIVE",
+      "starred": false,
+      "note": "Skate-able art board."
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+/* ouster-collection — a Shopify-collection-shaped page for the blue-star selection.
+ *
+ * The palette below is DELIBERATELY NEUTRAL. Ouster's real brand values live in
+ * the Figma file this page is fed from, and that file has not been readable, so
+ * nothing here claims to be Ouster's brand. Swap the four --brand-* values once
+ * the playground file opens; nothing else needs to change.
+ */
+
+:root{
+  /* --- swap these four for Ouster's real values --- */
+  --brand-star:#2E7FD0;        /* the blue of the star badge */
+  --brand-star-soft:#E8F1FB;
+  --brand-ink:#11161D;
+  --brand-accent:#11161D;
+  /* ------------------------------------------------ */
+
+  --paper:#FFFFFF;
+  --ground:#F7F7F5;
+  --card:#FFFFFF;
+  --line:#E4E4E0;
+  --hair:#EEEEEB;
+  --fg:var(--brand-ink);
+  --fg2:#5A6270;
+  --fg3:#8C939E;
+  --warn-bg:#FFF6E5;
+  --warn-line:#F0D9A8;
+  --warn-fg:#7A5A12;
+
+  --sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --radius:10px;
+  --bar-h:58px;
+}
+
+*{box-sizing:border-box}
+/* An author `display` beats the UA sheet's [hidden] rule, so .toolbar's
+ * display:flex would render the sort controls on the empty page. */
+[hidden]{display:none !important}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--ground);color:var(--fg);
+  font-family:var(--sans);font-size:15px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+img{max-width:100%;display:block}
+a{color:inherit}
+
+/* ---------- top bar ---------- */
+.bar{
+  position:sticky;top:0;z-index:40;height:var(--bar-h);
+  display:flex;align-items:center;gap:18px;
+  padding:0 clamp(16px,4vw,40px);
+  background:rgba(255,255,255,.86);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.bar .mark{font-weight:700;letter-spacing:-.02em;font-size:16px}
+.bar .crumb{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--fg3)}
+.bar .spacer{flex:1}
+.bar .src{font-family:var(--mono);font-size:10.5px;color:var(--fg3);
+  text-decoration:none;border-bottom:1px solid var(--line);padding-bottom:2px}
+.bar .src:hover{color:var(--fg);border-color:var(--fg3)}
+
+/* ---------- banner ---------- */
+.banner{
+  background:var(--warn-bg);border-bottom:1px solid var(--warn-line);
+  color:var(--warn-fg);padding:11px clamp(16px,4vw,40px);
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.02em;
+}
+.banner b{letter-spacing:.14em;text-transform:uppercase;font-size:10.5px}
+.banner a{color:inherit}
+
+/* ---------- page head ---------- */
+.wrap{max-width:1280px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+.head{padding:clamp(34px,5vw,62px) 0 clamp(20px,2.6vw,30px)}
+.head .eyebrow{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--fg3);margin-bottom:12px;
+}
+.head h1{
+  margin:0;font-size:clamp(34px,5.4vw,56px);line-height:1.03;
+  letter-spacing:-.035em;font-weight:700;
+}
+.head .lede{margin:14px 0 0;max-width:56ch;color:var(--fg2);font-size:16px}
+
+/* ---------- toolbar ---------- */
+.toolbar{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+}
+.toolbar .count{font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--fg3)}
+.toolbar .spacer{flex:1}
+.toolbar label{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--fg3);display:flex;align-items:center;gap:7px;cursor:pointer}
+.toolbar select{
+  font-family:var(--mono);font-size:11.5px;color:var(--fg);
+  background:var(--paper);border:1px solid var(--line);border-radius:7px;
+  padding:7px 9px;cursor:pointer;
+}
+.toolbar input[type=checkbox]{accent-color:var(--brand-star);width:15px;height:15px;cursor:pointer}
+
+/* ---------- grid ---------- */
+.grid{
+  display:grid;gap:clamp(14px,2vw,26px);
+  grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+  padding:clamp(24px,3.4vw,40px) 0 80px;
+}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  overflow:hidden;display:flex;flex-direction:column;
+  transition:border-color .18s ease,transform .18s ease,box-shadow .18s ease;
+}
+.card:hover{border-color:#CFCFC9;transform:translateY(-2px);
+  box-shadow:0 8px 22px rgba(17,22,29,.07)}
+.card .shot{
+  position:relative;aspect-ratio:1/1;background:var(--ground);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+}
+.card .shot img{width:100%;height:100%;object-fit:contain;padding:12px}
+.card .shot .none{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--fg3)}
+.card .body{padding:14px 15px 16px;display:flex;flex-direction:column;gap:5px;flex:1}
+.card h3{margin:0;font-size:15px;font-weight:600;letter-spacing:-.012em;line-height:1.3}
+.card .handle{font-family:var(--mono);font-size:10.5px;color:var(--fg3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .foot{display:flex;align-items:baseline;justify-content:space-between;
+  gap:10px;margin-top:auto;padding-top:10px}
+.card .price{font-size:15px;font-weight:600;letter-spacing:-.02em}
+.card .meta{font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--fg3);text-align:right}
+
+/* the star — the whole point of the selection */
+.star{
+  position:absolute;top:10px;left:10px;z-index:2;
+  display:flex;align-items:center;gap:5px;
+  background:var(--brand-star-soft);color:var(--brand-star);
+  border:1px solid color-mix(in srgb,var(--brand-star) 26%,transparent);
+  border-radius:99px;padding:4px 9px 4px 7px;
+  font-family:var(--mono);font-size:9.5px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;
+}
+.star svg{width:11px;height:11px;flex:none;fill:var(--brand-star)}
+.pill-out{
+  position:absolute;top:10px;right:10px;z-index:2;
+  background:rgba(17,22,29,.72);color:#fff;border-radius:99px;padding:4px 9px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+}
+
+/* ---------- empty state ---------- */
+.empty{
+  margin:clamp(28px,4vw,46px) 0 90px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:clamp(26px,4vw,46px);max-width:760px;
+}
+.empty h2{margin:0 0 6px;font-size:22px;letter-spacing:-.02em}
+.empty .sub{margin:0 0 22px;color:var(--fg2)}
+.empty ol{margin:0;padding-left:20px;color:var(--fg2)}
+.empty li{margin-bottom:11px}
+.empty li b{color:var(--fg);font-weight:600}
+.empty code{
+  font-family:var(--mono);font-size:12px;background:var(--ground);
+  border:1px solid var(--hair);border-radius:5px;padding:1.5px 5px;
+}
+.empty .rule{height:1px;background:var(--line);margin:24px 0}
+.empty .why{font-size:14px;color:var(--fg2);margin:0}
+
+footer{
+  border-top:1px solid var(--line);padding:22px 0 40px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--fg3);
+}
+
+@media (max-width:640px){
+  .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  .bar .crumb{display:none}
+}

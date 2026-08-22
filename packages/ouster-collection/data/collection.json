@@ -1,0 +1,18 @@
+{
+  "$comment": "THE REAL SLOT. One entry per product carrying a blue star in the Ouster Brand Playground Figma file. `products` is empty because that file has never been read successfully - see README.md, 'Why products is empty'. Do not fill this in from memory or guesswork: every field below must trace to the Figma node or to a source the client has confirmed.",
+  "collection": {
+    "title": "Ouster",
+    "handle": "ouster",
+    "subtitle": "Blue-star selection",
+    "source": {
+      "figmaUrl": "https://www.figma.com/design/8EPHS3N2yuXjEa9YAC2y84/Ouster-Brand-Playground?node-id=3765-3103",
+      "figmaFileKey": "8EPHS3N2yuXjEa9YAC2y84",
+      "figmaNodeId": "3765:3103",
+      "rule": "Include a product if and only if it is Ouster-branded AND carries the blue star marker in Figma.",
+      "importedAt": null,
+      "importedBy": null,
+      "status": "blocked-no-file-access"
+    }
+  },
+  "products": []
+}

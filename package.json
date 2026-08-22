@@ -62,6 +62,7 @@
     "test:devices-studio": "node packages/web/test/devices-browser.mjs",
     "test:sales": "node packages/internal/test/sales-browser.mjs",
     "dev:sales": "npx --yes serve packages/sales-site -l 8902",
+    "dev:ouster": "python3 -m http.server 8903 --directory packages/ouster-collection",
     "test:mobile": "node packages/internal/test/mobile-browser.mjs",
     "test:lens-core": "npm test --workspace=packages/lens-core",
     "dev:pocket": "npm run dev --workspace=packages/pocket",

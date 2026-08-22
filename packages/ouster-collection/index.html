@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ouster — collection</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/collection.css">
+</head>
+<body>
+
+<header class="bar">
+  <span class="mark">Ouster</span>
+  <span class="crumb">Collection</span>
+  <span class="spacer"></span>
+  <a class="src" href="https://www.figma.com/design/8EPHS3N2yuXjEa9YAC2y84/Ouster-Brand-Playground?node-id=3765-3103" target="_blank" rel="noopener">Source file ↗</a>
+</header>
+
+<div class="banner" id="preview-banner" hidden>
+  <b>Layout preview</b> — these are live Future Basics products standing in so the
+  grid can be seen working. They are <b>not</b> the Ouster blue-star selection.
+  Drop the <code>?preview=1</code> from the URL for the real collection.
+</div>
+
+<div class="wrap">
+
+  <div class="head">
+    <div class="eyebrow" id="eyebrow">Blue-star selection</div>
+    <h1 id="title">Ouster</h1>
+    <p class="lede" id="lede">Every Ouster-branded product carrying a blue star in the brand playground file, laid out as a storefront collection.</p>
+  </div>
+
+  <div class="toolbar" id="toolbar" hidden>
+    <span class="count" id="count"></span>
+    <span class="spacer"></span>
+    <label><input type="checkbox" id="starred-only"> Starred only</label>
+    <label>Sort
+      <select id="sort">
+        <option value="featured">Featured</option>
+        <option value="title">A–Z</option>
+        <option value="price-asc">Price ↑</option>
+        <option value="price-desc">Price ↓</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <section class="empty" id="empty" hidden>
+    <h2>No products imported yet</h2>
+    <p class="sub">The page works. The selection behind it does not exist yet.</p>
+
+    <p class="why" id="load-error" hidden></p>
+
+    <ol>
+      <li><b>The blue-star list lives only in Figma.</b> The file
+        <code>Ouster-Brand-Playground</code> returns
+        <em>“you don’t have edit access to this file”</em> on every read, so which
+        products carry the star has never been readable from here.</li>
+      <li><b>Nothing local fills the gap.</b> The repository has no Ouster
+        references, and the connected Shopify store holds 32 products, all of them
+        vendor <code>Future Basics</code> — no Ouster product in it.</li>
+      <li><b>So the list was left empty rather than invented.</b> This is a page
+        meant to be shown to the client; guessed product names and prices are worse
+        than an honest blank.</li>
+    </ol>
+
+    <div class="rule"></div>
+
+    <p class="why">
+      To fill it: grant <code>kyle@thefuturebasics.com</code> <b>can-edit</b> access
+      to the Figma file, or export the starred frames and hand over the names and
+      prices. Either way the products go into
+      <code>data/collection.json</code> and this page renders them with no other change.
+      To see the layout working right now, append <code>?preview=1</code>.
+    </p>
+  </section>
+
+</div>
+
+<footer class="wrap">
+  ouster-collection · data: <span id="src-note">data/collection.json</span> · not for public distribution
+</footer>
+
+<script src="assets/collection.js"></script>
+</body>
+</html>
